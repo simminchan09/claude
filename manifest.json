@@ -1,0 +1,11 @@
+{
+  "name": "바람의 대지",
+  "short_name": "바람의 대지",
+  "description": "모바일 오픈월드 어드벤처",
+  "start_url": "./index.html",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0d1520",
+  "theme_color": "#1b2a3a",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
