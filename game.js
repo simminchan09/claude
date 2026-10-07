@@ -5,7 +5,7 @@ import {
 } from './world.js';
 
 // ============================================================
-//  바람의 대지 — 모바일 오픈월드 어드벤처
+//  바람의 대지 — PC 오픈월드 어드벤처
 //  월드: 8654m × 8654m ≈ 74.9 km² · 플레이어 키 180cm
 // ============================================================
 
@@ -17,7 +17,8 @@ const SAVE_KEY = 'wildwind_save_v2';
 const SHRINE_COUNT = 120, TOWER_COUNT = 15;
 const DAY_LENGTH = 1440;          // 실시간 24분 = 게임 속 하루
 const CELL = 64;                  // object streaming cell (m)
-const TREE_R = 900, NEAR_TREE_R = 110, APPLE_R = 200, CAMP_R = 180, CAMP_DROP_R = 260;
+let TREE_R = 1000, NEAR_TREE_R = 130;
+const APPLE_R = 200, CAMP_R = 180, CAMP_DROP_R = 260;
 
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -59,7 +60,6 @@ function slopeOK(x, z, lim = 0.85) { return normalAt(x, z).y > lim; }
 // ---------- Renderer / scene ----------
 const canvas = document.getElementById('game');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
@@ -72,7 +72,6 @@ const hemi = new THREE.HemisphereLight(0xcfe8ff, 0x4a5a30, 0.9);
 scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff2d8, 1.6);
 sun.castShadow = true;
-sun.shadow.mapSize.set(1024, 1024);
 const sc = sun.shadow.camera;
 sc.left = -45; sc.right = 45; sc.top = 45; sc.bottom = -45; sc.near = 1; sc.far = 260;
 sun.shadow.bias = -0.0008;
@@ -83,7 +82,6 @@ function resize() {
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  rotateCheck();
 }
 window.addEventListener('resize', resize);
 const lam = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
@@ -108,7 +106,7 @@ const chunkIndex = (() => {
   }
   return new THREE.BufferAttribute(new Uint32Array(idx), 1);
 })();
-const SPLIT = 1.25;
+let SPLIT = 1.4;
 const chunks = new Map();     // key -> {mesh, lastSeen}
 const pending = new Set();
 let inFlight = 0;
@@ -417,7 +415,7 @@ function makeTreeSet(cap, shadow) {
   }
   return set;
 }
-const nearTrees = makeTreeSet(2500, true), farTrees = makeTreeSet(14000, false);
+const nearTrees = makeTreeSet(4000, true), farTrees = makeTreeSet(26000, false);
 const rockMesh = new THREE.InstancedMesh(new THREE.DodecahedronGeometry(1, 0), lam(0x8a8478, { flatShading: true }), 3000);
 rockMesh.count = 0; rockMesh.castShadow = true; rockMesh.receiveShadow = true; rockMesh.frustumCulled = false; scene.add(rockMesh);
 const appleMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(0.11, 8, 6), lam(0xd8262a, { emissive: 0x330000 }), 1500);
@@ -654,88 +652,100 @@ const P = {
 };
 let gameClock = 0;
 
-// ---------- Input ----------
-const input = { jx: 0, jy: 0, kx: 0, ky: 0, sprint: false, sprintKey: false, jump: false, jumpPressed: false, attackPressed: false, interactPressed: false, eatPressed: false };
-const keys = new Set();
-const cam = { yaw: Math.PI, pitch: 0.35, dist: 6.5, target: new THREE.Vector3() };
+// ---------- Settings / graphics quality ----------
+const SETTINGS_KEY = 'wildwind_settings_v1';
+const QUALITY = {
+  low:    { pr: 1,    shadow: 1024, shadowR: 40, split: 1.0, treeR: 650,  nearR: 90,  fogFar: 3800 },
+  medium: { pr: 1.25, shadow: 2048, shadowR: 50, split: 1.4, treeR: 1000, nearR: 130, fogFar: 5200 },
+  high:   { pr: 2,    shadow: 4096, shadowR: 60, split: 1.8, treeR: 1400, nearR: 180, fogFar: 6500 },
+};
+const settings = { quality: 'medium', sens: 1, invertY: false, fov: 65 };
+try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}')); } catch (e) {}
+if (!QUALITY[settings.quality]) settings.quality = 'medium';
+function applySettings() {
+  const q = QUALITY[settings.quality];
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, q.pr));
+  sun.shadow.mapSize.set(q.shadow, q.shadow);
+  if (sun.shadow.map) { sun.shadow.map.dispose(); sun.shadow.map = null; }
+  sc.left = sc.bottom = -q.shadowR; sc.right = sc.top = q.shadowR; sc.updateProjectionMatrix();
+  SPLIT = q.split; TREE_R = q.treeR; NEAR_TREE_R = q.nearR;
+  scene.fog.far = q.fogFar;
+  camera.fov = settings.fov;
+  resize();
+  if (started) { rebuildObjects(true); updateTerrain(); }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch (e) {}
+}
 
+// ---------- Input (keyboard + mouse with pointer lock) ----------
+const input = { kx: 0, ky: 0, sprintKey: false, jumpPressed: false, attackPressed: false, interactPressed: false, eatPressed: false };
+const keys = new Set();
+const cam = { yaw: Math.PI, pitch: 0.35, dist: 6.5, zoom: 1, target: new THREE.Vector3() };
+let paused = false;
+const pauseEl = document.getElementById('pause');
+const isLocked = () => document.pointerLockElement === canvas;
+function requestLock() {
+  try { const r = canvas.requestPointerLock?.({ unadjustedMovement: true }); if (r && r.catch) r.catch(() => { try { canvas.requestPointerLock(); } catch (e) {} }); } catch (e) {}
+}
+function overlayOpen() { return mapOpen || P.dead || !rewardEl.classList.contains('hidden'); }
+function setPaused(v) {
+  paused = v;
+  pauseEl.classList.toggle('hidden', !v);
+  if (v) { document.getElementById('pauseSettings').appendChild(settingsPanel); keys.clear(); if (isLocked()) document.exitPointerLock(); }
+  else requestLock();
+}
+document.addEventListener('pointerlockchange', () => {
+  if (!isLocked() && started && !paused && !overlayOpen()) setPaused(true);
+});
 window.addEventListener('keydown', e => {
+  if (['Space', 'Tab', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
+  if (!started) return;
+  if (e.code === 'KeyM' || e.code === 'Tab') { if (!paused && rewardEl.classList.contains('hidden')) toggleMap(); return; }
+  if (e.code === 'Escape') { if (mapOpen) toggleMap(); else if (paused) setPaused(false); return; }
+  if (paused || overlayOpen()) return;
   keys.add(e.code);
-  if (e.code === 'Space') { input.jumpPressed = true; input.jump = true; e.preventDefault(); }
-  if (e.code === 'KeyJ' || e.code === 'KeyK') input.attackPressed = true;
+  if (e.code === 'Space') input.jumpPressed = true;
   if (e.code === 'KeyE' || e.code === 'KeyF') input.interactPressed = true;
   if (e.code === 'KeyQ') input.eatPressed = true;
-  if (e.code === 'KeyM') toggleMap();
+  if (e.code === 'KeyJ') input.attackPressed = true;
 });
-window.addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'Space') input.jump = false; });
-window.addEventListener('blur', () => { keys.clear(); input.jx = input.jy = 0; });
+window.addEventListener('keyup', e => keys.delete(e.code));
+window.addEventListener('blur', () => keys.clear());
 function readKeys() {
   input.kx = (keys.has('KeyD') || keys.has('ArrowRight') ? 1 : 0) - (keys.has('KeyA') || keys.has('ArrowLeft') ? 1 : 0);
   input.ky = (keys.has('KeyW') || keys.has('ArrowUp') ? 1 : 0) - (keys.has('KeyS') || keys.has('ArrowDown') ? 1 : 0);
   input.sprintKey = keys.has('ShiftLeft') || keys.has('ShiftRight');
 }
-const joyBase = document.getElementById('joyBase'), joyKnob = document.getElementById('joyKnob');
-const pointers = new Map();
-let joyId = null;
-canvas.addEventListener('pointerdown', e => {
-  e.preventDefault();
-  if (e.pointerType !== 'mouse' && e.clientX < window.innerWidth * 0.45 && joyId === null) {
-    joyId = e.pointerId;
-    pointers.set(e.pointerId, { type: 'joy', ox: e.clientX, oy: e.clientY });
-    joyBase.style.display = 'block';
-    joyBase.style.left = e.clientX + 'px'; joyBase.style.top = e.clientY + 'px';
-    joyKnob.style.transform = 'translate(0px,0px)';
-  } else pointers.set(e.pointerId, { type: 'cam', x: e.clientX, y: e.clientY });
-  canvas.setPointerCapture?.(e.pointerId);
+canvas.addEventListener('mousedown', e => {
+  if (!started || paused || overlayOpen()) return;
+  if (!isLocked()) { requestLock(); return; }
+  if (e.button === 0) input.attackPressed = true;
 });
-canvas.addEventListener('pointermove', e => {
-  const p = pointers.get(e.pointerId);
-  if (!p) return;
-  if (p.type === 'joy') {
-    let dx = e.clientX - p.ox, dy = e.clientY - p.oy;
-    const d = Math.hypot(dx, dy), max = 55;
-    if (d > max) { dx = dx / d * max; dy = dy / d * max; }
-    joyKnob.style.transform = `translate(${dx}px,${dy}px)`;
-    input.jx = dx / max; input.jy = -dy / max;
-  } else {
-    const k = e.pointerType === 'mouse' ? 0.006 : 0.008;
-    cam.yaw -= (e.clientX - p.x) * k;
-    cam.pitch = clamp(cam.pitch + (e.clientY - p.y) * k * 0.8, -0.35, 1.3);
-    p.x = e.clientX; p.y = e.clientY;
-  }
+document.addEventListener('mousemove', e => {
+  if (!started || paused || overlayOpen()) return;
+  // with pointer lock: free look; without (lock unavailable): drag with the left button
+  if (!isLocked() && !(e.buttons & 1)) return;
+  const k = 0.0022 * settings.sens;
+  cam.yaw -= e.movementX * k;
+  cam.pitch = clamp(cam.pitch + e.movementY * k * (settings.invertY ? -1 : 1), -0.35, 1.3);
 });
-function endPointer(e) {
-  const p = pointers.get(e.pointerId);
-  if (!p) return;
-  if (p.type === 'joy') { joyId = null; input.jx = input.jy = 0; joyBase.style.display = 'none'; }
-  pointers.delete(e.pointerId);
-}
-canvas.addEventListener('pointerup', endPointer);
-canvas.addEventListener('pointercancel', endPointer);
+canvas.addEventListener('wheel', e => { e.preventDefault(); cam.zoom = clamp(cam.zoom * (e.deltaY > 0 ? 1.1 : 0.9), 0.45, 2.5); }, { passive: false });
 canvas.addEventListener('contextmenu', e => e.preventDefault());
-document.addEventListener('gesturestart', e => e.preventDefault());
-function bindButton(id, down, up) {
-  const el = document.getElementById(id);
-  el.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); el.classList.add('pressed'); el.setPointerCapture?.(e.pointerId); down(); });
-  const rel = () => { el.classList.remove('pressed'); up && up(); };
-  el.addEventListener('pointerup', rel); el.addEventListener('pointercancel', rel); el.addEventListener('lostpointercapture', rel);
-  el.addEventListener('contextmenu', e => e.preventDefault());
+
+// settings panel (shown on the title screen and in the pause menu)
+const settingsPanel = document.getElementById('settingsPanel');
+{
+  const q = document.getElementById('setQuality'), sens = document.getElementById('setSens'), fov = document.getElementById('setFov'), inv = document.getElementById('setInvert');
+  q.value = settings.quality; sens.value = settings.sens; fov.value = settings.fov; inv.checked = settings.invertY;
+  const label = () => { document.getElementById('sensVal').textContent = (+sens.value).toFixed(1); document.getElementById('fovVal').textContent = fov.value + '°'; };
+  label();
+  q.addEventListener('change', () => { settings.quality = q.value; applySettings(); });
+  sens.addEventListener('input', () => { settings.sens = +sens.value; label(); applySettings(); });
+  fov.addEventListener('input', () => { settings.fov = +fov.value; label(); camera.fov = settings.fov; camera.updateProjectionMatrix(); applySettings(); });
+  inv.addEventListener('change', () => { settings.invertY = inv.checked; applySettings(); });
 }
-bindButton('btnJump', () => { input.jumpPressed = true; input.jump = true; }, () => { input.jump = false; });
-bindButton('btnAttack', () => { input.attackPressed = true; });
-bindButton('btnSprint', () => { input.sprint = true; }, () => { input.sprint = false; });
-bindButton('btnInteract', () => { input.interactPressed = true; });
-bindButton('btnEat', () => { input.eatPressed = true; });
-bindButton('btnMap', () => toggleMap());
-bindButton('btnFull', () => goFullscreen());
-function goFullscreen() {
-  const el = document.documentElement;
-  const req = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (!document.fullscreenElement && req) {
-    Promise.resolve(req.call(el)).then(() => screen.orientation?.lock?.('landscape').catch(() => {})).catch(() => {});
-  } else if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
-}
+document.getElementById('btnResume').addEventListener('click', () => setPaused(false));
+document.getElementById('btnSaveQuit').addEventListener('click', () => { save(); location.reload(); });
 
 // ---------- Audio ----------
 let actx = null;
@@ -754,7 +764,7 @@ const heartsCv = document.getElementById('hearts'), hctx = heartsCv.getContext('
 const staminaEl = document.getElementById('stamina'), staminaRing = document.getElementById('staminaRing');
 const toastEl = document.getElementById('toast'), promptEl = document.getElementById('prompt');
 const clockEl = document.getElementById('clock'), shrineCountEl = document.getElementById('shrineCount');
-const appleCountEl = document.getElementById('appleCount'), btnInteract = document.getElementById('btnInteract');
+const appleCountEl = document.getElementById('appleCount');
 const coordEl = document.getElementById('coords');
 let toastTimer = 0;
 function toast(msg, t = 2.6) { toastEl.innerHTML = msg; toastEl.classList.add('show'); toastTimer = t; }
@@ -809,6 +819,7 @@ function toggleMap() {
   if (!started) return;
   mapOpen = !mapOpen;
   mapView.classList.toggle('hidden', !mapOpen);
+  if (mapOpen) document.exitPointerLock?.(); else requestLock();
   if (mapOpen) { mapState.cx = P.pos.x; mapState.cz = P.pos.z; mapState.sel = null; mapSel.classList.add('hidden'); drawBigMap(); }
 }
 worker.onmessage = e => {
@@ -835,7 +846,8 @@ function drawArrow(ctx, x, y, ang, s) {
 }
 const MINI_VIEW = 240;
 function drawMinimap() {
-  const W = miniCv.width, k = W / MINI_VIEW;
+  const W = 140, k = W / MINI_VIEW;           // logical size; canvas is drawn at higher resolution
+  mctx.setTransform(miniCv.width / W, 0, 0, miniCv.width / W, 0, 0);
   if (!miniPending && (!mini || Math.hypot(mini.cx - P.pos.x, mini.cz - P.pos.z) > 70)) {
     miniPending = true;
     worker.postMessage({ type: 'mini', cx: Math.round(P.pos.x), cz: Math.round(P.pos.z), span: 480, res: 192 });
@@ -999,7 +1011,7 @@ function updateTowerLook(t) {
 // ---------- Player helpers ----------
 const _v = new THREE.Vector3();
 function moveVector(out) {
-  let jx = input.jx + input.kx, jy = input.jy + input.ky;
+  let jx = input.kx, jy = input.ky;
   const mag = Math.min(1, Math.hypot(jx, jy));
   if (mag < 0.08) return out.set(0, 0, 0);
   const l = Math.hypot(jx, jy); jx = jx / l * mag; jy = jy / l * mag;
@@ -1022,11 +1034,12 @@ function hurt(q, fromX, fromZ) {
   if (navigator.vibrate) try { navigator.vibrate(60); } catch (e) {}
   if (P.hp <= 0) die();
 }
-function die() { P.dead = true; document.getElementById('gameover').classList.remove('hidden'); }
+function die() { P.dead = true; document.getElementById('gameover').classList.remove('hidden'); document.exitPointerLock?.(); }
 function respawn() {
   P.dead = false; P.hp = P.maxHp; P.stamina = P.maxStamina; P.exhausted = false;
   P.pos.copy(P.lastSafe); P.state = 'ground'; P.vy = 0; P.vel.set(0, 0, 0); P.inv = 2;
   document.getElementById('gameover').classList.add('hidden');
+  requestLock();
 }
 function enterClimbTerrain() { P.state = 'climb'; P.tower = null; P.vy = 0; sfx(300, 0.05, 'triangle', 0.04); }
 function tryTowerClimb(mv) {
@@ -1054,7 +1067,7 @@ const mv = new THREE.Vector3();
 function updatePlayer(dt) {
   moveVector(mv);
   const mag = mv.length();
-  const wantSprint = (input.sprint || input.sprintKey) && mag > 0.1 && !P.exhausted;
+  const wantSprint = input.sprintKey && mag > 0.1 && !P.exhausted;
   if (P.inv > 0) P.inv -= dt;
   if (P.climbBoost > 0) P.climbBoost -= dt;
 
@@ -1145,7 +1158,7 @@ function updatePlayer(dt) {
       if (P.tower) {
         const t = P.tower, R = towerClimbR(t);
         const sp = 3.0 * (P.climbBoost > 0 ? 2.4 : 1);
-        const up = input.jy + input.ky, side = input.jx + input.kx;
+        const up = input.ky, side = input.kx;
         P.pos.y += clamp(up, -1, 1) * sp * dt;
         const tx = -Math.sin(P.towerAngle), tz = Math.cos(P.towerAngle);
         const rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
@@ -1177,7 +1190,7 @@ function updatePlayer(dt) {
       let px = -oz, pz = ox;
       const rx = Math.cos(cam.yaw), rz = -Math.sin(cam.yaw);
       if (px * rx + pz * rz < 0) { px = -px; pz = -pz; }
-      const up = clamp(input.jy + input.ky, -1, 1), side = clamp(input.jx + input.kx, -1, 1);
+      const up = clamp(input.ky, -1, 1), side = clamp(input.kx, -1, 1);
       const sp = 2.0 * (P.climbBoost > 0 ? 2.8 : 1);
       P.pos.x += (ux * up * n.y + px * side) * sp * dt;
       P.pos.z += (uz * up * n.y + pz * side) * sp * dt;
@@ -1195,7 +1208,7 @@ function updatePlayer(dt) {
       break;
     }
     case 'swim': {
-      const sprinting = (input.sprint || input.sprintKey) && P.stamina > 0 && mag > 0.1;
+      const sprinting = input.sprintKey && P.stamina > 0 && mag > 0.1;
       const spd = (sprinting ? 5.2 : 2.6) * mag;
       if (mag > 0.08) {
         P.pos.x += mv.x / mag * spd * dt; P.pos.z += mv.z / mag * spd * dt;
@@ -1312,10 +1325,10 @@ function isNight() { const h = dayTime * 24; return h < 5.5 || h > 19.5; }
 function currentInteraction() {
   for (const s of shrines) {
     if (Math.abs(P.pos.x - s.x) > 6 || Math.abs(P.pos.z - s.z) > 6) continue;
-    if (!s.done && !s.trial && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 4.2 && Math.abs(P.pos.y - s.y) < 3) return { type: 'shrine', s, label: '사당의 시련 시작' };
+    if (!s.done && !s.trial && Math.hypot(P.pos.x - s.x, P.pos.z - s.z) < 4.2 && Math.abs(P.pos.y - s.y) < 3) return { type: 'shrine', s, label: '[E] 사당의 시련 시작' };
   }
   for (const t of towers) {
-    if (!t.activated && Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < t.r + 0.9 && P.pos.y >= t.top - 0.2) return { type: 'tower', t, label: '탑 활성화' };
+    if (!t.activated && Math.hypot(P.pos.x - t.x, P.pos.z - t.z) < t.r + 0.9 && P.pos.y >= t.top - 0.2) return { type: 'tower', t, label: '[E] 탑 활성화' };
   }
   return null;
 }
@@ -1359,12 +1372,13 @@ function openReward() {
   document.getElementById('btnRewardStamina').disabled = stamMax;
   if (heartMax && stamMax) return;
   rewardEl.classList.remove('hidden');
+  document.exitPointerLock?.();
 }
 document.getElementById('btnRewardHeart').addEventListener('click', () => {
-  P.maxHp += 4; P.hp = P.maxHp; rewardEl.classList.add('hidden'); toast('❤️ 하트 그릇 +1'); fanfare(); save();
+  P.maxHp += 4; P.hp = P.maxHp; rewardEl.classList.add('hidden'); requestLock(); toast('❤️ 하트 그릇 +1'); fanfare(); save();
 });
 document.getElementById('btnRewardStamina').addEventListener('click', () => {
-  P.maxStamina += 20; P.stamina = P.maxStamina; P.exhausted = false; rewardEl.classList.add('hidden'); toast('🟢 기력의 그릇 +20%'); fanfare(); save();
+  P.maxStamina += 20; P.stamina = P.maxStamina; P.exhausted = false; rewardEl.classList.add('hidden'); requestLock(); toast('🟢 기력의 그릇 +20%'); fanfare(); save();
 });
 function activateTower(t) {
   t.activated = true; updateTowerLook(t);
@@ -1423,7 +1437,7 @@ function animatePlayer(dt, t) {
     aL.rotation.z = -0.25; aR.rotation.z = 0.25;
     b.rotation.x = 0.15;
   } else if (P.state === 'climb') {
-    P.walkPhase += dt * 6 * (Math.abs(input.jy + input.ky) + Math.abs(input.jx + input.kx) > 0.1 ? 1 : 0);
+    P.walkPhase += dt * 6 * (Math.abs(input.ky) + Math.abs(input.kx) > 0.1 ? 1 : 0);
     const s = Math.sin(P.walkPhase);
     aL.rotation.x = -2.4 + s * 0.5; aR.rotation.x = -2.4 - s * 0.5;
     lL.rotation.x = -0.6 - s * 0.4; lR.rotation.x = -0.6 + s * 0.4;
@@ -1441,7 +1455,7 @@ function updateCamera(dt) {
   const tgt = _v.copy(P.pos); tgt.y += 1.45;
   cam.target.lerp(tgt, Math.min(1, dt * 10));
   if (cam.target.distanceTo(tgt) > 30) cam.target.copy(tgt);
-  const want = P.state === 'glide' ? 9 : P.state === 'climb' ? 7.5 : 6.5;
+  const want = (P.state === 'glide' ? 9 : P.state === 'climb' ? 7.5 : 6.5) * cam.zoom;
   cam.dist = lerp(cam.dist, want, Math.min(1, dt * 3));
   const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
   camera.position.set(
@@ -1477,7 +1491,6 @@ function updateHUD(dt) {
   const it = currentInteraction();
   promptEl.textContent = it ? it.label : '';
   promptEl.classList.toggle('show', !!it);
-  btnInteract.classList.toggle('ready', !!it);
   appleCountEl.textContent = P.apples;
   hudT -= dt;
   if (hudT <= 0) {
@@ -1518,7 +1531,7 @@ function frame(now) {
   terrainTimer -= dt;
   if (terrainTimer <= 0) { terrainTimer = 0.25; updateTerrain(); }
   if (loadingWait && playerChunkReady()) { loadingWait = false; loadingEl.classList.add('hidden'); }
-  const active = started && !mapOpen && !P.dead && !loadingWait && rewardEl.classList.contains('hidden');
+  const active = started && !paused && !mapOpen && !P.dead && !loadingWait && rewardEl.classList.contains('hidden');
   if (active) {
     gameClock += dt;
     readKeys();
@@ -1561,10 +1574,6 @@ function frame(now) {
 
 // ---------- Menus ----------
 const titleEl = document.getElementById('title');
-const rotateEl = document.getElementById('rotate');
-let ignoreRotate = false;
-function rotateCheck() { rotateEl.classList.toggle('active', !ignoreRotate && window.innerHeight > window.innerWidth); }
-document.getElementById('btnIgnoreRotate').addEventListener('click', () => { ignoreRotate = true; rotateCheck(); });
 function begin(cont) {
   try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); actx.resume?.(); } catch (e) {}
   let loaded = false;
@@ -1578,9 +1587,10 @@ function begin(cont) {
   cam.target.copy(P.pos); cam.target.y += 1.45;
   titleEl.classList.add('hidden');
   started = true;
+  document.getElementById('keyhint').classList.remove('hidden');
   rebuildObjects(true); updateTerrain();
   loadingWait = true; loadingEl.classList.remove('hidden');
-  if (matchMedia('(pointer: coarse)').matches) goFullscreen();
+  requestLock();
   toast(loaded ? '모험을 이어간다' : '여기는 「시작의 고원」. 보라색 탑에 올라 활성화하고<br>주황색 빛기둥의 사당 120곳을 정화하라!', 6);
 }
 if (hasSave()) document.getElementById('btnContinue').classList.remove('hidden');
@@ -1588,16 +1598,15 @@ document.getElementById('btnContinue').addEventListener('click', () => begin(tru
 document.getElementById('btnNew').addEventListener('click', () => begin(false));
 document.getElementById('btnRetry').addEventListener('click', respawn);
 document.addEventListener('visibilitychange', () => { if (document.hidden && started) save(); });
-if (!matchMedia('(pointer: coarse)').matches) document.getElementById('buttons').style.opacity = '0.75';
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
-resize();
+applySettings();
 cam.target.copy(P.pos);
 worker.postMessage({ type: 'map', res: MAP_RES });
 updateTerrain();
 requestAnimationFrame(frame);
 window.__game = {
-  PM, THREE, P, shrines, towers, climbables, enemies, input, cam, chunks, terrainH, normalAt, teleport, SPAWN,
+  setPaused, isPaused: () => paused, PM, THREE, P, shrines, towers, climbables, enemies, input, cam, chunks, terrainH, normalAt, teleport, SPAWN,
   step: dt => updatePlayer(dt),
   stats: () => ({ chunks: chunks.size, visible: visibleChunks.size, leaves: desiredLeaves.length, inFlight, enemies: enemies.length, cells: cellCache.size, calls: renderer.info.render.calls, tris: renderer.info.render.triangles }),
 };

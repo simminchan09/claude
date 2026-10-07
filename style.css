@@ -1,10 +1,9 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body {
   margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
-  background: #0d1520; color: #fff; touch-action: none;
+  background: #0d1520; color: #fff;
   font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
-  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
-  overscroll-behavior: none;
+  user-select: none; -webkit-user-select: none;
 }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
 
@@ -18,8 +17,8 @@ html, body {
   font-size: 13px; text-shadow: 0 1px 3px #000; opacity: .9;
 }
 #minimap {
-  position: absolute; right: calc(12px + env(safe-area-inset-right)); top: calc(54px + env(safe-area-inset-top));
-  width: 110px; height: 110px; border-radius: 50%; border: 2px solid rgba(255,255,255,.7);
+  position: absolute; right: 16px; top: 16px;
+  width: 150px; height: 150px; border-radius: 50%; border: 2px solid rgba(255,255,255,.7);
   box-shadow: 0 2px 8px rgba(0,0,0,.5);
 }
 #stamina { position: absolute; left: 0; top: 0; opacity: 0; transition: opacity .3s; }
@@ -46,38 +45,7 @@ html, body {
 }
 #prompt.show { opacity: 1; }
 
-#joyBase {
-  position: fixed; width: 120px; height: 120px; margin: -60px 0 0 -60px; border-radius: 50%;
-  background: rgba(255,255,255,.12); border: 2px solid rgba(255,255,255,.35);
-  display: none; pointer-events: none;
-}
-#joyKnob {
-  position: absolute; left: 50%; top: 50%; width: 52px; height: 52px; margin: -26px 0 0 -26px;
-  border-radius: 50%; background: rgba(255,255,255,.55);
-}
 
-#buttons {
-  position: fixed; right: calc(14px + env(safe-area-inset-right)); bottom: calc(14px + env(safe-area-inset-bottom));
-  width: 200px; height: 200px;
-}
-button { font-family: inherit; touch-action: none; }
-.act {
-  position: absolute; width: 64px; height: 64px; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.6); background: rgba(20,30,45,.5); color: #fff;
-  font-size: 13px; font-weight: 700; line-height: 1.1; padding: 0;
-}
-.act.pressed { background: rgba(120,200,255,.55); }
-.act.big { width: 78px; height: 78px; font-size: 15px; }
-#btnJump { right: 0; bottom: 0; }
-#btnAttack { right: 90px; bottom: 6px; }
-#btnSprint { right: 8px; bottom: 90px; }
-#btnInteract { right: 84px; bottom: 84px; }
-#btnInteract.ready { border-color: #ffd24a; box-shadow: 0 0 12px #ffd24a; }
-
-#topButtons {
-  position: fixed; right: calc(12px + env(safe-area-inset-right)); top: calc(10px + env(safe-area-inset-top));
-  display: flex; gap: 6px;
-}
 .small {
   height: 36px; min-width: 44px; padding: 0 10px; border-radius: 18px;
   border: 1px solid rgba(255,255,255,.5); background: rgba(20,30,45,.55); color: #fff; font-size: 14px;
@@ -99,10 +67,6 @@ button { font-family: inherit; touch-action: none; }
 #mapView { z-index: 8; }
 #reward { z-index: 11; }
 #title { background: linear-gradient(180deg, rgba(20,40,70,.85), rgba(10,15,25,.92)); }
-#rotate { display: none; z-index: 20; }
-@media (orientation: portrait) and (max-width: 700px) {
-  #rotate.active { display: flex; }
-}
 .mapWrap { display: flex; gap: 8px; align-items: flex-start; }
 #mapView canvas { width: min(78vw, 80vh); height: min(78vw, 80vh); border-radius: 10px; border: 2px solid rgba(255,255,255,.5); touch-action: none; }
 .mapSide { display: flex; flex-direction: column; gap: 6px; }
@@ -111,3 +75,23 @@ button { font-family: inherit; touch-action: none; }
 .small:disabled, .menu:disabled { opacity: .35; }
 .legend { margin-top: 8px; font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+
+#apples { position: absolute; right: 26px; top: 176px; font-size: 15px; text-shadow: 0 1px 3px #000; background: rgba(0,0,0,.35); padding: 3px 10px; border-radius: 12px; }
+#keyhint {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; max-width: 92vw;
+  font-size: 12px; opacity: .8; text-shadow: 0 1px 3px #000;
+}
+kbd {
+  display: inline-block; min-width: 18px; padding: 1px 6px; margin-right: 3px; border-radius: 4px;
+  border: 1px solid rgba(255,255,255,.6); background: rgba(0,0,0,.45); font: 11px/1.5 inherit; text-align: center;
+}
+.settings { display: grid; gap: 8px; margin: 14px auto; width: 320px; text-align: left; font-size: 14px;
+  background: rgba(0,0,0,.3); padding: 12px 16px; border-radius: 10px; }
+.settings label { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.settings input[type=range] { flex: 1; }
+.settings label:has(input[type=checkbox]) { justify-content: flex-start; }
+.settings select { background: #1c2c40; color: #fff; border: 1px solid #567; border-radius: 6px; padding: 3px 6px; font: inherit; }
+#pause { z-index: 12; }
+.menu:hover, .small:hover { background: rgba(90,160,220,.6); cursor: pointer; }
+#game { cursor: pointer; }
