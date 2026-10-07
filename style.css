@@ -96,11 +96,18 @@ button { font-family: inherit; touch-action: none; }
   border: 2px solid rgba(255,255,255,.7); background: rgba(60,120,170,.45); color: #fff; font-size: 17px;
 }
 .help { margin-top: 16px; font-size: 12px; opacity: .75; line-height: 1.6; }
+#mapView { z-index: 8; }
+#reward { z-index: 11; }
 #title { background: linear-gradient(180deg, rgba(20,40,70,.85), rgba(10,15,25,.92)); }
 #rotate { display: none; z-index: 20; }
 @media (orientation: portrait) and (max-width: 700px) {
   #rotate.active { display: flex; }
 }
-#mapView canvas { width: min(86vw, 82vh); height: min(86vw, 82vh); border-radius: 10px; border: 2px solid rgba(255,255,255,.5); }
+.mapWrap { display: flex; gap: 8px; align-items: flex-start; }
+#mapView canvas { width: min(78vw, 80vh); height: min(78vw, 80vh); border-radius: 10px; border: 2px solid rgba(255,255,255,.5); touch-action: none; }
+.mapSide { display: flex; flex-direction: column; gap: 6px; }
+#mapSel { margin-top: 6px; background: rgba(0,0,0,.55); padding: 6px 12px; border-radius: 18px; font-size: 14px; }
+#loading { background: rgba(5,10,18,.5); z-index: 9; }
+.small:disabled, .menu:disabled { opacity: .35; }
 .legend { margin-top: 8px; font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }

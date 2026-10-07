@@ -18,7 +18,7 @@
 
 <div id="hud">
   <canvas id="hearts" width="400" height="64"></canvas>
-  <div id="info"><span id="clock">08:00</span> · <span id="shrineCount">사당 0/8</span></div>
+  <div id="info"><span id="clock">08:00</span> · <span id="shrineCount">사당 0/120</span><br><span id="coords"></span></div>
   <canvas id="minimap" width="140" height="140"></canvas>
   <svg id="stamina" width="56" height="56" viewBox="0 0 56 56">
     <circle cx="28" cy="28" r="20" class="ring-bg"/>
@@ -44,19 +44,39 @@
 </div>
 
 <div id="mapView" class="overlay hidden">
-  <canvas id="bigmap" width="600" height="600"></canvas>
+  <div class="mapWrap">
+    <canvas id="bigmap" width="800" height="800"></canvas>
+    <div class="mapSide">
+      <button id="btnZoomIn" class="small">＋</button>
+      <button id="btnZoomOut" class="small">－</button>
+      <button id="btnMapMe" class="small">내 위치</button>
+      <button id="btnMapClose" class="small">닫기</button>
+    </div>
+  </div>
+  <div id="mapSel" class="hidden"><span id="mapSelText"></span> <button id="btnTravel" class="small">빠른 이동</button></div>
   <div class="legend">
     <span><i style="background:#ffa53a"></i>미정화 사당</span>
     <span><i style="background:#4fd2ff"></i>정화된 사당</span>
-    <span><i style="background:#c9a0ff"></i>탑</span>
-    <span>화면을 터치하면 닫힘</span>
+    <span><i style="background:#c9a0ff"></i>활성화된 탑</span>
+    <span>드래그: 이동 · 마커 터치: 선택</span>
   </div>
 </div>
+
+<div id="reward" class="overlay hidden">
+  <div class="panel">
+    <h2>빛의 구슬 4개를 바쳤다</h2>
+    <p>무엇을 원하는가?</p>
+    <button id="btnRewardHeart" class="menu">❤️ 하트 그릇 +1</button>
+    <button id="btnRewardStamina" class="menu">🟢 기력의 그릇 +20%</button>
+  </div>
+</div>
+
+<div id="loading" class="overlay hidden"><div class="panel"><h2>지형 불러오는 중...</h2></div></div>
 
 <div id="title" class="overlay">
   <div class="panel">
     <h1>바람의 대지</h1>
-    <p class="sub">모바일 오픈월드 어드벤처</p>
+    <p class="sub">모바일 오픈월드 어드벤처 · 74.9km²의 대지</p>
     <button id="btnContinue" class="menu hidden">이어하기</button>
     <button id="btnNew" class="menu">새로 시작</button>
     <div class="help">
