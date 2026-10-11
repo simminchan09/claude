@@ -59,3 +59,37 @@ export class DummyCtrl {
     return { mx: 0, mz: 0, guard: this.mode === 'guard', jumpP: false, press: null };
   }
 }
+
+// 몬스터 AI: 다가가기 · 주위 돌기 · 공격 (동시에 공격하는 수를 G.takeToken 으로 제한)
+// 적 정의의 ai: { range, keep, cdMin, cdMax, pick(f, o, dist) -> 기술 이름 | null, chain }
+export class EnemyAI {
+  constructor() { this.t = rand(0.2, 0.8); this.cool = rand(0.8, 1.8); this.mode = 'approach'; this.strafe = Math.random() < 0.5 ? 1 : -1; this.human = false; }
+  read(G, f) {
+    const out = { mx: 0, mz: 0, guard: false, jumpP: false, press: null }, dt = (G.rdt || 1 / 60) * (G.foeScale ?? 1), A = f.def.ai;
+    this.t -= dt; this.cool -= dt;
+    const o = f.opp; if (G.state !== 'fight' || !o || o.state === 'ko') return out;
+    if (f.state === 'act') { if (f.def.moves[f.actName] && f.def.moves[f.actName].next && Math.random() < (A.chain ?? 0.5) * 0.1) out.press = 'light'; return out; }
+    if (f.state !== 'idle' && f.state !== 'run') return out;
+    const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z, dist = Math.hypot(dx, dz) || 1, tx = dx / dist, tz = dz / dist;
+    if (this.t <= 0) {
+      this.t = rand(0.15, 0.35);
+      if (this.cool <= 0 && dist < A.range + 0.6 && G.takeToken(f)) {
+        const mv = A.pick(f, o, dist);
+        if (mv && f.canAct(mv)) { out.press = mv; this.cool = rand(A.cdMin, A.cdMax) * (f.enraged ? 0.65 : 1); return out; }
+      }
+      this.mode = dist > A.range ? 'approach' : Math.random() < 0.65 ? 'circle' : 'hold';
+      if (Math.random() < 0.25) this.strafe *= -1;
+    }
+    if (this.mode === 'approach') { out.mx = tx; out.mz = tz; }
+    else if (this.mode === 'circle') { const away = dist < (A.keep ?? 1.2) ? -0.6 : 0.15; out.mx = (-tz * this.strafe + tx * away) * 0.55; out.mz = (tx * this.strafe + tz * away) * 0.55; }
+    const W = G.stage && G.stage.world;
+    if (W && (out.mx || out.mz)) {
+      const l = Math.hypot(out.mx, out.mz), ux = out.mx / l, uz = out.mz / l;
+      if (W.blockedAhead(f.pos, ux, uz, 1.8 * f.scale)) for (const a of [0.9 * this.strafe, -0.9 * this.strafe, 1.7 * this.strafe]) {
+        const c = Math.cos(a), s = Math.sin(a), x = ux * c - uz * s, z = ux * s + uz * c;
+        if (!W.blockedAhead(f.pos, x, z, 1.8 * f.scale)) { out.mx = x * l; out.mz = z * l; break; }
+      }
+    }
+    return out;
+  }
+}

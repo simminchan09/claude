@@ -29,12 +29,16 @@ addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
 addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' || e.target.id !== 'gl') return; const k = 'Mouse' + e.button; if (!keys[k]) pressed[k] = true; keys[k] = true; audioInit(); });
 addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') keys['Mouse' + e.button] = false; });
 addEventListener('contextmenu', (e) => { if (e.target.id === 'gl') e.preventDefault(); });
+// 마우스 시점: 포인터 잠금 중이거나 mouse.active(자유 시점 전투 중)일 때 이동량을 모은다
+export const mouse = { dx: 0, dy: 0, active: false };
+addEventListener('mousemove', (e) => { if (document.pointerLockElement || mouse.active) { mouse.dx += e.movementX || 0; mouse.dy += e.movementY || 0; } });
+addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse' && e.button === 1) e.preventDefault(); });
 export function endFrame() { for (const k in pressed) delete pressed[k]; }
 
 // 키 배치. 1P 단독(CPU·훈련) 모드에서는 방향키도 이동에 쓸 수 있다.
 export const MAPS = {
   // 좌클 = 기본공격 · 우클 / Shift / E = 스킬 · Q = 궁극기 (J K U I O 도 같은 동작)
-  p1solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['Space'], dash: ['KeyC'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'ShiftRight', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
+  p1solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['Space'], dash: ['KeyC'], lock: ['Tab', 'Mouse1'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'ShiftRight', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
   p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], dash: ['KeyC'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
   p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight'], dash: ['NumpadDecimal', 'ShiftRight'], guard: ['Numpad3', 'Slash'], light: ['Numpad1', 'Comma'], heavy: ['Numpad2', 'Period'], s1: ['Numpad4', 'Semicolon'], s2: ['Numpad5', 'Quote'], ult: ['Numpad6', 'BracketRight'] },
 };
@@ -57,7 +61,7 @@ export class KeyCtrl {
     const f = G.camFwdOf ? G.camFwdOf(fighter) : G.camFwd;
     let mx = f.x * iy - f.z * ix, mz = f.z * iy + f.x * ix;
     const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
-    return { mx, mz, guard: h('guard'), jumpP: p('jump'), press: ACTIONS.find(p) || null };
+    return { mx, mz, guard: h('guard'), jumpP: p('jump'), lockP: this.m.lock ? p('lock') : false, press: ACTIONS.find(p) || null };
   }
 }
 
@@ -103,5 +107,12 @@ const SFX = {
   jump() { noise(0.1, 'bandpass', 600, 1400, 0.15, 1); },
   land() { tone(90, 50, 0.1, 'sine', 0.25); },
   ui() { tone(880, 1320, 0.07, 'triangle', 0.12); },
+  tele() { tone(1200, 1500, 0.12, 'triangle', 0.12); tone(1800, 2200, 0.1, 'sine', 0.08, 0.05); },
+  teleRed() { tone(300, 180, 0.3, 'sawtooth', 0.12); tone(600, 360, 0.3, 'square', 0.05); },
+  parry() { tone(2200, 1600, 0.25, 'triangle', 0.25); tone(3300, 2600, 0.2, 'sine', 0.15); noise(0.15, 'highpass', 6000, 3000, 0.4); },
+  dodge() { tone(400, 1600, 0.4, 'sine', 0.18); noise(0.5, 'bandpass', 3000, 600, 0.25, 2); },
+  brk() { tone(160, 50, 0.6, 'sawtooth', 0.25); noise(0.5, 'lowpass', 4000, 200, 0.5); tone(900, 300, 0.4, 'square', 0.08); },
+  spawn() { tone(90, 300, 0.5, 'sawtooth', 0.08); noise(0.6, 'bandpass', 200, 2000, 0.25, 2); },
+  crit() { tone(1600, 2400, 0.08, 'square', 0.06); },
 };
 export function sfx(n) { try { SFX[n] && SFX[n](); } catch (e) { /* 소리 실패는 무시 */ } }

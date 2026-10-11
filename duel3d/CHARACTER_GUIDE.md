@@ -44,7 +44,7 @@ export default {
 필수 포즈 이름: `base`(대기) `run` `jump` `guard` `hit` `air`(공중 피격) `down`(누움) `dash` `win` `portrait`(컷인 초상).
 
 ## 5. 기술
-이름 규칙과 키: `light1 → light2 → light3` = 좌클릭 연타, `heavy` = 우클릭, `s1` = Shift, `s2` = E, `ult` = Q.
+이름 규칙과 키: `light1 → light2 → light3` = 좌클릭 연타, `heavy` = 우클릭, `s1` = Shift, `s2` = E, `ult` = Q, `counter` = 극한 회피 직후 좌클릭(선택).
 
 | 필드 | 의미 |
 |---|---|
@@ -58,6 +58,8 @@ export default {
 | `next`, `cancel` | 약공 연계 대상과 입력 허용 시점 |
 | `cd` | `'s1'`/`'s2'` 쿨타임 슬롯 |
 | `trail` | 무기 궤적 표시 |
+| `tele` | `[시간, 'yellow' \| 'red']` 공격 예고 빛 (주로 적 기술. 빨강이면 hits 에 `unblock: true`) |
+| hits 의 `daze` | 그로기 누적량 (기본: 피해 × 0.55) |
 | `tick(f, o, G, t, dt)` | 매 프레임 실행 |
 | `end(f, o, G)` | 종료·중단 시 정리 |
 | `ult: true` + `cam` | 궁극기. 컷인 뒤 `cam` 키프레임으로 카메라 연출: `[[t, { ref: 'self'|'target', p: [오른쪽,위,앞], l: [...], fov }]]` |
@@ -71,3 +73,10 @@ export default {
 - 판정: `new Projectile(G, {...})` + `G.spawn()`, `areaHit(f, 중심, 반경, hit)`
 - 궁극기 고정: `o.lock()` / `o.release()`
 - 소리: `sfx('swing' | 'heavy' | 'hit' | 'big' | 'zap' | 'shot' | 'boom' | 'charge' | 'dash' ...)`
+
+## 7. 몬스터 · 보스
+`src/enemies/index.js` 에 같은 형식으로 정의합니다. 추가 필드:
+- `stats.daze`(그로기 최대치) · `stats.armor`(슈퍼아머) · `stats.breakTime`(브레이크 시간) · `scale`(몸 크기 배율) · `boss: true`
+- `ai: { range, keep, cdMin, cdMax, chain, pick(f, o, dist) }` — `pick` 이 쓸 기술 이름('light' · 'heavy' · 's1' …)을 돌려준다
+- `slow(원본기술, { k, windup, tele, dmg, unblock, ev })` 로 캐릭터 기술을 느리고 예고가 있는 적 기술로 바꿀 수 있다
+- 토벌전 구성은 같은 파일의 `WAVES`

@@ -111,7 +111,7 @@ const moves = {
       [0.24, { chest: [0.1, -0.6, 0], spine: [0.2, 0, 0], shoulderL: [-1.55, 0, 0], elbowL: [0, 0, 0] }], [0.4, {}], [0.55, 'base']],
     tick: (f, o, G, t) => { if (t < 0.22) { const h = f.model.J.handL.getWorldPosition(new V3()); G.fx.p(h, { size: 0.5, size1: 0.1, life: 0.15, color: ACC(f), alpha: 0.8 }); } },
     ev: [[0.02, () => sfx('charge')], [0.24, (f, o, G) => {
-      const h = f.model.J.handL.getWorldPosition(new V3()), d = o.chest(new V3()).sub(h).normalize();
+      const h = f.model.J.handL.getWorldPosition(new V3()), d = (o ? o.chest(new V3()) : f.local([0, 1.1, 12])).sub(h).normalize();
       G.spawn(new Projectile(G, { owner: f, pos: h.addScaledVector(d, 0.3), vel: d.multiplyScalar(17), r: 0.35, color: ACC(f), homing: 1.6, hit: { dmg: 70, kb: [5, 4], stun: 0.5, hs: 0.09, shake: 0.12 } }));
       sfx('shot'); G.fx.burst(h, 10, ACC(f), 5, { dir: d, spread: 0.6 });
     }]] },
@@ -126,6 +126,16 @@ const moves = {
         areaHit(f, c, 4.6, { dmg: 72, kb: [6, 8.5], stun: 0.6, hs: 0.1, shake: 0.12 });
       }]] },
   // 궁극기: 컷인이 끝난 뒤 0초부터 진행된다
+  // 극한 회피 뒤 좌클릭: 상대 옆으로 순간이동해 크게 벤다
+  counter: { dur: 0.55, trail: true, aim: true,
+    keys: [[0, { chest: [0.1, -1.1, 0], spine: [0.15, -0.3, 0], shoulderR: [-1.45, 0, -0.5], elbowR: [-0.25, 0, 0], weapon: [1.5, 0, 0] }], [0.09, { chest: [0.2, 1.0, 0], spine: [0.2, 0.35, 0], shoulderR: [-1.4, 0, 0.35] }], [0.2, { chest: [0.2, 1.15, 0] }], [0.55, 'base']],
+    ev: [[0, (f, o, G) => {
+      const from = f.chest();
+      if (o) { const d = new V3().subVectors(f.pos, o.pos).setY(0).normalize(), side = new V3(-d.z, 0, d.x); f.pos.copy(o.pos).setY(o.onGround ? 0 : o.pos.y).addScaledVector(side, 1.2 + 0.4 * o.scale).addScaledVector(d, 0.6); f.faceOpp(); }
+      for (let i = 0; i <= 8; i++) G.fx.p(from.clone().lerp(f.chest(), i / 8), { size: 0.8, size1: 0.2, life: 0.3, color: ACC(f), alpha: 0.7 });
+      sfx('dash'); G.flash(ACC(f), 0.2);
+    }], [0.05, (f) => { sfx('swing'); f.slashFx({ tilt: 0.2, r: 1.8, at: [0, 1.15, 0.35], life: 0.3 }); }]],
+    hits: [{ t0: 0.03, t1: 0.16, at: [0, 1.1, 1.0], r: 1.0, dmg: 95, kb: [6, 4], stun: 0.6, hs: 0.12, shake: 0.15, daze: 45, snd: 'big' }] },
   ult: { dur: 2.7, ult: true, aim: true,
     keys: [[0, 'charge'], [0.24, 'charge'], [0.26, 'base'], [1.2, 'base'], [1.25, 'charge'], [2.7, 'charge']],
     cam: [[0, { ref: 'self', p: [1.7, 1.5, 2.6], l: [0, 1.2, 0], fov: 42 }], [0.25, { ref: 'target', p: [4.5, 2.3, -3.5], l: [0, 1.4, 0], fov: 52 }],
@@ -166,6 +176,6 @@ export default {
   stats: { hp: 1000, speed: 7.2, jump: 9.5 },
   palettes: [{ accent: 0x46e6ff, armor: 0xc3cad6, band: '#06283a' }, { accent: 0xff7a2a, armor: 0x3b3f4a, band: '#3a1206' }],
   skills: { heavy: { name: '올려베기' }, s1: { name: '에너지탄', cd: 4 }, s2: { name: '충격파', cd: 7 }, ult: { name: '오버클럭', sub: '데모 드라이브' } },
-  moveList: [['좌클 ×3', '베기 → 내려베기 → 찌르기(띄움)'], ['우클', '올려베기 (공중으로 띄움)'], ['Shift', '유도 에너지탄'], ['E', '도약 후 지면 충격파 (범위)'], ['Q', '오버클럭: 7연속 순간이동 베기 → 빛기둥']],
+  moveList: [['C (타이밍)', '극한 회피 → 적이 느려지고 좌클릭으로 반격'], ['F (타이밍)', '패리 → 노란 예고 공격을 튕겨내기'], ['좌클 ×3', '베기 → 내려베기 → 찌르기(띄움)'], ['우클', '올려베기 (공중으로 띄움)'], ['Shift', '유도 에너지탄'], ['E', '도약 후 지면 충격파 (범위)'], ['Q', '오버클럭: 7연속 순간이동 베기 → 빛기둥']],
   createModel, poses, moves,
 };

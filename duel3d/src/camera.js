@@ -40,6 +40,18 @@ export class FightCam {
     } else if (this.focus) {
       const f = this.focus, p = f.target.pos; f.t += dt; const yaw = (f.yaw ?? f.target.yaw) + f.t * f.spin;
       tP.set(p.x + Math.sin(yaw) * f.dist, p.y + f.h, p.z + Math.cos(yaw) * f.dist); tL.set(p.x, p.y + 1.1, p.z); fov = 42; k = 4;
+    } else if (this.mode === 'free' && this.follow) {
+      // 자유 시점 (명조·젠존제식): 마우스로 회전, 대상 고정(Tab) 중에는 대상 쪽으로 자동 회전
+      const f = this.follow, p = f.pos, M = G.mouse || { dx: 0, dy: 0 }, t = G.lock && !G.lock.gone ? G.lock : null;
+      if (this.fy == null) this.fy = f.yaw; if (this.fp == null) this.fp = 0.22;
+      this.fy -= M.dx * 0.0026; this.fp = clamp(this.fp + M.dy * 0.0022, -0.4, 1.05);
+      if (t) { const want = Math.atan2(t.pos.x - p.x, t.pos.z - p.z); this.fy = angLerp(this.fy, want, 1 - Math.exp(-dt * 5)); this.fp = damp(this.fp, 0.2 + Math.min(0.3, (t.scale - 1) * 0.4), 3, dt); }
+      const fx = Math.sin(this.fy), fz = Math.cos(this.fy), rx = -fz, rz = fx, cp = Math.cos(this.fp), sp = Math.sin(this.fp);
+      const big = Math.max(0, ...G.fighters.filter((o) => o.team !== f.team && !o.gone && o.state !== 'ko').map((o) => (o.scale - 1) * (Math.hypot(o.pos.x - p.x, o.pos.z - p.z) < 10 ? 1 : 0)));
+      const dist = 5.2 + Math.min(2.4, big * 3.5), px = p.x + rx * 0.6, py = p.y + 1.5, pz = p.z + rz * 0.6;
+      tP.set(px - fx * cp * dist, Math.max(0.4, py + sp * dist), pz - fz * cp * dist);
+      tL.set(px + fx * 2, py + 0.1 - this.fp * 0.6, pz + fz * 2);
+      fov = 54; k = 16;
     } else if (this.follow) {
       // 3인칭 추적: 내 캐릭터 등 뒤(오른쪽 어깨 너머)에서 상대 쪽을 바라본다
       const f = this.follow, p = f.pos, o = f.opp.pos, dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);

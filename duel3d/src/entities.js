@@ -18,8 +18,8 @@ export class Projectile {
     this.pos.addScaledVector(this.vel, dt); this.mesh.position.copy(this.pos); this.halo.scale.setScalar(1 + 0.18 * Math.sin(this.t * 45));
     G.fx.p(this.pos, { size: this.r * 2.6, size1: this.r * 0.6, life: 0.22, color: this.color, alpha: 0.7, drag: 0 });
     G.fx.burst(this.pos, 1, this.color, 1.5, { lk: 0.6 });
-    if (tgt && tgt.hurtHit(this.pos, this.r)) {
-      const r = tgt.takeHit(this.owner, this.h, this.vel.clone().setY(0).normalize());
+    for (const t of this.owner.foes()) if (t.hurtHit(this.pos, this.r)) {
+      const r = t.takeHit(this.owner, this.h, this.vel.clone().setY(0).normalize());
       if (r) { G.fx.impact(this.pos, this.color, 1.4); this.onHit && this.onHit(this, r); return this.kill(); }
     }
     const W = G.stage && G.stage.world;
@@ -30,8 +30,12 @@ export class Projectile {
 
 // 원형 범위 판정 (지면 충격파 등). 맞으면 피격 결과를 돌려준다
 export function areaHit(att, center, radius, h, maxY = 0.6) { // maxY: 이보다 높이 뜬 상대는 맞지 않음 (지면 충격파)
-  const o = att.opp, dx = o.pos.x - center.x, dz = o.pos.z - center.z, d = Math.hypot(dx, dz);
-  if (d > radius + 0.42 || o.pos.y - center.y > maxY) return false;
-  const dir = d > 0.01 ? new V3(dx / d, 0, dz / d) : att.fwd(new V3());
-  return o.takeHit(att, h, dir);
+  let any = false;
+  for (const o of att.foes()) {
+    const dx = o.pos.x - center.x, dz = o.pos.z - center.z, d = Math.hypot(dx, dz);
+    if (d > radius + 0.42 * o.scale || o.pos.y - center.y > maxY) continue;
+    const dir = d > 0.01 ? new V3(dx / d, 0, dz / d) : att.fwd(new V3());
+    any = o.takeHit(att, h, dir) || any;
+  }
+  return any;
 }

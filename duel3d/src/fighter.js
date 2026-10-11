@@ -11,6 +11,8 @@ export const GRAV = 26;
 const HURT_PARTS = [['hips', 'neck', 0.95], ['neck', 'headTop', 0.72], ['shoulderL', 'elbowL', 0.36], ['elbowL', 'handL', 0.33], ['shoulderR', 'elbowR', 0.36], ['elbowR', 'handR', 0.33],
   ['hipL', 'kneeL', 0.45], ['kneeL', 'footL', 0.4], ['hipR', 'kneeR', 0.45], ['kneeR', 'footR', 0.4]];
 const tA = new V3(), tB = new V3(), tC = new V3(), tD = new V3();
+let UID = 0;
+const PERFECT_DODGE = 0.2, PERFECT_PARRY = 0.22; // 회피·방어 입력 직후 이 시간 안에 맞으면 극한 회피 · 패리
 
 // 선분과 선분 사이 최단 거리
 function segSegDist(p1, q1, p2, q2) {
@@ -37,8 +39,9 @@ function segDist(p, a, b) {
 
 export class Fighter {
   constructor(def, slot, ctrl, G, palette) {
-    this.def = prepareDef(def); this.slot = slot; this.ctrl = ctrl; this.G = G; this.palette = palette;
+    this.def = prepareDef(def); this.slot = slot; this.ctrl = ctrl; this.G = G; this.palette = palette; this.id = ++UID; this.team = slot ? 1 : 0;
     this.model = def.createModel(palette); this.root = this.model.root; G.scene.add(this.root);
+    this.scale = def.scale || 1; this.root.scale.setScalar(this.scale); this.maxDaze = def.stats.daze || 0;
     this.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.pos = this.root.position; this.vel = new V3();
     this.pose = new Float32Array(POSE_LEN); this.tgt = new Float32Array(POSE_LEN);
@@ -58,6 +61,7 @@ export class Fighter {
     this.buf = null; this.jumpBuf = 0; this.cd = { s1: 0, s2: 0 }; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
+    this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
     this.pose.set(this.def._poses.base); this.root.visible = true; this.trail.clear(); this.ghostT = 0;
     this.root.rotation.y = this.yaw; this.applyRig(1 / 60); this.hasW = false; this.updateHurt();
   }
@@ -73,10 +77,12 @@ export class Fighter {
   yawTo(p) { return Math.atan2(p.x - this.pos.x, p.z - this.pos.z); }
   // dt 생략 시 즉시 상대를 바라본다
   faceOpp(rate, dt) { const o = this.opp; if (!o) return; const y = this.yawTo(o.pos); this.yaw = dt === undefined ? y : angLerp(this.yaw, y, 1 - Math.exp(-rate * dt)); }
-  dist() { return Math.hypot(this.opp.pos.x - this.pos.x, this.opp.pos.z - this.pos.z); }
+  dist() { return this.opp ? Math.hypot(this.opp.pos.x - this.pos.x, this.opp.pos.z - this.pos.z) : 99; }
+  // 공격이 닿을 수 있는 상대 목록 (다수 적 지원)
+  foes() { return this.G.foesOf ? this.G.foesOf(this) : this.opp ? [this.opp] : []; }
   // 골격에서 피격 캡슐 갱신 (applyRig 뒤에 호출)
   updateHurt() {
-    const J = this.model.J, k = (this.def.hurtScale || 1) * this.model.dims.shW;
+    const J = this.model.J, k = (this.def.hurtScale || 1) * this.model.dims.shW * this.scale;
     HURT_PARTS.forEach(([ja, jb, rr], i) => {
       const h = this.hurt[i]; J[ja].getWorldPosition(h.a);
       if (jb === 'headTop') J.head.localToWorld(h.b.set(0, this.model.dims.headTop ?? 0.2, 0)); else J[jb].getWorldPosition(h.b);
@@ -100,9 +106,10 @@ export class Fighter {
     const inp = this.ctrl.read(this.G, this); this.I = inp;
     if (inp.press) this.buf = { a: inp.press, t: 0.25 };
     if (inp.jumpP) this.jumpBuf = 0.15;
+    if (inp.lockP && this.G.toggleLock) this.G.toggleLock(this);
   }
   canAct(a) {
-    if (a === 'ult') return this.energy >= 100;
+    if (a === 'ult') return this.energy >= 100 && !!this.opp;
     if (a === 's1' || a === 's2') return this.cd[a] <= 0;
     if (a === 'dash') return this.dashCd <= 0 && this.onGround;
     return true;
@@ -110,19 +117,22 @@ export class Fighter {
   tryAction(a) {
     if (!this.canAct(a)) return false;
     if (a === 'dash') {
-      const m = Math.hypot(this.I.mx, this.I.mz), d = m > 0.2 ? new V3(this.I.mx / m, 0, this.I.mz / m) : this.fwd(new V3());
-      this.state = 'dash'; this.dashT = 0.24; this.dashCd = 0.5; this.vel.set(d.x * 17, 0, d.z * 17); this.inv = 0.14; this.yaw = Math.atan2(d.x, d.z);
+      // 회피: 입력 방향으로, 입력이 없으면 뒤로 물러난다. 시작 직후 맞으면 극한 회피
+      const m = Math.hypot(this.I.mx, this.I.mz), back = m <= 0.2, d = back ? this.fwd(new V3()).negate() : new V3(this.I.mx / m, 0, this.I.mz / m);
+      this.state = 'dash'; this.dashT = 0.26; this.dashCd = 0.45; this.vel.set(d.x * 16, 0, d.z * 16); this.inv = 0.3; this.dodgeT = this.G.time; if (!back) this.yaw = Math.atan2(d.x, d.z);
       this.G.fx.burst(this.pos.clone().setY(0.1), 10, 0x8a7a90, 3, { kind: 'dust' }); sfx('dash'); return true;
     }
     if (!this.onGround && a !== 'light' && a !== 'heavy' && a !== 'ult') return false;
+    if (a === 'light' && this.counterT > 0 && this.def.moves.counter) { this.counterT = 0; this.start('counter'); return true; }
     this.start(a === 'light' ? 'light1' : a); return true;
   }
   start(name) {
     const m = this.def.moves[name]; if (!m) return;
     if (m.cd) this.cd[m.cd] = this.def.skills[m.cd].cd;
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
-    this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear();
-    if (m.aim !== false && this.opp) this.faceOpp(1);
+    this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear(); this.teleDone = false;
+    // 자동 조준: 가까운 대상이 있으면 그쪽을 본다
+    if (m.aim !== false && this.opp && (this.team === 1 || this.dist() < 10)) this.faceOpp();
     m.start && m.start(this, this.opp, this.G);
     if (m.ult) { this.energy = 0; this.inv = 99; this.G.startCine(this); }
   }
@@ -131,6 +141,12 @@ export class Fighter {
     m && m.end && m.end(this, this.opp, this.G);
     if (this.inv > 5) this.inv = 0.25;
   }
+  breakStart(att) {
+    const G = this.G; this.brokenT = this.def.stats.breakTime ?? 4; this.daze = this.maxDaze;
+    if (this.act && this.act.end) this.act.end(this, this.opp, G);
+    this.act = null; this.trail.clear(); this.state = 'hit'; this.stun = this.brokenT;
+    G.onBreak && G.onBreak(this, att);
+  }
   lock() { // 궁극기 연출용 고정
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
     this.held = true; this.act = null; this.state = 'hit'; this.stun = 99; this.vel.set(0, 0, 0); this.trail.clear(); this.launched = false;
@@ -138,12 +154,18 @@ export class Fighter {
   release() { this.held = false; }
   /* ----- 피격 ----- */
   takeHit(att, h, dirIn) {
-    if ((this.inv > 0 && !h.force) || this.state === 'ko') return false;
-    const G = this.G, dir = (dirIn ? dirIn.clone() : tC.subVectors(this.pos, att.pos)).setY(0);
+    if (this.state === 'ko' || this.gone || (att.team === this.team && !h.force)) return false;
+    const G = this.G;
+    // 극한 회피: 회피 시작 직후에 맞을 공격이었다
+    if (this.state === 'dash' && G.time - this.dodgeT < PERFECT_DODGE && !h.force) { G.onPerfectDodge && G.onPerfectDodge(this, att); this.dodgeT = -9; return false; }
+    if (this.inv > 0 && !h.force) return false;
+    const dir = (dirIn ? dirIn.clone() : tC.subVectors(this.pos, att.pos)).setY(0);
     if (dir.lengthSq() < 1e-6) att.fwd(dir); dir.normalize();
     const point = this.chest(new V3()).addScaledVector(dir, -0.35);
     // 방어: 정면 공격만 막는다
     const toAtt = tD.subVectors(att.pos, this.pos).setY(0).normalize(), facing = this.fwd(new V3()).dot(toAtt);
+    // 패리: 방어를 누른 직후에 막았다 (붉은 공격은 막을 수 없음)
+    if (this.state === 'guard' && !h.unblock && !h.force && facing > 0.2 && this.onGround && G.time - this.guardT0 < PERFECT_PARRY && G.onParry) { G.onParry(this, att, h, point); return 'parry'; }
     if (this.state === 'guard' && !h.unblock && !h.force && facing > 0.2 && this.onGround) {
       this.hp = Math.max(1, this.hp - h.dmg * 0.12); this.chipT = 0.5; this.blockStun = 0.22;
       this.vel.addScaledVector(dir, Math.max(3, (h.kb ? h.kb[0] : 2) * 0.8));
@@ -154,20 +176,31 @@ export class Fighter {
     const comboing = this.state === 'hit' || this.held;
     att.combo = comboing ? att.combo + 1 : 1; att.comboT = 1.6;
     let dmg = h.dmg; if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
+    let crit = false; if (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2)) { dmg *= 1.6; crit = true; }
+    if (this.brokenT > 0) dmg *= 1.5;
+    // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
+    if (this.maxDaze && this.brokenT <= 0) { this.daze = Math.min(this.maxDaze, this.daze + (h.daze ?? dmg * 0.55)); if (this.daze >= this.maxDaze) this.breakStart(att); }
+    // 슈퍼아머: 브레이크 전에는 경직·넉백 없이 버틴다
+    const armored = this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held;
     this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
     this.energy = Math.min(100, this.energy + dmg * 0.1); att.energy = Math.min(100, att.energy + dmg * 0.14);
-    if (this.act && this.act.end) this.act.end(this, this.opp, G);
-    this.act = null; this.trail.clear(); this.state = 'hit'; this.stun = h.stun ?? 0.32; this.flashT = 0.12; this.float = false;
     att.hitConfirm = true;
-    if (!this.held) {
-      const kb = h.kb || [2, 0]; this.vel.set(dir.x * kb[0], kb[1], dir.z * kb[0]);
-      if (kb[1] > 0) { this.onGround = false; this.launched = true; }
+    if (armored) {
+      this.flashT = 0.1; this.vel.addScaledVector(dir, 0.8);
+    } else {
+    if (this.act && this.act.end) this.act.end(this, this.opp, G);
+    this.act = null; this.trail.clear(); this.state = 'hit'; this.stun = Math.max(h.stun ?? 0.32, this.brokenT); this.flashT = 0.12; this.float = false;
+    }
+    if (!this.held && !armored) {
+      const kb = h.kb || [2, 0], heavyBody = this.scale > 1.2, kx = kb[0] / (heavyBody ? 2 : 1), ky = heavyBody && this.brokenT > 0 ? 0 : kb[1];
+      this.vel.set(dir.x * kx, ky, dir.z * kx);
+      if (ky > 0) { this.onGround = false; this.launched = true; }
       else if (!this.onGround) { this.vel.y = Math.max(this.vel.y, 3); this.launched = true; }
       this.yaw = Math.atan2(-dir.x, -dir.z);
     }
     (att.def.hitFx || defaultHitFx)(G, point, dir, h, att);
     G.hitstop = Math.max(G.hitstop, h.hs ?? 0.075); G.shake(h.shake ?? 0.08); sfx(h.snd || (dmg >= 60 ? 'big' : 'hit'));
-    G.hud.damage(point, Math.round(dmg), dmg >= 100);
+    G.hud.damage(point, Math.round(dmg), dmg >= 100, false, crit); if (crit) sfx('crit');
     if (this.hp <= 0) {
       this.hp = 0; this.state = 'ko'; this.held = false; this.launched = true;
       if (this.onGround || this.vel.y < 4) { this.vel.y = 6; this.onGround = false; }
@@ -178,7 +211,8 @@ export class Fighter {
   /* ----- 업데이트 ----- */
   update(dt, live) {
     const o = this.opp, G = this.G;
-    this.inv -= dt; this.cd.s1 -= dt; this.cd.s2 -= dt; this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
+    this.inv -= dt; this.counterT -= dt; if (this.brokenT > 0) { this.brokenT -= dt; if (this.brokenT <= 0) this.daze = 0; }
+    this.cd.s1 -= dt; this.cd.s2 -= dt; this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
     if (this.comboT <= 0) this.combo = 0;
     if (live) this.energy = Math.min(100, this.energy + dt * 1.6);
@@ -190,18 +224,22 @@ export class Fighter {
         const m = this.act; this.at += dt;
         const ev = m.ev || [];
         while (this.evDone < ev.length && this.at >= ev[this.evDone][0]) { const e = ev[this.evDone++]; e[1](this, o, G); if (this.act !== m) return this.post(dt); }
+        if (m.tele && !this.teleDone && this.at >= m.tele[0]) { this.teleDone = true; G.telegraph && G.telegraph(this, m.tele[1]); }
         if (m.track && this.at < m.track) this.faceOpp(14, dt);
         if (m.lunge) for (const [t0, t1, sp] of m.lunge) if (this.at >= t0 && this.at <= t1) { const f = this.fwd(tA); this.vel.x = f.x * sp; this.vel.z = f.z * sp; }
         const hits = m.hits || [];
+        const foes = hits.length ? this.foes() : [];
         for (let i = 0; i < hits.length; i++) {
-          const hb = hits[i]; if (this.hitDone.has(i) || this.at < hb.t0 || this.at > hb.t1) continue;
+          const hb = hits[i]; if (this.at < hb.t0 || this.at > hb.t1) continue;
           // 무기 공격은 칼날이 지나간 경로(직전 프레임 → 지금)로, 그 외에는 구로 판정
-          let touch;
-          if ((hb.weapon ?? m.trail) && this.hasW) {
-            const br = hb.br ?? 0.14; tC.lerpVectors(this.pwb, this.wb, 0.5); tD.lerpVectors(this.pwt, this.wt, 0.5);
-            touch = o.hurtHitSeg(this.wb, this.wt, br) || o.hurtHitSeg(tC, tD, br) || o.hurtHitSeg(this.pwb, this.pwt, br);
-          } else touch = o.hurtHit(this.local(hb.at, tB), hb.r);
-          if (touch && o.takeHit(this, hb)) this.hitDone.add(i);
+          const weap = (hb.weapon ?? m.trail) && this.hasW, br = (hb.br ?? 0.14) * this.scale;
+          if (weap) { tC.lerpVectors(this.pwb, this.wb, 0.5); tD.lerpVectors(this.pwt, this.wt, 0.5); } else this.local(hb.at.map((v) => v * this.scale), tB);
+          for (const t of foes) {
+            const key = i * 100000 + t.id; if (this.hitDone.has(key)) continue;
+            const touch = weap ? t.hurtHitSeg(this.wb, this.wt, br) || t.hurtHitSeg(tC, tD, br) || t.hurtHitSeg(this.pwb, this.pwt, br) : t.hurtHit(tB, hb.r * this.scale);
+            if (touch && t.takeHit(this, hb)) this.hitDone.add(key);
+          }
+          if (this.act !== m) break;
         }
         m.tick && m.tick(this, o, G, this.at, dt);
         if (this.act === m && live && this.buf) {
@@ -240,7 +278,7 @@ export class Fighter {
       default: { // idle · run · guard
         if (this.blockStun > 0) { this.state = 'guard'; const f = Math.exp(-dt * 8); this.vel.x *= f; this.vel.z *= f; break; }
         if (live && this.buf && this.canAct(this.buf.a)) { const a = this.buf.a; this.buf = null; if (this.tryAction(a)) break; }
-        if (I.guard && this.onGround) { this.state = 'guard'; const f = Math.exp(-dt * 14); this.vel.x *= f; this.vel.z *= f; this.faceOpp(16, dt); break; }
+        if (I.guard && this.onGround) { if (this.state !== 'guard') this.guardT0 = G.time; this.state = 'guard'; const f = Math.exp(-dt * 14); this.vel.x *= f; this.vel.z *= f; this.faceOpp(16, dt); break; }
         if (this.jumpBuf > 0 && this.onGround) {
           this.jumpBuf = 0; this.vel.y = S.jump; this.vel.x = I.mx * S.speed * 0.9; this.vel.z = I.mz * S.speed * 0.9; this.onGround = false; this.state = 'jump';
           G.fx.burst(this.pos.clone().setY(0.08), 8, 0x8a7a90, 2.5, { kind: 'dust' }); sfx('jump'); break;
@@ -261,7 +299,7 @@ export class Fighter {
     const W = G.stage && G.stage.world;
     // 장애물에 막힘 · 세게 날아가 부딪히면 튕겨 나온다
     if (W && !this.held) {
-      const n = W.push(this.pos, 0.38);
+      const n = W.push(this.pos, 0.38 * this.scale);
       if (n) {
         const vn = this.vel.x * n.x + this.vel.z * n.z;
         if (vn < 0) {
@@ -318,7 +356,7 @@ export class Fighter {
     sh.m.position.set(this.pos.x, this.pos.y + 1.0, this.pos.z); sh.m.rotation.y += dt * 0.8;
     sh.m.material.opacity = sh.k * (0.35 + sh.hit * 0.6); sh.s.material.opacity = sh.k * (0.06 + sh.hit * 0.25); sh.m.visible = sh.k > 0.01;
     // 궁극기 준비 오라
-    if (this.energy >= 100 && Math.random() < 0.35 && this.root.visible)
+    if (this.energy >= 100 && !this.def.enemy && Math.random() < 0.35 && this.root.visible)
       G.fx.p(tA.set(this.pos.x + rand(-0.4, 0.4), this.pos.y + rand(0.1, 1.8), this.pos.z + rand(-0.4, 0.4)), { vel: [0, rand(1, 2.5), 0], life: 0.6, size: 0.08, color: this.palette.accent, drag: 0, flick: 0.6 });
     if (this.model.update) this.model.update(dt, this);
   }

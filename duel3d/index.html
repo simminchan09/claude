@@ -96,6 +96,35 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 #dmg{position:fixed;inset:0;pointer-events:none}
 .dn{position:fixed;transform:translate(-50%,-50%);font:30px var(--f-display);color:#fff;-webkit-text-stroke:1.5px rgba(0,0,0,.8);animation:dn .9s ease-out forwards}
 .dn.big{font-size:46px;color:var(--gold)} .dn.blk{font-size:20px;color:#bfc6d4}
+.dn.crit{font-size:40px;color:#ffd060;-webkit-text-stroke:1.5px #5a2a00;font-style:italic}
+.dn.crit::after{content:"!";margin-left:2px}
+/* 보스 막대 · 웨이브 · 몬스터 머리 위 막대 · 대상 표시 · 판정 문구 */
+#hud.pve .tb{display:none}
+#boss{position:absolute;left:50%;top:calc(96px + env(safe-area-inset-top,0px));transform:translateX(-50%);width:min(64vw,720px);--acc:#b04aff}
+#boss .bt{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;text-shadow:0 2px 0 rgba(0,0,0,.6)}
+#boss .bn{font:22px var(--f-display)} #boss .bph{font:700 13px var(--f-body);color:var(--acc)}
+#boss .bhp{position:relative;height:14px;background:rgba(8,8,16,.7);box-shadow:0 0 0 1px rgba(255,255,255,.25);transform:skewX(-14deg);overflow:hidden}
+#boss .bhp i{position:absolute;inset:0;transform-origin:left}
+#boss .bhp .chip{background:rgba(255,200,190,.9)} #boss .bhp .fill{background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 60%,#fff),var(--acc))}
+#boss .bdz{position:relative;height:5px;margin-top:4px;width:72%;background:rgba(8,8,16,.7);transform:skewX(-14deg);overflow:hidden}
+#boss .bdz i{position:absolute;inset:0;transform-origin:left;background:linear-gradient(90deg,#ffd27a,#fff)}
+#boss.broken .bdz i{background:#d08aff;animation:low .3s steps(2) infinite}
+#waveInfo{position:absolute;left:clamp(16px,3vw,44px);top:calc(18px + env(safe-area-inset-top,0px));font:15px var(--f-display);color:var(--dim);text-shadow:0 2px 0 rgba(0,0,0,.6)}
+#waveInfo b{color:#fff;font-size:20px}
+.hb.eb{width:96px;--acc:#ff3a5a}
+.hb.eb .hbn{font-size:12px}
+.hb.eb .dzb{height:3px;margin-top:2px;background:rgba(8,8,16,.7);transform:skewX(-14deg);overflow:hidden}
+.hb.eb .dzb i{display:block;height:100%;transform-origin:left;background:#ffd27a}
+.hb.eb.broken .dzb i{background:#d08aff}
+.hb.eb.tgt .hbn{color:#ffe08a}
+#reticle{position:fixed;width:46px;height:46px;transform:translate(-50%,-50%);pointer-events:none;opacity:.75}
+#reticle i{position:absolute;width:10px;height:10px;border:2px solid #fff;border-width:2px 0 0 2px}
+#reticle i:nth-child(1){left:0;top:0}#reticle i:nth-child(2){right:0;top:0;transform:rotate(90deg)}#reticle i:nth-child(3){right:0;bottom:0;transform:rotate(180deg)}#reticle i:nth-child(4){left:0;bottom:0;transform:rotate(270deg)}
+#reticle.locked{opacity:1}#reticle.locked i{border-color:#ff5a4a}
+#pop{position:absolute;left:50%;top:62%;transform:translateX(-50%);font:italic 34px var(--f-display);letter-spacing:.06em;opacity:0;text-shadow:0 0 18px currentColor,0 3px 0 rgba(0,0,0,.6);white-space:nowrap}
+#pop.on{animation:popT 1s ease-out forwards}
+#pop.cyan{color:#9ad8ff}#pop.gold{color:#ffe08a}#pop.violet{color:#e0a8ff}
+@keyframes popT{0%{opacity:0;transform:translateX(-50%) scale(1.6)}12%{opacity:1;transform:translateX(-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-18px)}}
 @keyframes dn{0%{transform:translate(-50%,-50%) scale(1.8);opacity:1}15%{transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{transform:translate(-50%,-160%);opacity:0}}
 #flash{position:fixed;inset:0;opacity:0;pointer-events:none;mix-blend-mode:screen}
 body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(255,255,255,.35);pointer-events:none}
@@ -141,6 +170,7 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 .card span{font-size:11.5px;color:var(--dim)}
 .card[aria-pressed="true"]{border-color:var(--sel,var(--p1));box-shadow:inset 0 0 0 1px var(--sel,var(--p1))}
 .card .tag{position:absolute;top:6px;right:8px;font:700 11px var(--f-num);color:var(--sel,var(--p1))}
+.mapInfo{margin:6px 0 0;font-size:12.5px;color:var(--dim);line-height:1.5}
 .card.empty{border-style:dashed;color:var(--dim);cursor:default;opacity:.55}
 .info{background:var(--panel);border:1px solid var(--line);padding:12px 16px;display:grid;gap:6px}
 .info h3{margin:0;font:22px var(--f-display)} .info p{margin:0;font-size:13px;color:var(--dim);line-height:1.55}
@@ -178,6 +208,11 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
     <div class="tb p2"><span class="pips"></span><b class="nm"></b></div>
   </div>
   <div id="trainBar" hidden></div>
+  <div id="boss" hidden><div class="bt"><b class="bn"></b><span class="bph"></span></div><div class="bhp"><i class="chip"></i><i class="fill"></i></div><div class="bdz"><i class="fill"></i></div></div>
+  <div id="waveInfo" hidden></div>
+  <div id="ebars"></div>
+  <div id="reticle" hidden><i></i><i></i><i></i><i></i></div>
+  <div id="pop"></div>
   <div class="ph p1">
     <div class="me"><div class="who"><b class="nm"></b><span class="tt"></span></div><div class="hpnum"><b></b><span></span></div><div class="hpbar"><i class="chip"></i><i class="fill"></i></div></div>
     <div class="ult"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42"/><circle class="arc" cx="50" cy="50" r="42"/></svg><div class="uin"><b>0%</b><span></span></div><div class="uname"></div></div>
@@ -201,12 +236,12 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 <section id="title" class="screen">
   <div class="wrapT">
     <h1 class="logo">ECLIPSE DUEL<small>3D · 일식의 신전</small></h1>
-    <p class="lede">호수 위 원형 결투장에서 벌이는 1:1 3D 대전. 맵 10곳 중 하나가 경기마다 무작위로 정해집니다. 지금은 시스템 확인용 기체 하나만 들어 있고, 정식 캐릭터는 하나씩 추가됩니다.</p>
+    <p class="lede">호수 위 원형 결투장에서 벌이는 1:1 3D 대전. 명조·젠레스 존 제로식 3D 액션. 보스전·토벌전·대전, 맵 10곳 중 하나가 무작위로 정해집니다. 지금은 시스템 확인용 기체 하나만 들어 있습니다.</p>
     <div><div class="lbl">모드</div><div class="seg" id="modes">
-      <button data-mode="cpu" aria-pressed="true">1P vs CPU</button><button data-mode="pvp" aria-pressed="false">2P 로컬 대전</button><button data-mode="training" aria-pressed="false">훈련 모드</button>
-    </div></div>
+      <button data-mode="boss" aria-pressed="true">보스전</button><button data-mode="waves" aria-pressed="false">토벌전</button><button data-mode="duel" aria-pressed="false">1:1 결투</button><button data-mode="pvp" aria-pressed="false">2P 대전</button><button data-mode="training" aria-pressed="false">훈련</button>
+    </div><p class="mapInfo" id="modeInfo"></p></div>
     <div><div class="lbl">1P 캐릭터</div><div class="roster" id="r1"></div></div>
-    <div><div class="lbl" id="r2lbl">상대 캐릭터</div><div class="roster" id="r2"></div></div>
+    <div id="r2wrap"><div class="lbl" id="r2lbl">상대 캐릭터</div><div class="roster" id="r2"></div></div>
     <button class="go" id="start">결투 시작 <span style="font-size:.7em;opacity:.6">Enter</span></button>
     <div class="info" id="charInfo"></div>
     <div class="keys" id="keyHelp"></div>
@@ -228,7 +263,7 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
   <div class="pad dpad"><button class="u" data-k="KeyW">▲</button><button class="l" data-k="KeyA">◀</button><button class="d" data-k="KeyS">▼</button><button class="r" data-k="KeyD">▶</button></div>
   <div class="pad acts">
     <button data-k="KeyU">스킬1</button><button data-k="KeyI">스킬2</button><button data-k="KeyQ" style="border-color:var(--p2)">궁</button><button data-k="KeyF">방어</button>
-    <button data-k="KeyJ">공격</button><button data-k="KeyK">우클</button><button data-k="Space">점프</button><button data-k="KeyC">대시</button>
+    <button data-k="KeyJ">공격</button><button data-k="KeyK">우클</button><button data-k="Space">점프</button><button data-k="KeyC">회피</button>
   </div>
 </div>
 <script type="module" src="src/main.js"></script>
