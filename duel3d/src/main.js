@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { keys, pressed, endFrame, MAPS, KeyCtrl, sfx, audioInit, setMuted, isMuted, damp, keyName } from './core.js';
 import { FX } from './fx.js';
-import { buildStage } from './stage.js';
+import { buildStage, MAPS as STAGES } from './stage.js';
 import { Fighter } from './fighter.js';
 import { FightCam } from './camera.js';
 import { HUD } from './hud.js';
@@ -24,12 +24,12 @@ const pKey = new THREE.SpotLight(0xffffff, 0, 10, 0.7, 0.6, 1); scene.add(pKey, 
 const pHemi = new THREE.HemisphereLight(0xc8d4ff, 0x1a1020, 0); scene.add(pHemi);
 // 카메라를 따라다니는 보조광: 역광 속에서도 캐릭터 실루엣이 읽히도록
 const camFill = new THREE.DirectionalLight(0xc0c8ff, 1.1); scene.add(camFill, camFill.target);
-const stage = buildStage(scene), fx = new FX(scene), hud = new HUD(), fcam = new FightCam(camera), fcam2 = new FightCam(camera2);
+let stage = buildStage(scene, 'eclipse'); const fx = new FX(scene), hud = new HUD(), fcam = new FightCam(camera), fcam2 = new FightCam(camera2);
 
 const G = (window.__G = {
   scene, camera, renderer, fx, hud, stage, fighters: [], ents: [], preview: [],
   state: 'title', mode: 'cpu', time: 0, t: 0, rdt: 1 / 60, timer: 99, round: 1, hitstop: 0, ts: 1, tsT: 1, tsHold: 0,
-  cine: null, paused: false, camFwd: { x: 0, z: -1 }, tint: { c: 0, a: 0 }, tintA: 0, sel: { p1: 0, p2: 0 },
+  cine: null, paused: false, camFwd: { x: 0, z: -1 }, tint: { c: 0, a: 0 }, tintA: 0, sel: { p1: 0, p2: 0, map: 'eclipse' }, mapId: 'eclipse',
   shake(a) { fcam.shake = Math.max(fcam.shake, a); fcam2.shake = Math.max(fcam2.shake, a); },
   // 2P 대전은 좌우 분할. 궁극기 연출·KO·결과처럼 카메라 1이 연출 중이면 전체 화면 하나로 합친다
   splitOn() { return G.mode === 'pvp' && G.fighters.length === 2 && !G.cine && !fcam.cine && !fcam.focus && G.state !== 'title'; },
@@ -53,6 +53,11 @@ const G = (window.__G = {
     hud.announce('K.O.', '', 'red', 2.2); fcam.setFocus(loser, { dist: 5.5, h: 1.8, spin: 0.35 });
   },
 });
+
+function setMap(id) {
+  if (id === G.mapId) return;
+  stage.dispose(); stage = buildStage(scene, id); G.stage = stage; G.mapId = id;
+}
 
 /* ---------- 리사이즈 ---------- */
 function resize() {
@@ -79,6 +84,9 @@ function buildSelect() {
     el.innerHTML = ROSTER.map((d, i) => `<button class="card" data-slot="${slot}" data-i="${i}" style="--sel:${col}" aria-pressed="${G.sel[slot] === i}"><span class="tag">${slot === 'p1' ? '1P' : G.mode === 'pvp' ? '2P' : G.mode === 'training' ? '더미' : 'CPU'}</span><b>${d.short || d.name}</b><span>${d.title}</span></button>`).join('')
       + Array.from({ length: EMPTY_SLOTS }, () => '<div class="card empty"><b>?</b><span>추가 예정</span></div>').join('');
   }
+  $('#maps').innerHTML = STAGES.map((m, i) => `<button class="mapb" data-map="${m.id}" aria-pressed="${G.sel.map === m.id}"><i>${String(i + 1).padStart(2, '0')}</i>${m.name}</button>`).join('')
+    + `<button class="mapb" data-map="random" aria-pressed="${G.sel.map === 'random'}"><i>??</i>무작위</button>`;
+  const mp = STAGES.find((m) => m.id === G.sel.map); $('#mapInfo').textContent = mp ? mp.concept : '경기 시작 때 10곳 중 하나를 고릅니다';
   $('#r2lbl').textContent = G.mode === 'pvp' ? '2P 캐릭터' : G.mode === 'training' ? '훈련 상대' : 'CPU 캐릭터';
   document.querySelectorAll('#modes button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === G.mode));
   const d = ROSTER[G.sel.p1];
@@ -98,6 +106,7 @@ function rebuildPreview() {
 document.addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return; audioInit();
   if (t.dataset.mode) { G.mode = t.dataset.mode; sfx('ui'); buildSelect(); }
+  else if (t.dataset.map) { G.sel.map = t.dataset.map; if (t.dataset.map !== 'random') setMap(t.dataset.map); sfx('ui'); buildSelect(); }
   else if (t.dataset.slot) { G.sel[t.dataset.slot] = +t.dataset.i; sfx('ui'); buildSelect(); }
   else if (t.id === 'start') startMatch();
   else if (t.dataset.act === 'resume') setPause(false);
@@ -121,6 +130,7 @@ function clearMatch() {
 }
 function startMatch() {
   sfx('ult'); for (const f of G.preview) f.dispose(); G.preview = []; clearMatch();
+  if (G.sel.map === 'random') setMap(STAGES[(Math.random() * STAGES.length) | 0].id);
   const d1 = ROSTER[G.sel.p1], d2 = ROSTER[G.sel.p2];
   const c1 = new KeyCtrl(G.mode === 'pvp' ? MAPS.p1 : MAPS.p1solo);
   const c2 = G.mode === 'pvp' ? new KeyCtrl(MAPS.p2) : G.mode === 'training' ? new DummyCtrl() : new AICtrl();

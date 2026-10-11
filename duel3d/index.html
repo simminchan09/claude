@@ -131,6 +131,12 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 .card span{font-size:11.5px;color:var(--dim)}
 .card[aria-pressed="true"]{border-color:var(--sel,var(--p1));box-shadow:inset 0 0 0 1px var(--sel,var(--p1))}
 .card .tag{position:absolute;top:6px;right:8px;font:700 11px var(--f-num);color:var(--sel,var(--p1))}
+.maps{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px}
+.mapb{background:var(--panel);border:1px solid var(--line);padding:7px 9px;text-align:left;font-size:12.5px;font-weight:700;display:flex;gap:6px;align-items:baseline;min-width:0}
+.mapb i{font:700 11px var(--f-num);color:var(--dim);font-style:normal}
+.mapb[aria-pressed="true"]{background:var(--ink);color:#0a0812}
+.mapb[aria-pressed="true"] i{color:#0a0812}
+.mapInfo{margin:6px 0 0;font-size:12.5px;color:var(--dim)}
 .card.empty{border-style:dashed;color:var(--dim);cursor:default;opacity:.55}
 .info{background:var(--panel);border:1px solid var(--line);padding:12px 16px;display:grid;gap:6px}
 .info h3{margin:0;font:22px var(--f-display)} .info p{margin:0;font-size:13px;color:var(--dim);line-height:1.55}
@@ -188,8 +194,9 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
     </div></div>
     <div><div class="lbl">1P 캐릭터</div><div class="roster" id="r1"></div></div>
     <div><div class="lbl" id="r2lbl">상대 캐릭터</div><div class="roster" id="r2"></div></div>
-    <div class="info" id="charInfo"></div>
+    <div><div class="lbl">맵</div><div class="maps" id="maps"></div><p class="mapInfo" id="mapInfo"></p></div>
     <button class="go" id="start">결투 시작 <span style="font-size:.7em;opacity:.6">Enter</span></button>
+    <div class="info" id="charInfo"></div>
     <div class="keys" id="keyHelp"></div>
   </div>
 </section>
