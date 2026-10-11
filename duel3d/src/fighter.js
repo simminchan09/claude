@@ -1,0 +1,289 @@
+// 파이터 시스템: 상태 머신 · 기술 실행 · 피격 판정 · 방어 · 다운 · 궁극기 연결
+import * as THREE from 'three';
+import { clamp, lerp, damp, rand, angDelta, angLerp, ease, sfx } from './core.js';
+import { POSE_LEN, applyPose, lerpPose, addRunCycle, prepareDef } from './rig.js';
+import { ARENA_R } from './stage.js';
+
+const V3 = THREE.Vector3;
+export const GRAV = 26;
+const HURT_R = 0.42, HURT_LO = 0.25, HURT_HI = 1.6;
+const tA = new V3(), tB = new V3(), tC = new V3(), tD = new V3();
+
+// 점과 선분 사이 거리
+function segDist(p, a, b) {
+  const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z, l2 = abx * abx + aby * aby + abz * abz;
+  let t = l2 ? ((p.x - a.x) * abx + (p.y - a.y) * aby + (p.z - a.z) * abz) / l2 : 0; t = clamp(t, 0, 1);
+  const x = a.x + abx * t - p.x, y = a.y + aby * t - p.y, z = a.z + abz * t - p.z; return Math.sqrt(x * x + y * y + z * z);
+}
+
+export class Fighter {
+  constructor(def, slot, ctrl, G, palette) {
+    this.def = prepareDef(def); this.slot = slot; this.ctrl = ctrl; this.G = G; this.palette = palette;
+    this.model = def.createModel(palette); this.root = this.model.root; G.scene.add(this.root);
+    this.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+    this.pos = this.root.position; this.vel = new V3();
+    this.pose = new Float32Array(POSE_LEN); this.tgt = new Float32Array(POSE_LEN);
+    this.trail = G.fx.makeTrail(palette.accent); this.shield = G.fx.makeShield(palette.accent);
+    this.maxHp = def.stats.hp; this.wins = 0; this.energy = 0;
+    this.wb = new V3(); this.wt = new V3();
+    this.reset(new V3(slot ? 4 : -4, 0, 0));
+  }
+  dispose() {
+    this.G.scene.remove(this.root); this.G.scene.remove(this.trail.mesh); this.G.scene.remove(this.shield.m);
+    this.G.fx.trails.splice(this.G.fx.trails.indexOf(this.trail), 1); this.G.fx.shields.splice(this.G.fx.shields.indexOf(this.shield), 1);
+  }
+  reset(p) {
+    this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
+    this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
+    this.buf = null; this.jumpBuf = 0; this.cd = { s1: 0, s2: 0 }; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
+    this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
+    this.pose.set(this.def._poses.base); this.root.visible = true; this.trail.clear(); this.ghostT = 0;
+    this.root.rotation.y = this.yaw; this.applyRig(1 / 60);
+  }
+  /* ----- 좌표 헬퍼 ----- */
+  fwd(out = new V3()) { return out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
+  right(out = new V3()) { return out.set(-Math.cos(this.yaw), 0, Math.sin(this.yaw)); }
+  // [오른쪽, 위, 앞] (m) → 월드 좌표
+  local(o, out = new V3()) {
+    const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
+    return out.set(this.pos.x - c * o[0] + s * o[2], this.pos.y + o[1], this.pos.z + s * o[0] + c * o[2]);
+  }
+  chest(out = new V3()) { return out.set(this.pos.x, this.pos.y + 1.15, this.pos.z); }
+  yawTo(p) { return Math.atan2(p.x - this.pos.x, p.z - this.pos.z); }
+  // dt 생략 시 즉시 상대를 바라본다
+  faceOpp(rate, dt) { const o = this.opp; if (!o) return; const y = this.yawTo(o.pos); this.yaw = dt === undefined ? y : angLerp(this.yaw, y, 1 - Math.exp(-rate * dt)); }
+  dist() { return Math.hypot(this.opp.pos.x - this.pos.x, this.opp.pos.z - this.pos.z); }
+  hurtHit(p, r) {
+    if (this.state === 'down' || (this.state === 'ko' && this.onGround)) { tA.set(this.pos.x, this.pos.y + 0.25, this.pos.z); return segDist(p, tA, tA) <= r + 0.8; }
+    tA.set(this.pos.x, this.pos.y + HURT_LO, this.pos.z); tB.set(this.pos.x, this.pos.y + HURT_HI, this.pos.z); return segDist(p, tA, tB) <= r + HURT_R;
+  }
+  /* ----- 이펙트 헬퍼 (기술 정의에서 사용) ----- */
+  // tilt: 0 = 수평 베기, π/2 = 수직 베기 / at: [오른쪽, 위, 앞]
+  slashFx(o = {}) {
+    const f = this.fwd(new V3()), r = this.right(new V3()), t = o.tilt || 0;
+    const n = new V3(0, 1, 0).multiplyScalar(Math.cos(t)).addScaledVector(r, Math.sin(t));
+    this.G.fx.slash(this.local(o.at || [0, 1.15, 0.35]), { fwd: f, normal: n, r: o.r || 1.3, color: o.color ?? this.palette.accent, life: o.life || 0.22, flip: o.flip });
+  }
+  /* ----- 입력 ----- */
+  read() {
+    if (!this.ctrl) return;
+    const inp = this.ctrl.read(this.G, this); this.I = inp;
+    if (inp.press) this.buf = { a: inp.press, t: 0.25 };
+    if (inp.jumpP) this.jumpBuf = 0.15;
+  }
+  canAct(a) {
+    if (a === 'ult') return this.energy >= 100;
+    if (a === 's1' || a === 's2') return this.cd[a] <= 0;
+    if (a === 'dash') return this.dashCd <= 0 && this.onGround;
+    return true;
+  }
+  tryAction(a) {
+    if (!this.canAct(a)) return false;
+    if (a === 'dash') {
+      const m = Math.hypot(this.I.mx, this.I.mz), d = m > 0.2 ? new V3(this.I.mx / m, 0, this.I.mz / m) : this.fwd(new V3());
+      this.state = 'dash'; this.dashT = 0.24; this.dashCd = 0.5; this.vel.set(d.x * 17, 0, d.z * 17); this.inv = 0.14; this.yaw = Math.atan2(d.x, d.z);
+      this.G.fx.burst(this.pos.clone().setY(0.1), 10, 0x8a7a90, 3, { kind: 'dust' }); sfx('dash'); return true;
+    }
+    if (!this.onGround && a !== 'light' && a !== 'heavy' && a !== 'ult') return false;
+    this.start(a === 'light' ? 'light1' : a); return true;
+  }
+  start(name) {
+    const m = this.def.moves[name]; if (!m) return;
+    if (m.cd) this.cd[m.cd] = this.def.skills[m.cd].cd;
+    if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
+    this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear();
+    if (m.aim !== false && this.opp) this.faceOpp(1);
+    m.start && m.start(this, this.opp, this.G);
+    if (m.ult) { this.energy = 0; this.inv = 99; this.G.startCine(this); }
+  }
+  endAct() {
+    const m = this.act; this.act = null; this.trail.clear(); this.state = this.onGround ? 'idle' : 'jump';
+    m && m.end && m.end(this, this.opp, this.G);
+    if (this.inv > 5) this.inv = 0.25;
+  }
+  lock() { // 궁극기 연출용 고정
+    if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
+    this.held = true; this.act = null; this.state = 'hit'; this.stun = 99; this.vel.set(0, 0, 0); this.trail.clear(); this.launched = false;
+  }
+  release() { this.held = false; }
+  /* ----- 피격 ----- */
+  takeHit(att, h, dirIn) {
+    if ((this.inv > 0 && !h.force) || this.state === 'ko') return false;
+    const G = this.G, dir = (dirIn ? dirIn.clone() : tC.subVectors(this.pos, att.pos)).setY(0);
+    if (dir.lengthSq() < 1e-6) att.fwd(dir); dir.normalize();
+    const point = this.chest(new V3()).addScaledVector(dir, -0.35);
+    // 방어: 정면 공격만 막는다
+    const toAtt = tD.subVectors(att.pos, this.pos).setY(0).normalize(), facing = this.fwd(new V3()).dot(toAtt);
+    if (this.state === 'guard' && !h.unblock && !h.force && facing > 0.2 && this.onGround) {
+      this.hp = Math.max(1, this.hp - h.dmg * 0.12); this.chipT = 0.5; this.blockStun = 0.22;
+      this.vel.addScaledVector(dir, Math.max(3, (h.kb ? h.kb[0] : 2) * 0.8));
+      this.energy = Math.min(100, this.energy + 3); att.energy = Math.min(100, att.energy + 1.5);
+      G.fx.burst(point, 14, [0xffffff, this.palette.accent], 7, { dir: dir.clone().negate(), spread: 0.9 }); this.shield.hit = 1;
+      G.hitstop = Math.max(G.hitstop, 0.05); G.shake(0.06); sfx('block'); G.hud.damage(point, '방어', false, true); return 'block';
+    }
+    const comboing = this.state === 'hit' || this.held;
+    att.combo = comboing ? att.combo + 1 : 1; att.comboT = 1.6;
+    let dmg = h.dmg; if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
+    this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
+    this.energy = Math.min(100, this.energy + dmg * 0.1); att.energy = Math.min(100, att.energy + dmg * 0.14);
+    if (this.act && this.act.end) this.act.end(this, this.opp, G);
+    this.act = null; this.trail.clear(); this.state = 'hit'; this.stun = h.stun ?? 0.32; this.flashT = 0.12; this.float = false;
+    att.hitConfirm = true;
+    if (!this.held) {
+      const kb = h.kb || [2, 0]; this.vel.set(dir.x * kb[0], kb[1], dir.z * kb[0]);
+      if (kb[1] > 0) { this.onGround = false; this.launched = true; }
+      else if (!this.onGround) { this.vel.y = Math.max(this.vel.y, 3); this.launched = true; }
+      this.yaw = Math.atan2(-dir.x, -dir.z);
+    }
+    (att.def.hitFx || defaultHitFx)(G, point, dir, h, att);
+    G.hitstop = Math.max(G.hitstop, h.hs ?? 0.075); G.shake(h.shake ?? 0.08); sfx(h.snd || (dmg >= 60 ? 'big' : 'hit'));
+    G.hud.damage(point, Math.round(dmg), dmg >= 100);
+    if (this.hp <= 0) {
+      this.hp = 0; this.state = 'ko'; this.held = false; this.launched = true;
+      if (this.onGround || this.vel.y < 4) { this.vel.y = 6; this.onGround = false; }
+      this.vel.x = dir.x * 6; this.vel.z = dir.z * 6; G.onKO(this, att);
+    }
+    return 'hit';
+  }
+  /* ----- 업데이트 ----- */
+  update(dt, live) {
+    const o = this.opp, G = this.G;
+    this.inv -= dt; this.cd.s1 -= dt; this.cd.s2 -= dt; this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
+    if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
+    if (this.comboT <= 0) this.combo = 0;
+    if (live) this.energy = Math.min(100, this.energy + dt * 1.6);
+    const I = live ? this.I : { mx: 0, mz: 0, guard: false };
+    const mag = Math.hypot(I.mx, I.mz), S = this.def.stats;
+    let target = null;
+    switch (this.state) {
+      case 'act': {
+        const m = this.act; this.at += dt;
+        const ev = m.ev || [];
+        while (this.evDone < ev.length && this.at >= ev[this.evDone][0]) { const e = ev[this.evDone++]; e[1](this, o, G); if (this.act !== m) return this.post(dt); }
+        if (m.track && this.at < m.track) this.faceOpp(14, dt);
+        if (m.lunge) for (const [t0, t1, sp] of m.lunge) if (this.at >= t0 && this.at <= t1) { const f = this.fwd(tA); this.vel.x = f.x * sp; this.vel.z = f.z * sp; }
+        const hits = m.hits || [];
+        for (let i = 0; i < hits.length; i++) {
+          const hb = hits[i]; if (this.hitDone.has(i) || this.at < hb.t0 || this.at > hb.t1) continue;
+          const p = this.local(hb.at, tB);
+          if (o.hurtHit(p, hb.r) && o.takeHit(this, hb)) this.hitDone.add(i);
+        }
+        m.tick && m.tick(this, o, G, this.at, dt);
+        if (this.act === m && live && this.buf) {
+          const a = this.buf.a;
+          if (a === 'light' && m.next && this.at >= m.cancel) { this.buf = null; this.start(m.next); }
+          else if (a !== 'light' && a !== 'dash' && this.hitConfirm && !m.ult && !m.cd && this.at >= (m.cancel ?? m.dur * 0.45) && this.canAct(a)) { this.buf = null; this.start(a); }
+        }
+        if (this.act === m && this.at >= m.dur) this.endAct();
+        if (this.act) {
+          const ks = this.act._keys; let i = 0; while (i < ks.length - 2 && this.at > ks[i + 1][0]) i++;
+          const [t0, p0] = ks[i], [t1, p1] = ks[Math.min(i + 1, ks.length - 1)];
+          const k = t1 > t0 ? clamp((this.at - t0) / (t1 - t0), 0, 1) : 1; lerpPose(this.tgt, p0, p1, ease.io(k)); target = this.tgt;
+        }
+        if (this.onGround) { const f = Math.exp(-dt * 9); this.vel.x *= f; this.vel.z *= f; }
+        break;
+      }
+      case 'hit':
+        if (this.held) this.vel.set(0, 0, 0);
+        else if (this.onGround && !this.launched) { const f = Math.exp(-dt * 8); this.vel.x *= f; this.vel.z *= f; this.stun -= dt; if (this.stun <= 0) this.state = 'idle'; }
+        break;
+      case 'down': {
+        const f = Math.exp(-dt * 10); this.vel.x *= f; this.vel.z *= f; this.downT -= dt;
+        if (this.downT <= 0) { this.state = 'idle'; this.inv = 0.3; G.fx.burst(this.pos.clone().setY(0.1), 6, 0x8a7a90, 2, { kind: 'dust' }); }
+        break;
+      }
+      case 'ko': case 'win': if (this.onGround) { const f = Math.exp(-dt * 6); this.vel.x *= f; this.vel.z *= f; } if (this.state === 'win') this.faceOpp(3, dt); break;
+      case 'dash':
+        this.dashT -= dt; this.ghostT -= dt;
+        if (this.ghostT <= 0) { this.ghostT = 0.02; G.fx.burst(this.chest(tA), 3, this.palette.accent, 1.5, { kind: 'glow', sk: 0.6, lk: 0.6 }); }
+        if (this.dashT <= 0) { this.state = 'idle'; this.vel.multiplyScalar(0.3); }
+        break;
+      case 'jump':
+        if (live && this.buf && ['light', 'heavy', 'ult'].includes(this.buf.a) && this.canAct(this.buf.a)) { const a = this.buf.a; this.buf = null; this.tryAction(a); }
+        else if (mag > 0.1) { this.vel.x = damp(this.vel.x, I.mx * S.speed * 0.8, 3, dt); this.vel.z = damp(this.vel.z, I.mz * S.speed * 0.8, 3, dt); }
+        break;
+      default: { // idle · run · guard
+        if (this.blockStun > 0) { this.state = 'guard'; const f = Math.exp(-dt * 8); this.vel.x *= f; this.vel.z *= f; break; }
+        if (live && this.buf && this.canAct(this.buf.a)) { const a = this.buf.a; this.buf = null; if (this.tryAction(a)) break; }
+        if (I.guard && this.onGround) { this.state = 'guard'; const f = Math.exp(-dt * 14); this.vel.x *= f; this.vel.z *= f; this.faceOpp(16, dt); break; }
+        if (this.jumpBuf > 0 && this.onGround) {
+          this.jumpBuf = 0; this.vel.y = S.jump; this.vel.x = I.mx * S.speed * 0.9; this.vel.z = I.mz * S.speed * 0.9; this.onGround = false; this.state = 'jump';
+          G.fx.burst(this.pos.clone().setY(0.08), 8, 0x8a7a90, 2.5, { kind: 'dust' }); sfx('jump'); break;
+        }
+        if (mag > 0.1) {
+          this.vel.x = damp(this.vel.x, I.mx * S.speed, 14, dt); this.vel.z = damp(this.vel.z, I.mz * S.speed, 14, dt);
+          this.yaw = angLerp(this.yaw, Math.atan2(I.mx, I.mz), 1 - Math.exp(-dt * 14)); this.state = 'run'; this.runP += dt * 11 * mag;
+        } else { const f = Math.exp(-dt * 14); this.vel.x *= f; this.vel.z *= f; this.state = 'idle'; this.faceOpp(7, dt); }
+      }
+    }
+    return this.post(dt, target);
+  }
+  post(dt, target) {
+    const G = this.G, P = this.def._poses;
+    // 물리
+    if (!this.held && !this.float && !this.onGround) this.vel.y -= GRAV * dt * (this.state === 'hit' || this.state === 'ko' ? 0.85 : 1);
+    this.pos.addScaledVector(this.vel, dt);
+    if (this.pos.y <= 0 && !this.float && !this.held) {
+      if (!this.onGround && this.vel.y <= 0) this.land();
+      this.pos.y = 0; if (this.vel.y < 0) this.vel.y = 0; this.onGround = true;
+    } else if (this.pos.y > 0.001) this.onGround = false;
+    if (this.held) this.onGround = false;
+    const r = Math.hypot(this.pos.x, this.pos.z); if (r > ARENA_R) { this.pos.x *= ARENA_R / r; this.pos.z *= ARENA_R / r; }
+    // 포즈 목표
+    if (!target) {
+      const s = this.state, t = this.tgt, br = Math.sin(G.time * 2.6 + this.slot);
+      if (s === 'run') { t.set(P.run); addRunCycle(t, this.runP, 1); }
+      else if (s === 'jump') t.set(P.jump);
+      else if (s === 'guard') t.set(P.guard);
+      else if (s === 'hit') t.set(this.onGround && !this.launched ? P.hit : P.air);
+      else if (s === 'down' || (s === 'ko' && this.onGround)) t.set(P.down);
+      else if (s === 'ko') t.set(P.air);
+      else if (s === 'dash') t.set(P.dash);
+      else if (s === 'win') t.set(P.win);
+      else { t.set(P.base); t[2] += br * 0.03; t[0] += br * 0.01; }
+      target = t;
+    }
+    const rate = this.state === 'act' ? 40 : this.state === 'hit' ? 30 : this.state === 'run' ? 20 : 13;
+    lerpPose(this.pose, this.pose, target, 1 - Math.exp(-dt * rate));
+    this.applyRig(dt);
+    // 무기 궤적
+    if (this.state === 'act' && this.act.trail && this.model.weaponPts) { this.model.weaponPts(this.wb, this.wt); this.trail.push(this.wb, this.wt); }
+    // 방어막
+    const sh = this.shield, on = this.state === 'guard' ? 1 : 0; sh.k = damp(sh.k, on, 16, dt); sh.hit = Math.max(0, sh.hit - dt * 4);
+    sh.m.position.set(this.pos.x, this.pos.y + 1.0, this.pos.z); sh.m.rotation.y += dt * 0.8;
+    sh.m.material.opacity = sh.k * (0.35 + sh.hit * 0.6); sh.s.material.opacity = sh.k * (0.06 + sh.hit * 0.25); sh.m.visible = sh.k > 0.01;
+    // 궁극기 준비 오라
+    if (this.energy >= 100 && Math.random() < 0.35 && this.root.visible)
+      G.fx.p(tA.set(this.pos.x + rand(-0.4, 0.4), this.pos.y + rand(0.1, 1.8), this.pos.z + rand(-0.4, 0.4)), { vel: [0, rand(1, 2.5), 0], life: 0.6, size: 0.08, color: this.palette.accent, drag: 0, flick: 0.6 });
+    if (this.model.update) this.model.update(dt, this);
+  }
+  applyRig(dt) {
+    applyPose(this.model, this.pose);
+    this.root.rotation.y = this.yaw;
+    // 접지: 발이 바닥에 닿도록 몸통 높이 보정
+    const b = this.model.body; b.position.y = 0; this.root.updateMatrixWorld(true);
+    let want = 0;
+    if (this.onGround && !this.held && this.state !== 'down' && !(this.state === 'ko' && this.onGround)) {
+      const J = this.model.J, yL = J.footL.getWorldPosition(tD).y, yR = J.footR.getWorldPosition(tD).y;
+      want = -(Math.min(yL, yR) - this.pos.y - (this.model.sole || 0.07));
+    }
+    this.groundOff = damp(this.groundOff, want, 30, dt); b.position.y = this.groundOff; this.root.updateMatrixWorld(true);
+  }
+  land() {
+    const G = this.G; G.fx.burst(this.pos.clone().setY(0.08), 6, 0x8a7a90, 2, { kind: 'dust' });
+    if (this.state === 'hit' && this.launched) {
+      this.launched = false; this.state = 'down'; this.downT = 0.75; this.inv = 1.05; this.vel.multiplyScalar(0.4); G.shake(0.08);
+      G.fx.burst(this.pos.clone().setY(0.1), 16, 0x8a7a90, 4, { kind: 'dust' }); sfx('land');
+    } else if (this.state === 'ko') { this.launched = false; G.shake(0.12); G.fx.burst(this.pos.clone().setY(0.1), 22, 0x8a7a90, 5, { kind: 'dust' }); sfx('land'); }
+    else if (this.state === 'jump') { this.state = 'idle'; sfx('land'); }
+    if (this.act && this.act.onLand) this.act.onLand(this, this.opp, G);
+  }
+}
+
+export function defaultHitFx(G, p, dir, h, att) {
+  const big = h.dmg >= 60, col = att.palette.accent;
+  G.fx.impact(p, col, big ? 1.6 : 1, dir);
+  const a = rand(0, Math.PI * 2), n = new V3(Math.cos(a) * 0.3, Math.sin(a), Math.cos(a)).normalize();
+  G.fx.slash(p.clone().addScaledVector(dir, -0.3), { fwd: dir, normal: n, r: big ? 1.3 : 0.9, color: col, life: 0.18 });
+}
