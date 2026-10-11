@@ -224,12 +224,36 @@ export class Fighter {
     // 물리
     if (!this.held && !this.float && !this.onGround) this.vel.y -= GRAV * dt * (this.state === 'hit' || this.state === 'ko' ? 0.85 : 1);
     this.pos.addScaledVector(this.vel, dt);
-    if (this.pos.y <= 0 && !this.float && !this.held) {
+    const W = G.stage && G.stage.world;
+    // 장애물에 막힘 · 세게 날아가 부딪히면 튕겨 나온다
+    if (W && !this.held) {
+      const n = W.push(this.pos, 0.38);
+      if (n) {
+        const vn = this.vel.x * n.x + this.vel.z * n.z;
+        if (vn < 0) {
+          if ((this.state === 'hit' || this.state === 'ko') && -vn > 7) {
+            this.vel.x -= 1.5 * vn * n.x; this.vel.z -= 1.5 * vn * n.z; this.vel.y = Math.max(this.vel.y, 4); this.launched = true; this.onGround = false;
+            G.shake(0.16); G.fx.burst(this.chest(tA).addScaledVector(new V3(n.x, 0, n.z), -0.4), 18, 0x9a8a90, 5, { kind: 'dust', sk: 1.2 }); sfx('land');
+          } else { this.vel.x -= vn * n.x; this.vel.z -= vn * n.z; }
+        }
+      }
+    }
+    // 바닥(또는 올라선 장애물 윗면)
+    const gy = W ? W.groundAt(this.pos.x, this.pos.z, this.pos.y) : 0;
+    if (this.pos.y <= gy && !this.float && !this.held) {
       if (!this.onGround && this.vel.y <= 0) this.land();
-      this.pos.y = 0; if (this.vel.y < 0) this.vel.y = 0; this.onGround = true;
-    } else if (this.pos.y > 0.001) this.onGround = false;
+      this.pos.y = gy; if (this.vel.y < 0) this.vel.y = 0; this.onGround = true;
+    } else if (this.pos.y > gy + 0.001) this.onGround = false;
     if (this.held) this.onGround = false;
     const r = Math.hypot(this.pos.x, this.pos.z); if (r > ARENA_R) { this.pos.x *= ARENA_R / r; this.pos.z *= ARENA_R / r; }
+    // 위험 지대 (용암 등)
+    if (W && W.hazards.length && this.onGround && this.state !== 'ko') {
+      this.hzT = (this.hzT || 0) - dt;
+      for (const hz of W.hazards) if (Math.hypot(this.pos.x - hz.x, this.pos.z - hz.z) < hz.r && this.pos.y < 0.2 && this.hzT <= 0) {
+        this.hzT = 0.4; const d = hz.dps * 0.4; this.hp = Math.max(1, this.hp - d); this.chipT = 0.5; this.vel.y = 5; this.onGround = false;
+        G.fx.burst(this.pos.clone().setY(0.2), 16, [hz.color, 0xffd070], 5, { dir: new V3(0, 1, 0), spread: 0.8 }); G.hud.damage(this.chest(tA), Math.round(d), false); sfx('hit');
+      }
+    }
     // 포즈 목표
     if (!target) {
       const s = this.state, t = this.tgt, br = Math.sin(G.time * 2.6 + this.slot);

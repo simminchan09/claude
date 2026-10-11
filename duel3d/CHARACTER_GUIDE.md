@@ -5,7 +5,7 @@
 ## 1. 순서
 1. `src/characters/trainer.js`를 복사해서 `src/characters/<이름>.js`로 만든다.
 2. `src/characters/index.js`의 `ROSTER` 배열에 추가한다. 선택 화면에 바로 나타난다.
-3. 훈련 모드(`F` 에너지 100%, `R` 쿨타임 초기화, `T` 더미 행동 변경, `H` 체력 회복)에서 기술을 확인한다.
+3. 훈련 모드(`1` 궁극기 충전, `2` 쿨타임 초기화, `3` 체력 회복, `4` 더미 행동 변경)에서 기술을 확인한다.
 
 ## 2. 캐릭터 정의 객체
 ```js
@@ -13,7 +13,7 @@ export default {
   id, name, short, title, desc,            // 표시용 텍스트
   stats: { hp, speed /*m/s*/, jump /*m/s*/ },
   palettes: [{ accent, armor, band }, ...], // [0] = 기본, [1] = 같은 캐릭터 미러전용 색
-  skills: { s1: { name, cd }, s2: { name, cd }, ult: { name, sub } },
+  skills: { heavy: { name }, s1: { name, cd }, s2: { name, cd }, ult: { name, sub } }, // HUD 스킬 칸 이름
   moveList: [['약공 ×3', '설명'], ...],    // 선택 화면 기술표
   createModel(palette),                     // 3D 모델 생성 (아래 3번)
   poses,                                    // 공통 포즈 (아래 4번)
@@ -43,7 +43,7 @@ export default {
 필수 포즈 이름: `base`(대기) `run` `jump` `guard` `hit` `air`(공중 피격) `down`(누움) `dash` `win` `portrait`(컷인 초상).
 
 ## 5. 기술
-이름 규칙: `light1 → light2 → light3`(약공 연타), `heavy`, `s1`, `s2`, `ult`.
+이름 규칙과 키: `light1 → light2 → light3` = 좌클릭 연타, `heavy` = 우클릭, `s1` = Shift, `s2` = E, `ult` = Q.
 
 | 필드 | 의미 |
 |---|---|

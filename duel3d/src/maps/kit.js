@@ -1,9 +1,10 @@
 // 맵 제작 도구: 하늘 · 조명 · 안개 · 결투장 바닥 · 지형 · 물/용암/구름바다 · 산맥 · 날씨 · 인스턴스 배치
-// 모든 맵은 반경 17m 결투장(이동 반경 ARENA_R) 위 y = 0 에서 싸운다.
+// 모든 맵은 반경 23m 결투장(이동 반경 ARENA_R) 위 y = 0 에서 싸운다.
+// 결투장 안의 장애물은 K.cylS / K.boxS / K.rockS 로 만들면 충돌·올라서기·카메라 투명화가 자동으로 붙는다.
 import * as THREE from 'three';
 
-export const ARENA_R = 15.5;
-export const PLAT_R = 17;
+export const ARENA_R = 21;
+export const PLAT_R = 23;
 const TAU = Math.PI * 2;
 const V3 = THREE.Vector3;
 // 셰이더용 색: 16진수 값을 화면에 보이는 그대로 쓴다 (색공간 변환 없음)
@@ -197,7 +198,7 @@ export function createKit(scene, seed = 1) {
     group.add(new THREE.HemisphereLight(o.sky ?? 0x8a74c0, o.ground ?? 0x2a1018, o.hemi ?? 1.2));
     const key = new THREE.DirectionalLight(o.key ?? 0xffffff, o.keyI ?? 2.5);
     const kd = o.keyDir ? new V3(...o.keyDir).normalize() : K.sunDir.clone(); key.position.copy(kd).multiplyScalar(40); if (key.position.y < 12) key.position.y = 12;
-    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 100 });
+    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
     key.shadow.bias = -0.0004; key.shadow.normalBias = 0.03; key.shadow.camera.updateProjectionMatrix(); group.add(key, key.target);
     if (o.fillI) { const fill = new THREE.DirectionalLight(o.fill ?? 0x6f86ff, o.fillI); fill.position.set(-20, 14, 25); group.add(fill); }
   };
@@ -338,8 +339,64 @@ export function createKit(scene, seed = 1) {
   K.spin = (obj, axis, speed) => K.updaters.push((dt) => { obj.rotation[axis] += speed * dt; });
   K.bob = (obj, amp, speed) => { const y0 = obj.position.y, p = K.r(0, TAU); K.updaters.push((dt, t) => { obj.position.y = y0 + Math.sin(t * speed + p) * amp; }); };
 
+  /* ---------- 결투장 안 장애물 (충돌) ----------
+     원기둥: { t:'c', x, z, r, y0, top }   상자: { t:'b', x, z, hw, hd, c, s, y0, top } (ry 회전)
+     top 이 낮으면(점프 높이 1.7m 이하) 위에 올라설 수 있다. */
+  K.colliders = []; K.occ = []; K.hazards = [];
+  const solid = (mesh, col) => {
+    K.colliders.push(col);
+    if (mesh) { const list = Array.isArray(mesh) ? mesh : [mesh]; for (const m of list) { m.material = m.material.clone(); m.userData.fade = 1; K.occ.push(m); } col.meshes = list; }
+    return mesh;
+  };
+  K.solid = solid;
+  K.cylS = (x, z, r, h, mat, o = {}) => { const y0 = o.y0 ?? 0, m = K.mesh(new THREE.CylinderGeometry(o.rTop ?? r, r, h, o.seg ?? 14), mat, x, y0 + h / 2, z); if (o.ry) m.rotation.y = o.ry; return solid(m, { t: 'c', x, z, r: o.colR ?? r, y0, top: y0 + h }); };
+  K.boxS = (x, z, w, d, h, ry, mat, o = {}) => { const y0 = o.y0 ?? 0, m = K.mesh(new THREE.BoxGeometry(w, h, d), mat, x, y0 + h / 2, z); m.rotation.y = ry; return solid(m, { t: 'b', x, z, hw: w / 2, hd: d / 2, c: Math.cos(ry), s: Math.sin(ry), y0, top: y0 + h }); };
+  K.rockS = (x, z, r, h, mat) => { const m = K.mesh(new THREE.DodecahedronGeometry(1, 0), mat, x, h * 0.42, z); m.scale.set(r, h * 0.55, r * K.r(0.85, 1.1)); m.rotation.y = K.r(0, TAU); return solid(m, { t: 'c', x, z, r: r * 0.86, y0: 0, top: h * 0.9 }); };
+  // 장애물 콜라이더만 (보이는 모양은 직접 만든 경우)
+  K.colC = (x, z, r, top, meshes) => solid(meshes || null, { t: 'c', x, z, r, y0: 0, top });
+  K.colB = (x, z, w, d, top, ry, meshes) => solid(meshes || null, { t: 'b', x, z, hw: w / 2, hd: d / 2, c: Math.cos(ry), s: Math.sin(ry), y0: 0, top });
+  // 위험 지대: 서 있으면 주기적으로 피해 (체력 1 아래로는 깎지 않음)
+  K.hazard = (x, z, r, dps, color) => K.hazards.push({ x, z, r, dps, color });
+
+  // 장애물 질의 (fighter · 투사체 · AI 가 사용)
+  const toLocal = (b, x, z) => { const dx = x - b.x, dz = z - b.z; return [dx * b.c - dz * b.s, dx * b.s + dz * b.c]; };
+  const inside = (c, x, z, pad) => {
+    if (c.t === 'c') return Math.hypot(x - c.x, z - c.z) < c.r + pad;
+    const [lx, lz] = toLocal(c, x, z); return Math.abs(lx) < c.hw + pad && Math.abs(lz) < c.hd + pad;
+  };
+  const world = {
+    colliders: K.colliders, hazards: K.hazards, occ: K.occ,
+    // (x,z)에서 높이 y 기준 발을 디딜 수 있는 가장 높은 면
+    groundAt(x, z, y) { let g = 0; for (const c of K.colliders) if (c.top <= y + 0.35 && c.top > g && inside(c, x, z, 0.12)) g = c.top; return g; },
+    // 반경 rad 원(높이 y~y+1.7)을 장애물 밖으로 밀어낸다. 밀린 법선을 돌려준다
+    push(p, rad) {
+      let nx = 0, nz = 0, hit = false;
+      for (const c of K.colliders) {
+        if (c.top <= p.y + 0.35 || c.y0 >= p.y + 1.7) continue;
+        if (c.t === 'c') {
+          const dx = p.x - c.x, dz = p.z - c.z, d = Math.hypot(dx, dz), m = c.r + rad;
+          if (d < m) { const ux = d > 1e-4 ? dx / d : 1, uz = d > 1e-4 ? dz / d : 0; p.x = c.x + ux * m; p.z = c.z + uz * m; nx += ux; nz += uz; hit = true; }
+        } else {
+          const [lx, lz] = toLocal(c, p.x, p.z), cx = Math.max(-c.hw, Math.min(c.hw, lx)), cz = Math.max(-c.hd, Math.min(c.hd, lz));
+          let ox = lx - cx, oz = lz - cz, d = Math.hypot(ox, oz), qx, qz, lnx, lnz;
+          if (d > 1e-4) { if (d >= rad) continue; lnx = ox / d; lnz = oz / d; qx = cx + lnx * rad; qz = cz + lnz * rad; }
+          else { const px = c.hw - Math.abs(lx), pz = c.hd - Math.abs(lz); if (px < pz) { lnx = Math.sign(lx) || 1; lnz = 0; qx = lnx * (c.hw + rad); qz = lz; } else { lnx = 0; lnz = Math.sign(lz) || 1; qx = lx; qz = lnz * (c.hd + rad); } }
+          p.x = c.x + qx * c.c + qz * c.s; p.z = c.z - qx * c.s + qz * c.c; nx += lnx * c.c + lnz * c.s; nz += -lnx * c.s + lnz * c.c; hit = true;
+        }
+      }
+      if (!hit) return null; const l = Math.hypot(nx, nz) || 1; return { x: nx / l, z: nz / l };
+    },
+    // 점(반경 r)이 장애물 안인지 (투사체용)
+    solidAt(p, r) { for (const c of K.colliders) if (p.y < c.top && p.y > c.y0 - r && inside(c, p.x, p.z, r)) return true; return false; },
+    // 앞쪽 dist 거리 안에서 막는 장애물의 최대 높이 (없으면 0) — AI 길찾기용
+    blockedAhead(p, dx, dz, dist, rad = 0.45) {
+      let top = 0; for (let k = 1; k <= 3; k++) { const x = p.x + dx * dist * k / 3, z = p.z + dz * dist * k / 3;
+        for (const c of K.colliders) if (c.top > p.y + 0.35 && c.y0 < p.y + 1.7 && inside(c, x, z, rad)) top = Math.max(top, c.top - p.y); }
+      return top;
+    },
+  };
   K.finish = () => ({
-    group, sunDir: K.sunDir,
+    group, sunDir: K.sunDir, world,
     flashSky(a) { K.flashA = Math.max(K.flashA, a); },
     setTint(color, a) { if (!K.skyMat) return; K.skyMat.uniforms.uTint.value.setHex(color, THREE.LinearSRGBColorSpace); K.skyMat.uniforms.uTintA.value = a; },
     update(dt, t) {

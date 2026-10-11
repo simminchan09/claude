@@ -22,7 +22,8 @@ export class Projectile {
       const r = tgt.takeHit(this.owner, this.h, this.vel.clone().setY(0).normalize());
       if (r) { G.fx.impact(this.pos, this.color, 1.4); this.onHit && this.onHit(this, r); return this.kill(); }
     }
-    if (this.t > this.life || this.pos.y < 0.05 || Math.hypot(this.pos.x, this.pos.z) > 40) { G.fx.impact(this.pos, this.color, 0.8); this.kill(); }
+    const W = G.stage && G.stage.world;
+    if (this.t > this.life || this.pos.y < 0.05 || (W && W.solidAt(this.pos, this.r * 0.6)) || Math.hypot(this.pos.x, this.pos.z) > 40) { G.fx.impact(this.pos, this.color, 0.8); this.kill(); }
   }
   kill() { this.done = true; this.G.scene.remove(this.mesh); this.mesh.geometry.dispose(); this.halo.geometry.dispose(); }
 }

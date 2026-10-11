@@ -32,6 +32,18 @@ export class AICtrl {
     }
     if (this.mode === 'approach') { out.mx = tx; out.mz = tz; }
     else if (this.mode === 'circle') { out.mx = -tz * this.strafe * 0.8 + tx * 0.2; out.mz = tx * this.strafe * 0.8 + tz * 0.2; }
+    // 장애물 회피: 앞이 막히면 낮은 건 뛰어넘고, 높은 건 옆으로 돌아간다
+    const W = G.stage && G.stage.world;
+    if (W && (out.mx || out.mz)) {
+      const h = W.blockedAhead(f.pos, out.mx, out.mz, 1.8);
+      if (h > 0) {
+        if (h < 1.5 && f.onGround) out.jumpP = true;
+        else for (const a of [0.8 * this.strafe, -0.8 * this.strafe, 1.6 * this.strafe, -1.6 * this.strafe]) {
+          const c = Math.cos(a), s = Math.sin(a), x = out.mx * c - out.mz * s, z = out.mx * s + out.mz * c;
+          if (!W.blockedAhead(f.pos, x, z, 1.8)) { out.mx = x; out.mz = z; break; }
+        }
+      }
+    }
     return out;
   }
 }

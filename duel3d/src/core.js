@@ -25,16 +25,22 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
+// 마우스 버튼도 키처럼 다룬다: Mouse0 = 좌클릭, Mouse2 = 우클릭 (게임 화면 위에서만)
+addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse' || e.target.id !== 'gl') return; const k = 'Mouse' + e.button; if (!keys[k]) pressed[k] = true; keys[k] = true; audioInit(); });
+addEventListener('pointerup', (e) => { if (e.pointerType === 'mouse') keys['Mouse' + e.button] = false; });
+addEventListener('contextmenu', (e) => { if (e.target.id === 'gl') e.preventDefault(); });
 export function endFrame() { for (const k in pressed) delete pressed[k]; }
 
 // 키 배치. 1P 단독(CPU·훈련) 모드에서는 방향키도 이동에 쓸 수 있다.
 export const MAPS = {
-  p1solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['Space'], dash: ['ShiftLeft', 'ShiftRight'], guard: ['KeyL'], light: ['KeyJ'], heavy: ['KeyK'], s1: ['KeyU'], s2: ['KeyI'], ult: ['KeyO'] },
-  p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], dash: ['ShiftLeft'], guard: ['KeyL'], light: ['KeyJ'], heavy: ['KeyK'], s1: ['KeyU'], s2: ['KeyI'], ult: ['KeyO'] },
+  // 좌클 = 기본공격 · 우클 / Shift / E = 스킬 · Q = 궁극기 (J K U I O 도 같은 동작)
+  p1solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['Space'], dash: ['KeyC'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'ShiftRight', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
+  p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], dash: ['KeyC'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
   p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight'], dash: ['NumpadDecimal', 'ShiftRight'], guard: ['Numpad3', 'Slash'], light: ['Numpad1', 'Comma'], heavy: ['Numpad2', 'Period'], s1: ['Numpad4', 'Semicolon'], s2: ['Numpad5', 'Quote'], ult: ['Numpad6', 'BracketRight'] },
 };
 export const ACTIONS = ['ult', 's1', 's2', 'heavy', 'light', 'dash'];
 export function keyName(code) {
+  if (code === 'Mouse0') return '좌클'; if (code === 'Mouse2') return '우클';
   return code.replace('Key', '').replace('Numpad', 'Num').replace('Comma', ',').replace('Period', '.').replace('Slash', '/')
     .replace('Semicolon', ';').replace('Quote', "'").replace('BracketRight', ']').replace('ShiftLeft', 'Shift').replace('ShiftRight', 'RShift')
     .replace('ControlRight', 'RCtrl').replace('NumDecimal', 'Num.');

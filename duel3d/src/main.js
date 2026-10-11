@@ -24,12 +24,14 @@ const pKey = new THREE.SpotLight(0xffffff, 0, 10, 0.7, 0.6, 1); scene.add(pKey, 
 const pHemi = new THREE.HemisphereLight(0xc8d4ff, 0x1a1020, 0); scene.add(pHemi);
 // 카메라를 따라다니는 보조광: 역광 속에서도 캐릭터 실루엣이 읽히도록
 const camFill = new THREE.DirectionalLight(0xc0c8ff, 1.1); scene.add(camFill, camFill.target);
-let stage = buildStage(scene, 'eclipse'); const fx = new FX(scene), hud = new HUD(), fcam = new FightCam(camera), fcam2 = new FightCam(camera2);
+// 타이틀 배경도 무작위 맵
+const firstMap = STAGES[(Math.random() * STAGES.length) | 0].id;
+let stage = buildStage(scene, firstMap); const fx = new FX(scene), hud = new HUD(), fcam = new FightCam(camera), fcam2 = new FightCam(camera2);
 
 const G = (window.__G = {
   scene, camera, renderer, fx, hud, stage, fighters: [], ents: [], preview: [],
   state: 'title', mode: 'cpu', time: 0, t: 0, rdt: 1 / 60, timer: 99, round: 1, hitstop: 0, ts: 1, tsT: 1, tsHold: 0,
-  cine: null, paused: false, camFwd: { x: 0, z: -1 }, tint: { c: 0, a: 0 }, tintA: 0, sel: { p1: 0, p2: 0, map: 'eclipse' }, mapId: 'eclipse',
+  cine: null, paused: false, camFwd: { x: 0, z: -1 }, tint: { c: 0, a: 0 }, tintA: 0, sel: { p1: 0, p2: 0 }, mapId: firstMap,
   shake(a) { fcam.shake = Math.max(fcam.shake, a); fcam2.shake = Math.max(fcam2.shake, a); },
   // 2P 대전은 좌우 분할. 궁극기 연출·KO·결과처럼 카메라 1이 연출 중이면 전체 화면 하나로 합친다
   splitOn() { return G.mode === 'pvp' && G.fighters.length === 2 && !G.cine && !fcam.cine && !fcam.focus && G.state !== 'title'; },
@@ -84,17 +86,14 @@ function buildSelect() {
     el.innerHTML = ROSTER.map((d, i) => `<button class="card" data-slot="${slot}" data-i="${i}" style="--sel:${col}" aria-pressed="${G.sel[slot] === i}"><span class="tag">${slot === 'p1' ? '1P' : G.mode === 'pvp' ? '2P' : G.mode === 'training' ? '더미' : 'CPU'}</span><b>${d.short || d.name}</b><span>${d.title}</span></button>`).join('')
       + Array.from({ length: EMPTY_SLOTS }, () => '<div class="card empty"><b>?</b><span>추가 예정</span></div>').join('');
   }
-  $('#maps').innerHTML = STAGES.map((m, i) => `<button class="mapb" data-map="${m.id}" aria-pressed="${G.sel.map === m.id}"><i>${String(i + 1).padStart(2, '0')}</i>${m.name}</button>`).join('')
-    + `<button class="mapb" data-map="random" aria-pressed="${G.sel.map === 'random'}"><i>??</i>무작위</button>`;
-  const mp = STAGES.find((m) => m.id === G.sel.map); $('#mapInfo').textContent = mp ? mp.concept : '경기 시작 때 10곳 중 하나를 고릅니다';
   $('#r2lbl').textContent = G.mode === 'pvp' ? '2P 캐릭터' : G.mode === 'training' ? '훈련 상대' : 'CPU 캐릭터';
   document.querySelectorAll('#modes button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === G.mode));
   const d = ROSTER[G.sel.p1];
   $('#charInfo').innerHTML = `<h3>${d.name}</h3><p>${d.desc}</p><dl class="mv">${d.moveList.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
   const k = (c) => `<kbd>${c}</kbd>`;
-  $('#keyHelp').innerHTML = G.mode === 'pvp'
-    ? `1P ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('Space')} 점프 · ${k('Shift')} 대시 · ${k('L')} 방어 · ${k('J')} 약공 ${k('K')} 강공 ${k('U')} ${k('I')} 스킬 ${k('O')} 궁극기<br>2P 방향키 이동 · ${k('Num0')} 점프 · ${k('Num.')} 대시 · ${k('Num3')} 방어 · ${k('Num1')} 약공 ${k('Num2')} 강공 ${k('Num4')} ${k('Num5')} 스킬 ${k('Num6')} 궁극기`
-    : `${k('W')}${k('A')}${k('S')}${k('D')} / 방향키 이동 (카메라 기준) · ${k('Space')} 점프 · ${k('Shift')} 대시 · ${k('L')} 방어(누르고 있기)<br>${k('J')} 약공(연타 3단) · ${k('K')} 강공 · ${k('U')} 스킬1 · ${k('I')} 스킬2 · ${k('O')} 궁극기 · ${k('Esc')} 일시정지 · ${k('M')} 소리`;
+  $('#keyHelp').innerHTML = (G.mode === 'pvp'
+    ? `1P ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 기본공격 · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기 · ${k('Space')} 점프 · ${k('C')} 대시 · ${k('F')} 방어<br>2P 방향키 이동 · ${k('Num1')} 기본공격 · ${k('Num2')} ${k('Num4')} ${k('Num5')} 스킬 · ${k('Num6')} 궁극기 · ${k('Num0')} 점프 · ${k('Num.')} 대시 · ${k('Num3')} 방어`
+    : `${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 기본공격(연타 3단) · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기<br>${k('Space')} 점프 · ${k('C')} 대시 · ${k('F')} 방어(누르고 있기) · ${k('Esc')} 일시정지 · ${k('M')} 소리`);
   rebuildPreview();
 }
 function rebuildPreview() {
@@ -106,7 +105,6 @@ function rebuildPreview() {
 document.addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return; audioInit();
   if (t.dataset.mode) { G.mode = t.dataset.mode; sfx('ui'); buildSelect(); }
-  else if (t.dataset.map) { G.sel.map = t.dataset.map; if (t.dataset.map !== 'random') setMap(t.dataset.map); sfx('ui'); buildSelect(); }
   else if (t.dataset.slot) { G.sel[t.dataset.slot] = +t.dataset.i; sfx('ui'); buildSelect(); }
   else if (t.id === 'start') startMatch();
   else if (t.dataset.act === 'resume') setPause(false);
@@ -120,7 +118,7 @@ function toTitle() {
 }
 function setPause(p) {
   G.paused = p; $('#pause').hidden = !p;
-  $('#pauseKeys').innerHTML = G.mode === 'training' ? '훈련 모드 단축키: <kbd>F</kbd> 에너지 100% · <kbd>R</kbd> 쿨타임 초기화 · <kbd>T</kbd> 더미 행동 변경 · <kbd>H</kbd> 체력 회복' : '<kbd>Esc</kbd> 또는 <kbd>P</kbd> 로 계속하기 · <kbd>M</kbd> 소리 켜기/끄기';
+  $('#pauseKeys').innerHTML = G.mode === 'training' ? '훈련 모드 단축키: <kbd>1</kbd> 궁극기 충전 · <kbd>2</kbd> 쿨타임 초기화 · <kbd>3</kbd> 체력 회복 · <kbd>4</kbd> 더미 행동 변경' : '<kbd>Esc</kbd> 또는 <kbd>P</kbd> 로 계속하기 · <kbd>M</kbd> 소리 켜기/끄기';
 }
 
 /* ---------- 경기 ---------- */
@@ -130,7 +128,8 @@ function clearMatch() {
 }
 function startMatch() {
   sfx('ult'); for (const f of G.preview) f.dispose(); G.preview = []; clearMatch();
-  if (G.sel.map === 'random') setMap(STAGES[(Math.random() * STAGES.length) | 0].id);
+  // 게임을 시작할 때마다 맵을 무작위로 정한다 (직전 맵은 제외)
+  const pool = STAGES.filter((m) => m.id !== G.mapId); setMap(pool[(Math.random() * pool.length) | 0].id);
   const d1 = ROSTER[G.sel.p1], d2 = ROSTER[G.sel.p2];
   const c1 = new KeyCtrl(G.mode === 'pvp' ? MAPS.p1 : MAPS.p1solo);
   const c2 = G.mode === 'pvp' ? new KeyCtrl(MAPS.p2) : G.mode === 'training' ? new DummyCtrl() : new AICtrl();
@@ -143,12 +142,12 @@ function startRound() {
   for (const e of G.ents) e.kill && e.kill(); G.ents = []; fx.clear();
   G.cine = null; G.t = 0; G.timer = 99; G.winner = null; G.timeout = false; G.ts = G.tsT = 1; G.tsHold = 0; G.hitstop = 0; G.setTint(0, 0);
   fcam.focus = null; fcam.cine = null; fcam.cyaw = fcam2.cyaw = null; hud.hideCutin(); hud.setup(G);
-  if (G.mode === 'training') { G.state = 'fight'; hud.announce('훈련 시작', '', 'gold', 1.2); updateTrainBar(); }
-  else { G.state = 'intro'; hud.announce(G.round >= 3 ? '최종 라운드' : `ROUND ${G.round}`, '', '', 1.1); }
+  if (G.mode === 'training') { G.state = 'fight'; hud.announce('훈련 시작', stage.def.name, 'gold', 1.4); updateTrainBar(); }
+  else { G.state = 'intro'; hud.announce(G.round >= 3 ? '최종 라운드' : `ROUND ${G.round}`, G.round === 1 ? stage.def.name : '', '', G.round === 1 ? 1.6 : 1.1); }
 }
 function updateTrainBar() {
   const d = G.fighters[1].ctrl;
-  hud.setTraining(`<kbd>F</kbd> 에너지 100% · <kbd>R</kbd> 쿨타임 초기화 · <kbd>H</kbd> 체력 회복 · <kbd>T</kbd> 더미: <b>${DUMMY_LABEL[d.mode]}</b>`);
+  hud.setTraining(`<kbd>1</kbd> 궁극기 충전 · <kbd>2</kbd> 쿨타임 초기화 · <kbd>3</kbd> 체력 회복 · <kbd>4</kbd> 더미: <b>${DUMMY_LABEL[d.mode]}</b>`);
 }
 function timeUp() {
   const [a, b] = G.fighters; G.state = 'ko'; G.t = 0; G.timeout = true;
@@ -188,10 +187,10 @@ function update(rdt) {
   // 훈련 단축키
   if (G.mode === 'training') {
     const [a, b] = G.fighters;
-    if (pressed.KeyF) a.energy = b.energy = 100;
-    if (pressed.KeyR) { a.cd.s1 = a.cd.s2 = b.cd.s1 = b.cd.s2 = 0; }
-    if (pressed.KeyH) { a.hp = a.dispHp = a.maxHp; b.hp = b.dispHp = b.maxHp; }
-    if (pressed.KeyT) { b.ctrl.cycle(); updateTrainBar(); }
+    if (pressed.Digit1) a.energy = b.energy = 100;
+    if (pressed.Digit2) { a.cd.s1 = a.cd.s2 = b.cd.s1 = b.cd.s2 = 0; }
+    if (pressed.Digit3) { a.hp = a.dispHp = a.maxHp; b.hp = b.dispHp = b.maxHp; }
+    if (pressed.Digit4) { b.ctrl.cycle(); updateTrainBar(); }
     for (const f of G.fighters) if (f.lastHitT > 1.6 && f.state !== 'hit') f.hp = Math.min(f.maxHp, f.hp + rdt * 500);
   }
   // 시간 배율 · 화면 색조
@@ -226,7 +225,21 @@ function update(rdt) {
   for (let i = G.ents.length - 1; i >= 0; i--) { G.ents[i].update(dt); if (G.ents[i].done) G.ents.splice(i, 1); }
   fx.update(dt, camera); camUpdate(rdt); hud.update(G, rdt);
 }
-function camUpdate(rdt) { fcam.update(rdt, G); if (G.mode === 'pvp') fcam2.update(rdt, G); }
+function camUpdate(rdt) { fcam.update(rdt, G); if (G.mode === 'pvp') fcam2.update(rdt, G); fadeOccluders(rdt); }
+// 카메라와 캐릭터 사이를 가리는 장애물은 반투명하게
+const ray = new THREE.Raycaster(), rv = new V3(), rd = new V3();
+function fadeOccluders(rdt) {
+  const occ = stage.world.occ; if (!occ.length) return;
+  for (const m of occ) m.userData.want = 1;
+  if (G.fighters.length === 2 && G.state !== 'title') for (const v of G.views()) for (const f of G.fighters) {
+    v.cam.getWorldPosition(rv); rd.copy(f.chest(new V3())).sub(rv); const len = rd.length(); rd.normalize();
+    ray.set(rv, rd); ray.far = len - 0.3; for (const h of ray.intersectObjects(occ, false)) h.object.userData.want = 0.22;
+  }
+  for (const m of occ) {
+    const u = m.userData, f = (u.fade = damp(u.fade ?? 1, u.want, 10, rdt)), mt = m.material, tr = f < 0.98;
+    mt.opacity = f; if (mt.transparent !== tr) { mt.transparent = tr; mt.depthWrite = !tr; mt.needsUpdate = true; }
+  }
+}
 
 /* ---------- 렌더 (+ 궁극기 초상 패스) ---------- */
 const bandColor = new THREE.Color();
