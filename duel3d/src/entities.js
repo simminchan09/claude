@@ -29,7 +29,7 @@ export class Projectile {
 }
 
 // 원형 범위 판정 (지면 충격파 등). 맞으면 피격 결과를 돌려준다
-export function areaHit(att, center, radius, h, maxY = 1.8) {
+export function areaHit(att, center, radius, h, maxY = 0.6) { // maxY: 이보다 높이 뜬 상대는 맞지 않음 (지면 충격파)
   const o = att.opp, dx = o.pos.x - center.x, dz = o.pos.z - center.z, d = Math.hypot(dx, dz);
   if (d > radius + 0.42 || o.pos.y - center.y > maxY) return false;
   const dir = d > 0.01 ? new V3(dx / d, 0, dz / d) : att.fwd(new V3());

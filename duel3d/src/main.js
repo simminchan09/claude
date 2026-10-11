@@ -61,6 +61,27 @@ function setMap(id) {
   stage.dispose(); stage = buildStage(scene, id); G.stage = stage; G.mapId = id;
 }
 
+/* ---------- 히트박스 보기 (훈련 5 · 어디서나 F3) ---------- */
+const DBG_MAX = 4000, dbgPos = new Float32Array(DBG_MAX * 3), dbgCol = new Float32Array(DBG_MAX * 3);
+const dbgGeo = new THREE.BufferGeometry(); dbgGeo.setAttribute('position', new THREE.BufferAttribute(dbgPos, 3).setUsage(THREE.DynamicDrawUsage)); dbgGeo.setAttribute('color', new THREE.BufferAttribute(dbgCol, 3).setUsage(THREE.DynamicDrawUsage));
+const dbgLines = new THREE.LineSegments(dbgGeo, new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.9 }));
+dbgLines.frustumCulled = false; dbgLines.renderOrder = 50; dbgLines.visible = false; scene.add(dbgLines);
+function drawCapsules() {
+  let n = 0; const c = new THREE.Color(), u = new V3(), v = new V3(), w = new V3(), p = new V3();
+  const seg = (a, b) => { if (n + 2 > DBG_MAX) return; dbgPos.set([a.x, a.y, a.z, b.x, b.y, b.z], n * 3); dbgCol.set([c.r, c.g, c.b, c.r, c.g, c.b], n * 3); n += 2; };
+  const cap = (a, b, r) => {
+    w.subVectors(b, a); if (w.lengthSq() < 1e-6) w.set(0, 1, 0); w.normalize(); u.set(Math.abs(w.y) < 0.9 ? 0 : 1, Math.abs(w.y) < 0.9 ? 1 : 0, 0).cross(w).normalize(); v.crossVectors(w, u);
+    for (const s of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const o = u.clone().multiplyScalar(s[0] * r).addScaledVector(v, s[1] * r); seg(a.clone().add(o), b.clone().add(o)); }
+    for (const e of [a, b]) for (let i = 0; i < 12; i++) { const a0 = (i / 12) * Math.PI * 2, a1 = ((i + 1) / 12) * Math.PI * 2;
+      seg(p.copy(e).addScaledVector(u, Math.cos(a0) * r).addScaledVector(v, Math.sin(a0) * r).clone(), e.clone().addScaledVector(u, Math.cos(a1) * r).addScaledVector(v, Math.sin(a1) * r)); }
+  };
+  for (const f of G.fighters) {
+    c.set(f.inv > 0 ? 0x8888ff : 0x40ff70); for (const h of f.hurt) cap(h.a, h.b, h.r);
+    if (f.state === 'act' && f.act.hits && f.hasW) { const live = f.act.hits.some((hb, i) => !f.hitDone.has(i) && f.at >= hb.t0 && f.at <= hb.t1); c.set(live ? 0xff3030 : 0x806060); cap(f.wb, f.wt, 0.14); }
+  }
+  dbgGeo.setDrawRange(0, n); dbgGeo.attributes.position.needsUpdate = true; dbgGeo.attributes.color.needsUpdate = true;
+}
+
 /* ---------- 리사이즈 ---------- */
 function resize() {
   const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
@@ -147,7 +168,7 @@ function startRound() {
 }
 function updateTrainBar() {
   const d = G.fighters[1].ctrl;
-  hud.setTraining(`<kbd>1</kbd> 궁극기 충전 · <kbd>2</kbd> 쿨타임 초기화 · <kbd>3</kbd> 체력 회복 · <kbd>4</kbd> 더미: <b>${DUMMY_LABEL[d.mode]}</b>`);
+  hud.setTraining(`<kbd>1</kbd> 궁극기 충전 · <kbd>2</kbd> 쿨타임 초기화 · <kbd>3</kbd> 체력 회복 · <kbd>4</kbd> 더미: <b>${DUMMY_LABEL[d.mode]}</b> · <kbd>5</kbd> 히트박스 보기`);
 }
 function timeUp() {
   const [a, b] = G.fighters; G.state = 'ko'; G.t = 0; G.timeout = true;
@@ -170,6 +191,7 @@ function update(rdt) {
   G.rdt = rdt; G.time += rdt;
   camera.getWorldDirection(tmpV); tmpV.y = 0; tmpV.normalize(); G.camFwd = { x: tmpV.x, z: tmpV.z };
   if (pressed.KeyM) setMuted(!isMuted());
+  if (pressed.F3) G.showHit = !G.showHit;
   stage.update(rdt, G.time);
   if (G.state === 'title') {
     if (pressed.Enter) startMatch();
@@ -191,6 +213,7 @@ function update(rdt) {
     if (pressed.Digit2) { a.cd.s1 = a.cd.s2 = b.cd.s1 = b.cd.s2 = 0; }
     if (pressed.Digit3) { a.hp = a.dispHp = a.maxHp; b.hp = b.dispHp = b.maxHp; }
     if (pressed.Digit4) { b.ctrl.cycle(); updateTrainBar(); }
+    if (pressed.Digit5) G.showHit = !G.showHit;
     for (const f of G.fighters) if (f.lastHitT > 1.6 && f.state !== 'hit') f.hp = Math.min(f.maxHp, f.hp + rdt * 500);
   }
   // 시간 배율 · 화면 색조
@@ -244,6 +267,7 @@ function fadeOccluders(rdt) {
 /* ---------- 렌더 (+ 궁극기 초상 패스) ---------- */
 const bandColor = new THREE.Color();
 function render() {
+  dbgLines.visible = !!G.showHit && G.fighters.length === 2 && G.state !== 'title'; if (dbgLines.visible) drawCapsules();
   camFill.position.copy(camera.position).add(new V3(0, 3, 0)); camFill.target.position.copy(fcam.look);
   const views = G.views(), split = views.length > 1;
   renderer.setScissorTest(split);

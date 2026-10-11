@@ -6,9 +6,28 @@ import { ARENA_R } from './stage.js';
 
 const V3 = THREE.Vector3;
 export const GRAV = 26;
-const HURT_R = 0.42, HURT_LO = 0.25, HURT_HI = 1.6;
+// 피격 판정: 매 프레임 골격 관절 위치로 만든 캡슐들 (몸 크기·자세를 그대로 따라감)
+// [시작 관절, 끝 관절(또는 'headTop'), 반경 배율(어깨 폭 기준)]
+const HURT_PARTS = [['hips', 'neck', 0.95], ['neck', 'headTop', 0.72], ['shoulderL', 'elbowL', 0.36], ['elbowL', 'handL', 0.33], ['shoulderR', 'elbowR', 0.36], ['elbowR', 'handR', 0.33],
+  ['hipL', 'kneeL', 0.45], ['kneeL', 'footL', 0.4], ['hipR', 'kneeR', 0.45], ['kneeR', 'footR', 0.4]];
 const tA = new V3(), tB = new V3(), tC = new V3(), tD = new V3();
 
+// 선분과 선분 사이 최단 거리
+function segSegDist(p1, q1, p2, q2) {
+  const d1x = q1.x - p1.x, d1y = q1.y - p1.y, d1z = q1.z - p1.z, d2x = q2.x - p2.x, d2y = q2.y - p2.y, d2z = q2.z - p2.z, rx = p1.x - p2.x, ry = p1.y - p2.y, rz = p1.z - p2.z;
+  const a = d1x * d1x + d1y * d1y + d1z * d1z, e = d2x * d2x + d2y * d2y + d2z * d2z, f = d2x * rx + d2y * ry + d2z * rz;
+  let s, t;
+  if (a < 1e-8 && e < 1e-8) { s = t = 0; }
+  else if (a < 1e-8) { s = 0; t = clamp(f / e, 0, 1); }
+  else {
+    const c = d1x * rx + d1y * ry + d1z * rz;
+    if (e < 1e-8) { t = 0; s = clamp(-c / a, 0, 1); }
+    else { const b = d1x * d2x + d1y * d2y + d1z * d2z, den = a * e - b * b; s = den > 1e-8 ? clamp((b * f - c * e) / den, 0, 1) : 0; t = (b * s + f) / e;
+      if (t < 0) { t = 0; s = clamp(-c / a, 0, 1); } else if (t > 1) { t = 1; s = clamp((b - c) / a, 0, 1); } }
+  }
+  const x = p1.x + d1x * s - (p2.x + d2x * t), y = p1.y + d1y * s - (p2.y + d2y * t), z = p1.z + d1z * s - (p2.z + d2z * t);
+  return Math.sqrt(x * x + y * y + z * z);
+}
 // 점과 선분 사이 거리
 function segDist(p, a, b) {
   const abx = b.x - a.x, aby = b.y - a.y, abz = b.z - a.z, l2 = abx * abx + aby * aby + abz * abz;
@@ -25,7 +44,8 @@ export class Fighter {
     this.pose = new Float32Array(POSE_LEN); this.tgt = new Float32Array(POSE_LEN);
     this.trail = G.fx.makeTrail(palette.accent); this.shield = G.fx.makeShield(palette.accent);
     this.maxHp = def.stats.hp; this.wins = 0; this.energy = 0;
-    this.wb = new V3(); this.wt = new V3();
+    this.wb = new V3(); this.wt = new V3(); this.pwb = new V3(); this.pwt = new V3(); this.hasW = false;
+    this.hurt = HURT_PARTS.map(() => ({ a: new V3(), b: new V3(), r: 0.1 }));
     this.reset(new V3(slot ? 4 : -4, 0, 0));
   }
   dispose() {
@@ -39,7 +59,7 @@ export class Fighter {
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.pose.set(this.def._poses.base); this.root.visible = true; this.trail.clear(); this.ghostT = 0;
-    this.root.rotation.y = this.yaw; this.applyRig(1 / 60);
+    this.root.rotation.y = this.yaw; this.applyRig(1 / 60); this.hasW = false; this.updateHurt();
   }
   /* ----- 좌표 헬퍼 ----- */
   fwd(out = new V3()) { return out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
@@ -54,10 +74,19 @@ export class Fighter {
   // dt 생략 시 즉시 상대를 바라본다
   faceOpp(rate, dt) { const o = this.opp; if (!o) return; const y = this.yawTo(o.pos); this.yaw = dt === undefined ? y : angLerp(this.yaw, y, 1 - Math.exp(-rate * dt)); }
   dist() { return Math.hypot(this.opp.pos.x - this.pos.x, this.opp.pos.z - this.pos.z); }
-  hurtHit(p, r) {
-    if (this.state === 'down' || (this.state === 'ko' && this.onGround)) { tA.set(this.pos.x, this.pos.y + 0.25, this.pos.z); return segDist(p, tA, tA) <= r + 0.8; }
-    tA.set(this.pos.x, this.pos.y + HURT_LO, this.pos.z); tB.set(this.pos.x, this.pos.y + HURT_HI, this.pos.z); return segDist(p, tA, tB) <= r + HURT_R;
+  // 골격에서 피격 캡슐 갱신 (applyRig 뒤에 호출)
+  updateHurt() {
+    const J = this.model.J, k = (this.def.hurtScale || 1) * this.model.dims.shW;
+    HURT_PARTS.forEach(([ja, jb, rr], i) => {
+      const h = this.hurt[i]; J[ja].getWorldPosition(h.a);
+      if (jb === 'headTop') J.head.localToWorld(h.b.set(0, this.model.dims.headTop ?? 0.2, 0)); else J[jb].getWorldPosition(h.b);
+      h.r = rr * k;
+    });
   }
+  // 구(중심 p, 반경 r)가 몸에 닿는가
+  hurtHit(p, r) { for (const h of this.hurt) if (segDist(p, h.a, h.b) <= r + h.r) return true; return false; }
+  // 캡슐(선분 a-b, 반경 r)이 몸에 닿는가
+  hurtHitSeg(a, b, r) { for (const h of this.hurt) if (segSegDist(a, b, h.a, h.b) <= r + h.r) return true; return false; }
   /* ----- 이펙트 헬퍼 (기술 정의에서 사용) ----- */
   // tilt: 0 = 수평 베기, π/2 = 수직 베기 / at: [오른쪽, 위, 앞]
   slashFx(o = {}) {
@@ -92,7 +121,7 @@ export class Fighter {
     const m = this.def.moves[name]; if (!m) return;
     if (m.cd) this.cd[m.cd] = this.def.skills[m.cd].cd;
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
-    this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear();
+    this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear();
     if (m.aim !== false && this.opp) this.faceOpp(1);
     m.start && m.start(this, this.opp, this.G);
     if (m.ult) { this.energy = 0; this.inv = 99; this.G.startCine(this); }
@@ -166,8 +195,13 @@ export class Fighter {
         const hits = m.hits || [];
         for (let i = 0; i < hits.length; i++) {
           const hb = hits[i]; if (this.hitDone.has(i) || this.at < hb.t0 || this.at > hb.t1) continue;
-          const p = this.local(hb.at, tB);
-          if (o.hurtHit(p, hb.r) && o.takeHit(this, hb)) this.hitDone.add(i);
+          // 무기 공격은 칼날이 지나간 경로(직전 프레임 → 지금)로, 그 외에는 구로 판정
+          let touch;
+          if ((hb.weapon ?? m.trail) && this.hasW) {
+            const br = hb.br ?? 0.14; tC.lerpVectors(this.pwb, this.wb, 0.5); tD.lerpVectors(this.pwt, this.wt, 0.5);
+            touch = o.hurtHitSeg(this.wb, this.wt, br) || o.hurtHitSeg(tC, tD, br) || o.hurtHitSeg(this.pwb, this.pwt, br);
+          } else touch = o.hurtHit(this.local(hb.at, tB), hb.r);
+          if (touch && o.takeHit(this, hb)) this.hitDone.add(i);
         }
         m.tick && m.tick(this, o, G, this.at, dt);
         if (this.act === m && live && this.buf) {
@@ -272,7 +306,13 @@ export class Fighter {
     lerpPose(this.pose, this.pose, target, 1 - Math.exp(-dt * rate));
     this.applyRig(dt);
     // 무기 궤적
-    if (this.state === 'act' && this.act.trail && this.model.weaponPts) { this.model.weaponPts(this.wb, this.wt); this.trail.push(this.wb, this.wt); }
+    if (this.model.weaponPts) {
+      this.pwb.copy(this.wb); this.pwt.copy(this.wt); this.model.weaponPts(this.wb, this.wt);
+      // 기술 시작·순간이동 등으로 크게 튀면 칼날 궤적을 잇지 않음
+      if (!this.hasW || this.wJump || this.pwt.distanceToSquared(this.wt) > 9) { this.pwb.copy(this.wb); this.pwt.copy(this.wt); this.hasW = true; this.wJump = false; }
+      if (this.state === 'act' && this.act.trail) this.trail.push(this.wb, this.wt);
+    }
+    this.updateHurt();
     // 방어막
     const sh = this.shield, on = this.state === 'guard' ? 1 : 0; sh.k = damp(sh.k, on, 16, dt); sh.hit = Math.max(0, sh.hit - dt * 4);
     sh.m.position.set(this.pos.x, this.pos.y + 1.0, this.pos.z); sh.m.rotation.y += dt * 0.8;

@@ -16,7 +16,7 @@ export function angLerp(a, b, t) { return a + angDelta(a, b) * t; }
 /* ---------------- 입력 ---------------- */
 export const keys = {};
 export const pressed = {};
-const BLOCK = new Set(['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Slash', 'Quote', 'Semicolon', 'Tab', 'ShiftLeft', 'ShiftRight', 'ControlRight']);
+const BLOCK = new Set(['F3', 'Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Slash', 'Quote', 'Semicolon', 'Tab', 'ShiftLeft', 'ShiftRight', 'ControlRight']);
 addEventListener('keydown', (e) => {
   if (BLOCK.has(e.code)) e.preventDefault();
   if (!keys[e.code]) pressed[e.code] = true;
