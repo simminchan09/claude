@@ -18,18 +18,26 @@ renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.A
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(48, 16 / 9, 0.1, 1500);
+const camera2 = new THREE.PerspectiveCamera(48, 8 / 9, 0.1, 1500); // 2P 화면 분할용
 const pCam = new THREE.PerspectiveCamera(26, 4, 0.05, 60);
 const pKey = new THREE.SpotLight(0xffffff, 0, 10, 0.7, 0.6, 1); scene.add(pKey, pKey.target);
 const pHemi = new THREE.HemisphereLight(0xc8d4ff, 0x1a1020, 0); scene.add(pHemi);
 // 카메라를 따라다니는 보조광: 역광 속에서도 캐릭터 실루엣이 읽히도록
 const camFill = new THREE.DirectionalLight(0xc0c8ff, 1.1); scene.add(camFill, camFill.target);
-const stage = buildStage(scene), fx = new FX(scene), hud = new HUD(), fcam = new FightCam(camera);
+const stage = buildStage(scene), fx = new FX(scene), hud = new HUD(), fcam = new FightCam(camera), fcam2 = new FightCam(camera2);
 
 const G = (window.__G = {
   scene, camera, renderer, fx, hud, stage, fighters: [], ents: [], preview: [],
   state: 'title', mode: 'cpu', time: 0, t: 0, rdt: 1 / 60, timer: 99, round: 1, hitstop: 0, ts: 1, tsT: 1, tsHold: 0,
   cine: null, paused: false, camFwd: { x: 0, z: -1 }, tint: { c: 0, a: 0 }, tintA: 0, sel: { p1: 0, p2: 0 },
-  shake(a) { fcam.shake = Math.max(fcam.shake, a); },
+  shake(a) { fcam.shake = Math.max(fcam.shake, a); fcam2.shake = Math.max(fcam2.shake, a); },
+  // 2P 대전은 좌우 분할. 궁극기 연출·KO·결과처럼 카메라 1이 연출 중이면 전체 화면 하나로 합친다
+  splitOn() { return G.mode === 'pvp' && G.fighters.length === 2 && !G.cine && !fcam.cine && !fcam.focus && G.state !== 'title'; },
+  views() {
+    const w = innerWidth, h = innerHeight;
+    return G.splitOn() ? [{ cam: camera, fc: fcam, x: 0, w: Math.floor(w / 2), h }, { cam: camera2, fc: fcam2, x: Math.floor(w / 2), w: w - Math.floor(w / 2), h }] : [{ cam: camera, fc: fcam, x: 0, w, h }];
+  },
+  camFwdOf(f) { const c = f && f.slot === 1 && G.splitOn() ? camera2 : camera; c.getWorldDirection(tmpV); tmpV.y = 0; tmpV.normalize(); return { x: tmpV.x, z: tmpV.z }; },
   flash(c, a) { hud.flash(c, a); },
   slow(s, h) { G.tsT = s; G.ts = Math.min(G.ts, s); G.tsHold = h; },
   spawn(e) { G.ents.push(e); },
@@ -98,7 +106,7 @@ document.addEventListener('click', (e) => {
 });
 function showScreen(id) { for (const s of ['#title', '#pause', '#result']) $(s).hidden = s !== id; }
 function toTitle() {
-  G.paused = false; clearMatch(); G.state = 'title'; fcam.mode = 'orbit'; fcam.focus = null; fcam.cine = null; hud.show(false); hud.hideCutin(); hud.setTraining('');
+  G.paused = false; clearMatch(); G.state = 'title'; fcam.mode = 'orbit'; fcam.focus = null; fcam.cine = null; fcam.follow = fcam2.follow = null; hud.show(false); hud.hideCutin(); hud.setTraining('');
   showScreen('#title'); buildSelect();
 }
 function setPause(p) {
@@ -118,13 +126,13 @@ function startMatch() {
   const c2 = G.mode === 'pvp' ? new KeyCtrl(MAPS.p2) : G.mode === 'training' ? new DummyCtrl() : new AICtrl();
   const a = new Fighter(d1, 0, c1, G, d1.palettes[0]), b = new Fighter(d2, 1, c2, G, d1 === d2 ? d2.palettes[1] : d2.palettes[0]);
   a.opp = b; b.opp = a; G.fighters = [a, b]; G.round = 1;
-  showScreen(null); hud.show(true); fcam.mode = 'fight'; startRound();
+  showScreen(null); hud.show(true); fcam.mode = fcam2.mode = 'fight'; fcam.follow = a; fcam2.follow = b; fcam.cyaw = fcam2.cyaw = null; startRound();
 }
 function startRound() {
   const [a, b] = G.fighters; a.reset(new V3(-4, 0, 0)); b.reset(new V3(4, 0, 0));
   for (const e of G.ents) e.kill && e.kill(); G.ents = []; fx.clear();
   G.cine = null; G.t = 0; G.timer = 99; G.winner = null; G.timeout = false; G.ts = G.tsT = 1; G.tsHold = 0; G.hitstop = 0; G.setTint(0, 0);
-  fcam.focus = null; fcam.cine = null; hud.hideCutin(); hud.setup(G);
+  fcam.focus = null; fcam.cine = null; fcam.cyaw = fcam2.cyaw = null; hud.hideCutin(); hud.setup(G);
   if (G.mode === 'training') { G.state = 'fight'; hud.announce('훈련 시작', '', 'gold', 1.2); updateTrainBar(); }
   else { G.state = 'intro'; hud.announce(G.round >= 3 ? '최종 라운드' : `ROUND ${G.round}`, '', '', 1.1); }
 }
@@ -185,9 +193,9 @@ function update(rdt) {
     const C = G.cine; C.t += rdt;
     if (C.t > C.dur - 0.22 && !C.out) { C.out = true; hud.outCutin(); }
     if (C.t >= C.dur) { G.cine = null; hud.hideCutin(); G.flash(0xffffff, 0.6); G.shake(0.15); fcam.playCine(C.f, C.f.act && C.f.act.cam); }
-    fcam.update(rdt, G); hud.update(G, rdt); return;
+    camUpdate(rdt); hud.update(G, rdt); return;
   }
-  if (G.hitstop > 0) { G.hitstop -= rdt; fx.update(dt * 0.1, camera); fcam.update(rdt, G); hud.update(G, rdt); return; }
+  if (G.hitstop > 0) { G.hitstop -= rdt; fx.update(dt * 0.1, camera); camUpdate(rdt); hud.update(G, rdt); return; }
   G.t += dt;
   if (G.state === 'intro' && G.t > 1.15 && !G.fightShown) { G.fightShown = true; hud.announce('FIGHT!', '', 'gold', 0.9); }
   if (G.state === 'intro' && G.t > 1.9) { G.state = 'fight'; G.t = 0; G.fightShown = false; }
@@ -206,15 +214,23 @@ function update(rdt) {
     if (ov > 0) { const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0; a.pos.x -= nx * ov / 2; a.pos.z -= nz * ov / 2; b.pos.x += nx * ov / 2; b.pos.z += nz * ov / 2; }
   }
   for (let i = G.ents.length - 1; i >= 0; i--) { G.ents[i].update(dt); if (G.ents[i].done) G.ents.splice(i, 1); }
-  fx.update(dt, camera); fcam.update(rdt, G); hud.update(G, rdt);
+  fx.update(dt, camera); camUpdate(rdt); hud.update(G, rdt);
 }
+function camUpdate(rdt) { fcam.update(rdt, G); if (G.mode === 'pvp') fcam2.update(rdt, G); }
 
 /* ---------- 렌더 (+ 궁극기 초상 패스) ---------- */
 const bandColor = new THREE.Color();
 function render() {
   camFill.position.copy(camera.position).add(new V3(0, 3, 0)); camFill.target.position.copy(fcam.look);
+  const views = G.views(), split = views.length > 1;
+  renderer.setScissorTest(split);
+  for (const v of views) {
+    const a = v.w / v.h; if (Math.abs(v.cam.aspect - a) > 1e-3) { v.cam.aspect = a; v.cam.updateProjectionMatrix(); }
+    renderer.setViewport(v.x, 0, v.w, v.h); if (split) renderer.setScissor(v.x, 0, v.w, v.h);
+    renderer.render(scene, v.cam);
+  }
   renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
-  renderer.render(scene, camera);
+  document.body.classList.toggle('split', split);
   if (G.cine) renderPortrait(G.cine);
 }
 function renderPortrait(C) {

@@ -43,12 +43,12 @@ export function keyName(code) {
 // 카메라 기준 이동: W = 화면 안쪽, D = 화면 오른쪽
 export class KeyCtrl {
   constructor(map) { this.m = map; this.human = true; }
-  read(G) {
+  read(G, fighter) {
     const h = (k) => this.m[k].some((c) => keys[c]);
     const p = (k) => this.m[k].some((c) => pressed[c]);
     const ix = (h('right') ? 1 : 0) - (h('left') ? 1 : 0);
     const iy = (h('up') ? 1 : 0) - (h('down') ? 1 : 0);
-    const f = G.camFwd;
+    const f = G.camFwdOf ? G.camFwdOf(fighter) : G.camFwd;
     let mx = f.x * iy - f.z * ix, mz = f.z * iy + f.x * ix;
     const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
     return { mx, mz, guard: h('guard'), jumpP: p('jump'), press: ACTIONS.find(p) || null };

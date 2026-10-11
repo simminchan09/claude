@@ -1,6 +1,6 @@
 // 카메라: 대전 프레이밍 · 타이틀 공전 · 궁극기 시네마틱 · KO/승리 연출
 import * as THREE from 'three';
-import { clamp, damp, ease, lerp, rand } from './core.js';
+import { clamp, damp, ease, lerp, rand, angLerp } from './core.js';
 
 const V3 = THREE.Vector3;
 const tP = new V3(), tL = new V3(), tF = new V3(), tR = new V3();
@@ -9,6 +9,7 @@ export class FightCam {
   constructor(camera) {
     this.c = camera; this.pos = new V3(0, 6, 22); this.look = new V3(0, 1, 0); this.side = new V3(0, 0, 1);
     this.mode = 'orbit'; this.t = 0; this.fov = 50; this.cine = null; this.focus = null; this.shake = 0;
+    this.follow = null; this.cyaw = null; // follow = 카메라가 뒤를 따라가는 파이터
   }
   // 궁극기 카메라: keys = [[t, { ref: 'self'|'target', p: [오른쪽, 위, 앞], l: [...], fov }]]
   // 좌표는 시전자가 궁극기를 시작할 때 바라보던 방향 기준
@@ -39,6 +40,17 @@ export class FightCam {
     } else if (this.focus) {
       const f = this.focus, p = f.target.pos; f.t += dt; const yaw = (f.yaw ?? f.target.yaw) + f.t * f.spin;
       tP.set(p.x + Math.sin(yaw) * f.dist, p.y + f.h, p.z + Math.cos(yaw) * f.dist); tL.set(p.x, p.y + 1.1, p.z); fov = 42; k = 4;
+    } else if (this.follow) {
+      // 3인칭 추적: 내 캐릭터 등 뒤(오른쪽 어깨 너머)에서 상대 쪽을 바라본다
+      const f = this.follow, p = f.pos, o = f.opp.pos, dx = o.x - p.x, dz = o.z - p.z, d = Math.hypot(dx, dz);
+      const want = d > 0.6 ? Math.atan2(dx, dz) : (this.cyaw ?? f.yaw);
+      this.cyaw = this.cyaw == null ? want : angLerp(this.cyaw, want, 1 - Math.exp(-dt * (d < 2 ? 2.5 : 5)));
+      const fx = Math.sin(this.cyaw), fz = Math.cos(this.cyaw), rx = -fz, rz = fx;
+      const dist = 4.4 + clamp(d, 0, 14) * 0.1, h = 2.25 + p.y * 0.55;
+      tP.set(p.x - fx * dist + rx * 1.15, h, p.z - fz * dist + rz * 1.15);
+      const reach = clamp(d, 0, 9) * 0.45;
+      tL.set(p.x + fx * reach + rx * 0.35, 1.25 + Math.max(p.y, o.y) * 0.45, p.z + fz * reach + rz * 0.35);
+      fov = 52; k = 8;
     } else {
       const a = F[0].pos, b = F[1].pos, M = tL.set((a.x + b.x) / 2, 0, (a.z + b.z) / 2);
       let dx = b.x - a.x, dz = b.z - a.z; const d = Math.hypot(dx, dz) || 0.001; dx /= d; dz /= d;

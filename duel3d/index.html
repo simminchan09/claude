@@ -88,6 +88,7 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .dn.big{font-size:46px;color:var(--gold)} .dn.blk{font-size:20px;color:#bfc6d4}
 @keyframes dn{0%{transform:translate(-50%,-50%) scale(1.8);opacity:1}15%{transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{transform:translate(-50%,-160%);opacity:0}}
 #flash{position:fixed;inset:0;opacity:0;pointer-events:none;mix-blend-mode:screen}
+body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;margin-left:-1px;background:rgba(255,255,255,.35);pointer-events:none}
 #vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.5) 100%)}
 #trainBar{position:absolute;left:50%;top:118px;transform:translateX(-50%);background:var(--panel);border:1px solid var(--line);padding:8px 14px;font-size:13px;color:var(--dim);white-space:nowrap}
 #trainBar b{color:var(--ink);font-weight:700}

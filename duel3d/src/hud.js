@@ -59,12 +59,14 @@ export class HUD {
   }
   flash(color, a) { if (a < this.flashA) return; this.flashA = a; this.flashEl.style.background = hex(color); this.flashEl.style.opacity = a; }
   damage(p, val, big, block) {
-    const G = window.__G; if (!G) return; tV.copy(p).project(G.camera);
-    if (tV.z > 1) return;
-    const r = G.renderer.domElement.getBoundingClientRect(), el = document.createElement('div');
-    el.className = 'dn' + (big ? ' big' : '') + (block ? ' blk' : ''); el.textContent = val;
-    el.style.left = `${r.left + (tV.x * 0.5 + 0.5) * r.width + (Math.random() - 0.5) * 30}px`; el.style.top = `${r.top + (-tV.y * 0.5 + 0.5) * r.height - 30}px`;
-    this.dmg.appendChild(el); setTimeout(() => el.remove(), 900);
+    const G = window.__G; if (!G) return;
+    for (const v of G.views()) { // 화면 분할이면 양쪽 화면에 각각 표시
+      tV.copy(p).project(v.cam); if (tV.z > 1 || Math.abs(tV.x) > 1.1) continue;
+      const el = document.createElement('div');
+      el.className = 'dn' + (big ? ' big' : '') + (block ? ' blk' : ''); el.textContent = val;
+      el.style.left = `${v.x + (tV.x * 0.5 + 0.5) * v.w + (Math.random() - 0.5) * 30}px`; el.style.top = `${(-tV.y * 0.5 + 0.5) * v.h - 30}px`;
+      this.dmg.appendChild(el); setTimeout(() => el.remove(), 900);
+    }
   }
   showCutin(f) {
     const d = f.def, c = this.cut; c.style.setProperty('--acc', hex(f.palette.accent)); c.style.setProperty('--band', f.palette.band || '#101018');
