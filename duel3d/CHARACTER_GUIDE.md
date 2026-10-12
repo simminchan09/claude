@@ -61,7 +61,7 @@ export default {
 | 상체 숙이기 · 비틀기 | spine/chest x 양수 · y 양수 = 왼쪽 |
 | 팔 벌리기 | 왼팔 z 양수, 오른팔 z 음수 |
 
-필수 포즈 이름: `base`(대기) `run` `jump` `guard` `hit` `air`(공중 피격) `down`(누움) `dash` `win` `portrait`(컷인 초상). `crouch`(앉기)는 없으면 기본 자세에 다리·상체만 굽혀 자동으로 만든다.
+필수 포즈 이름: `base`(대기) `run` `jump` `guard` `hit` `air`(공중 피격) `down`(누움) `dash` `win` `portrait`(컷인 초상). `crouch`(앉기)는 없으면 기본 자세에 다리·상체만 굽혀 자동으로 만든다. `idle2` 를 주면 4초 이상 가만히 있을 때 그 자세로 바뀐다.
 
 ## 5. 기술
 이름 규칙과 키: `light1 → light2 → light3` = 좌클릭 연타, `heavy` = 우클릭, `s1` = Shift, `s2` = E, `ult` = Q, `counter` = 극한 회피 직후 좌클릭(선택).
@@ -87,6 +87,10 @@ export default {
 | `ult: true` + `cam` | 궁극기. 컷인 뒤 `cam` 키프레임으로 카메라 연출: `[[t, { ref: 'self'|'target', p: [오른쪽,위,앞], l: [...], fov }]]` |
 
 적중하면 강공·스킬로 캔슬할 수 있습니다(시스템 공통).
+
+- hits 의 `weapon: false` = 무기가 아닌 몸(발차기·박치기)으로 치는 공격: `at`·`r` 구로 판정.
+- 정의 객체 `resource(f) → { v: 0..1, label, color, full }` 를 주면 HP 아래에 고유 게이지가 표시된다 (예: 아자젤 열기).
+- 공격자의 `f.dmgMul` 은 모든 피해에 곱해진다 (각성·발화 버프).
 
 **낙하 공격(공중 좌클릭)** 은 공통 시스템입니다. `src/plunge.js` 의 `makePlunge` 에 자세 3개만 넘겨 기술 목록에 펼치세요:
 ```js

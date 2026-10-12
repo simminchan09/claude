@@ -146,6 +146,8 @@ function eyeTex() {
 }
 // 얼굴 장식: 입 · 볼 반창고 (투명 배경)
 function mouthTex() { const [c, g] = cv(128, 64); g.clearRect(0, 0, 128, 64); g.strokeStyle = '#6a2026'; g.lineWidth = 4; g.lineCap = 'round'; g.beginPath(); g.moveTo(40, 30); g.quadraticCurveTo(64, 36, 88, 28); g.stroke(); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(78, 30); g.lineTo(84, 30); g.lineTo(81, 38); g.fill(); return tex(c); }
+// 벌린 입 + 송곳니 (화염 숨결 · 각성)
+function mouthOpenTex() { const [c, g] = cv(128, 64); g.clearRect(0, 0, 128, 64); g.fillStyle = '#4a0a12'; g.beginPath(); g.moveTo(34, 22); g.quadraticCurveTo(64, 14, 94, 22); g.quadraticCurveTo(80, 58, 64, 58); g.quadraticCurveTo(48, 58, 34, 22); g.fill(); g.fillStyle = '#fff'; for (const x of [44, 80]) { g.beginPath(); g.moveTo(x - 5, 21); g.lineTo(x + 5, 20); g.lineTo(x, 34); g.fill(); } g.strokeStyle = '#6a2026'; g.lineWidth = 3; g.beginPath(); g.moveTo(34, 22); g.quadraticCurveTo(64, 14, 94, 22); g.stroke(); return tex(c); }
 function plasterTex() { const [c, g] = cv(128, 128); g.clearRect(0, 0, 128, 128); g.save(); g.translate(64, 64); g.rotate(0.5); g.fillStyle = '#efe4d6'; g.fillRect(-46, -20, 92, 40); g.fillStyle = '#d8c6b0'; g.fillRect(-14, -20, 28, 40); g.strokeStyle = '#b8a48e'; g.lineWidth = 2; g.strokeRect(-46, -20, 92, 40); g.restore(); return tex(c); }
 // 운동화: 검정 + 붉은 패널 + 끈
 function shoeTex() {
@@ -225,6 +227,7 @@ export function createModel(pal) {
     furB: phys({ color: 0xeeebe4, roughness: 0.9, sheen: 1, sheenColor: new THREE.Color(0xffffff) }),
     eye: phys({ map: T('eye', eyeTex), alphaTest: 0.3, emissiveMap: T('eye', eyeTex), emissive: 0xff2a1a, emissiveIntensity: 0, roughness: 0.2, clearcoat: 1 }),
     mouth: phys({ map: T('mouth', mouthTex), alphaTest: 0.3, roughness: 0.5 }),
+    mouthO: phys({ map: T('mouthO', mouthOpenTex), alphaTest: 0.3, roughness: 0.5, emissiveMap: T('mouthO', mouthOpenTex), emissive: 0xff5a1a, emissiveIntensity: 0 }),
     plaster: phys({ map: T('plaster', plasterTex), alphaTest: 0.3, roughness: 0.7 }),
     key: phys({ map: T('keyF', keyFaceTex), roughness: 0.7, sheen: 1, sheenColor: new THREE.Color(0xff8090) }),
     club: phys({ map: T('club', () => clubTex(false)), emissiveMap: T('clubG', () => clubTex(true)), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.4, metalness: 0.3, clearcoat: 0.6 }),
@@ -334,7 +337,7 @@ export function createModel(pal) {
     for (let i = 0; i < 4; i++) { const p = loftAt(cfP, i / 4 + 0.125, 0.5, new V3()); add(el, C('rivet', () => new THREE.SphereGeometry(0.0055, 10, 8)), M.silver, [p.x * 1.04, p.y, p.z * 1.04]); }
     const end = new THREE.Group(); add(end, C('diamond', diamond), M.iron);
     const rope = new Rope(6, 0.03, { damp: 0.975 }), view = new RopeChain(rope, linkGeo, M.iron, end);
-    m.ropes.push({ rope, view, joint: el, local: new V3(s * 0.03, -DIMS.lArm + 0.004, -0.01), rest: new V3(0, -1, 0), caps: 'none' });
+    m.ropes.push({ rope, view, joint: el, local: new V3(s * 0.03, -DIMS.lArm + 0.004, -0.01), rest: new V3(0, -1, 0), caps: 'none', wrist: true });
     // 손: 검은 장갑 손바닥 + 맨 손가락
     add(ha, C('palm' + s, () => loft((v) => ({ y: -0.004 - 0.072 * v, rx: 0.021 + 0.003 * Math.sin(v * Math.PI), rz: 0.034 + 0.005 * v, n: 3, cx: s * 0.017 }), 18, 6)), M.leather);
     for (let k = 0; k < 4; k++) {
@@ -383,7 +386,8 @@ export function createModel(pal) {
     // 뾰족 귀
     add(H, C('ear' + s, () => strand([[s * 0.066, 0.1, -0.005], [s * 0.088, 0.112, -0.016], [s * 0.112, 0.138, -0.03]], 0.015, 0.0015, { seg: 10, rad: 8, flat: 0.35, ref: [s, 0, 0] })), M.skin);
   }
-  add(H, C('mouth', () => decal(-0.22, 0.22, -0.5, -0.36, 0.0008, 10)), M.mouth);
+  m.mouth = add(H, C('mouth', () => decal(-0.22, 0.22, -0.5, -0.36, 0.0008, 10)), M.mouth);
+  m.mouthO = add(H, C('mouthO', () => decal(-0.26, 0.26, -0.56, -0.34, 0.001, 10)), M.mouthO); m.mouthO.visible = false;
   add(H, C('plaster', () => decal(-0.95, -0.45, -0.34, 0.0, 0.0018, 10)), M.plaster);
   // 뿔: 관자놀이 위에서 바깥 → 위 → 앞으로 휘는 마디진 뿔
   for (const s of [-1, 1]) {
@@ -479,12 +483,17 @@ export function createModel(pal) {
     // 땋은 머리 끈 위치
     { const br = m.ropes.find((r) => r.joint === H).rope.p, i = br.length - 3; m.braidTie.position.copy(br[i]).lerp(br[i + 1], 0.5); m.braidTie.quaternion.setFromUnitVectors(new V3(0, 0, 1), tmp.subVectors(br[i + 1], br[i]).normalize()); m.braidTie.visible = f.root.visible; }
     for (const o of extras) o.visible = f.root.visible;
+    m.chainsBroken = f.awakenT > 0;
     // 각성: 뿔 균열 · 눈 · 철퇴 발광 (0..1 로 부드럽게)
-    const aw = f.awakenT > 0 ? 1 : 0; m.awake += (aw - m.awake) * Math.min(1, dt * 4);
+    // 불: f.fireK (0..1, 열기·발화·각성) → 철퇴 발광과 불길 / 각성: 뿔 균열 · 눈 · 송곳니
+    m.awake += ((f.fireK ?? 0) - m.awake) * Math.min(1, dt * 4); m.horned = (m.horned || 0) + ((f.awakenT > 0 ? 1 : 0) - (m.horned || 0)) * Math.min(1, dt * 4);
     const pulse = 0.85 + 0.15 * Math.sin(f.G.time * 9);
-    M.horn.emissiveIntensity = m.awake * 2.2 * pulse; M.eye.emissiveIntensity = m.awake * 0.5; M.club.emissiveIntensity = m.awake * 1.8 * pulse; M.clubR.emissiveIntensity = m.awake * 1.5;
-    M.ember.emissiveIntensity = 1 + m.awake * 1.5;
-    if (m.awake > 0.3 && f.root.visible && !m.weaponOut && Math.random() < 0.9) {
+    M.horn.emissiveIntensity = m.horned * 2.2 * pulse; M.eye.emissiveIntensity = m.horned * 0.5; M.club.emissiveIntensity = m.awake * 1.8 * pulse; M.clubR.emissiveIntensity = m.awake * 1.5;
+    M.ember.emissiveIntensity = 1 + m.awake * 1.5; M.mouthO.emissiveIntensity = f.breathing ? 1.2 : 0;
+    const open = f.breathing || m.horned > 0.5 || (f.state === 'act' && f.act && f.act.shout); m.mouth.visible = !open; m.mouthO.visible = open;
+    // 각성 중에는 손목 족쇄 사슬이 끊어져 있다
+    for (const r of m.ropes) if (r.wrist) { const o = r.view.im; o.visible = f.root.visible && !m.chainsBroken; if (r.view.end) r.view.end.visible = o.visible; }
+    if (m.awake > 0.45 && f.root.visible && !m.weaponOut && Math.random() < m.awake) {
       J.weapon.updateMatrixWorld(true); const p = J.weapon.localToWorld(tmp.set((Math.random() - 0.5) * 0.12, (Math.random() - 0.5) * 0.12, CL.head0 + Math.random() * (CL.top - CL.head0)));
       f.G.fx.p(p, { vel: [rand2(), 1.5 + Math.random() * 2, rand2()], life: 0.35 + Math.random() * 0.3, size: 0.14 + Math.random() * 0.12, size1: 0.02, color: Math.random() < 0.5 ? FIRE : EMBER, alpha: 0.9, drag: 1.5 });
     }

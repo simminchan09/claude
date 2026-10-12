@@ -61,7 +61,7 @@ export class Fighter {
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
@@ -367,6 +367,7 @@ export class Fighter {
     // 포즈 목표
     if (!target) {
       const s = this.state, t = this.tgt, br = Math.sin(G.time * 2.6 + this.slot);
+      this.idleT = s === 'idle' ? (this.idleT || 0) + dt : 0; // 오래 가만히 있으면 대기 자세 2 (idle2 를 정의한 캐릭터)
       if (s === 'run') { t.set(P.run); addRunCycle(t, this.runP, 1); }
       else if (s === 'jump') t.set(P.jump);
       else if (s === 'guard') t.set(P.guard);
@@ -376,7 +377,9 @@ export class Fighter {
       else if (s === 'ko') t.set(P.air);
       else if (s === 'dash') t.set(P.dash);
       else if (s === 'win') t.set(P.win);
-      else { t.set(P.base); t[2] += br * 0.03; t[0] += br * 0.01; }
+      else {
+        t.set(P.idle2 && this.idleT > 4 ? P.idle2 : P.base); t[2] += br * 0.03; t[0] += br * 0.01;
+      }
       target = t;
     }
     // 일어날 때는 빠르게 자세를 되찾는다

@@ -11,7 +11,7 @@ export class HUD {
     this.root = $('#hud'); this.dmg = $('#dmg'); this.ann = $('#announce'); this.flashEl = $('#flash'); this.cut = $('#cutin');
     this.sides = [0, 1].map((i) => {
       const el = $(`.ph.p${i + 1}`), tb = $(`.tb.p${i + 1}`);
-      return { el, tb, fill: $('.hpbar .fill', el), chip: $('.hpbar .chip', el), nm: $('.who .nm', el), tt: $('.who .tt', el), hpb: $('.hpnum b', el), hps: $('.hpnum span', el),
+      return { el, tb, fill: $('.hpbar .fill', el), chip: $('.hpbar .chip', el), nm: $('.who .nm', el), tt: $('.who .tt', el), hpb: $('.hpnum b', el), hps: $('.hpnum span', el), rs: $('.rsbar', el),
         ult: $('.ult', el), arc: $('.ult .arc', el), ub: $('.uin b', el), uk: $('.uin span', el), un: $('.uname', el), skills: $('.skills', el), combo: $('.combo', el),
         tnm: $('.nm', tb), pips: $('.pips', tb), hb: $(`#hb${i}`) };
     });
@@ -51,6 +51,9 @@ export class HUD {
       const hp = f.hp / f.maxHp, ch = f.dispHp / f.maxHp;
       s.fill.style.transform = `scaleX(${hp})`; s.chip.style.transform = `scaleX(${ch})`; s.el.classList.toggle('low', hp < 0.25);
       s.hpb.textContent = Math.ceil(f.hp); s.hps.textContent = `/ ${f.maxHp}`;
+      // 캐릭터 고유 자원 (def.resource(f) → { v: 0..1, label, color, full })
+      const rs = f.def.resource && f.def.resource(f); s.rs.hidden = !rs;
+      if (rs) { s.rs.firstChild.style.transform = `scaleX(${rs.v})`; s.rs.lastChild.textContent = rs.label; s.rs.style.setProperty('--rs', hex(rs.color)); s.rs.classList.toggle('full', !!rs.full); }
       const en = Math.floor(f.energy);
       if (en !== s.lastEn) { s.arc.style.strokeDashoffset = 264 * (1 - f.energy / 100); s.ub.textContent = `${en}%`; s.ult.classList.toggle('ready', en >= 100); s.lastEn = en; }
       s.skills.querySelectorAll('.sk').forEach((el) => {

@@ -40,12 +40,30 @@ const poses = {
   roar: { hips: [0, 0, 0], spine: [-0.3, 0, 0], chest: [-0.25, 0, 0], head: [-0.4, 0, 0], shoulderR: [-1.2, 0, -1.3], elbowR: [-0.3, 0, 0], weapon: [0.6, 1.6, 0.4], shoulderL: [-1.0, 0, 1.4], elbowL: [-0.4, 0, 0],
     hipL: [-0.3, 0, 0.25], kneeL: [0.5, 0, 0], hipR: [0.25, 0, -0.25], kneeR: [0.45, 0, 0] },
 };
+Object.assign(poses, {
+  // 양키 쪼그려 앉기: 오래 가만히 있으면 (무릎을 벌리고 쪼그려 앉아 철퇴는 어깨에, 왼팔은 무릎에 걸치고 올려다본다)
+  idle2: { hipY: -0.05, hips: [0, 0.15, 0], spine: [0.42, -0.1, 0], chest: [0.12, -0.1, 0], head: [-0.42, 0.2, -0.1],
+    shoulderR: [-0.95, 0, -0.5], elbowR: [-1.9, 0, 0], weapon: [0.55, 2.9, 1.57], shoulderL: [-0.85, 0, 0.35], elbowL: [-0.75, 0, 0],
+    hipL: [-1.55, 0, 0.62], kneeL: [2.45, 0, 0], footL: [-0.55, 0, 0], hipR: [-1.5, 0, -0.62], kneeR: [2.45, 0, 0], footR: [-0.55, 0, 0] },
+  // 타자 자세 (홈런 스윙 준비): 철퇴를 오른쪽 뒤로 높이 들고 몸을 비튼다
+  batter: { hips: [0, -0.95, 0], spine: [0.15, -0.5, 0], chest: [0, -0.7, 0], head: [0, 0.95, 0], shoulderR: [-1.0, 0, -0.95], elbowR: [-1.35, 0, 0], weapon: [0.55, 2.55, 0.3],
+    hipL: [-0.25, 0, 0.25], kneeL: [0.5, 0, 0], hipR: [0.15, 0, -0.3], kneeR: [0.45, 0, 0] },
+  swingThru: { hips: [0, 0.6, 0], spine: [0.25, 0.45, 0], chest: [0.05, 0.8, 0], head: [0, -0.4, 0], shoulderR: [-1.4, 0, 0.3], elbowR: [-0.15, 0, 0], weapon: [0.15, -0.2, 0], hipL: [-1.0, 0, 0.15], kneeL: [1.0, 0, 0], hipR: [0.7, 0, -0.15], kneeR: [0.3, 0, 0] },
+  follow: { hips: [0, 0.8, 0], spine: [0.15, 0.55, 0], chest: [0, 1.15, 0], head: [0, -0.6, 0], shoulderR: [-2.0, 0, 0.6], elbowR: [-0.3, 0, 0], weapon: [0.75, -2.3, -0.4], hipL: [-0.6, 0, 0.15], kneeL: [0.6, 0, 0], hipR: [0.5, 0, -0.15], kneeR: [0.3, 0, 0] },
+  // 한 손 철퇴 들어올림 / 내리치기
+  bashUp: { hips: [0, -0.3, 0], spine: [0.05, -0.25, 0], chest: [-0.05, -0.3, 0], shoulderR: [-2.4, 0, -0.5], elbowR: [-1.2, 0, 0], weapon: [1.45, 2.2, 1.57], shoulderL: [-0.6, 0, 0.4], elbowL: [-1.2, 0, 0] },
+  bashDn: { hips: [0, 0.25, 0], spine: [0.45, 0.15, 0], chest: [0.15, 0.25, 0], head: [-0.2, 0, 0], shoulderR: [-1.2, 0, -0.15], elbowR: [-0.2, 0, 0], weapon: [-0.6, 0.25, 1.57], shoulderL: [0.3, 0, 0.5], elbowL: [-1.3, 0, 0],
+    hipL: [-1.0, 0, 0.15], kneeL: [1.0, 0, 0], hipR: [0.7, 0, -0.15], kneeR: [0.3, 0, 0] },
+  // 앞차기 (왼발)
+  kickCh: { hips: [0, 0.1, 0], spine: [-0.1, 0, 0], chest: [-0.05, 0, 0], hipL: [-1.55, 0, 0.1], kneeL: [1.95, 0, 0], footL: [-0.3, 0, 0], hipR: [0.1, 0, -0.05], kneeR: [0.25, 0, 0], shoulderL: [-0.4, 0, 0.6], elbowL: [-1.3, 0, 0] },
+  kickEx: { hips: [0, 0.15, 0], spine: [-0.3, 0, 0], chest: [-0.12, 0, 0], head: [0.15, 0, 0], hipL: [-1.45, 0, 0], kneeL: [0.05, 0, 0], footL: [0.55, 0, 0], hipR: [0.15, 0, -0.05], kneeR: [0.3, 0, 0], shoulderL: [0.3, 0, 0.7], elbowL: [-1.0, 0, 0] },
+});
 const LEGS_LUNGE = { hipL: [-1.0, 0, 0.15], kneeL: [1.0, 0, 0], hipR: [0.7, 0, -0.15], kneeR: [0.3, 0, 0] };
 
 /* =====================================================================
    불꽃 이펙트 도구
    ===================================================================== */
-const fireSlash = (f, o) => f.slashFx({ r: o.r || 2.2, color: o.color ?? (f.awakenT > 0 ? EMBER : FIRE), life: o.life ?? 0.26, tilt: o.tilt || 0, flip: o.flip, at: o.at || [0, 1.0, 0.35] });
+const fireSlash = (f, o) => f.slashFx({ r: o.r || 2.2, color: o.color ?? ((f.fireK || 0) > 0.5 ? EMBER : FIRE), life: o.life ?? 0.26, tilt: o.tilt || 0, flip: o.flip, at: o.at || [0, 1.0, 0.35] });
 function embers(G, p, n = 14, sp = 5) { G.fx.burst(p, n, FIRES, sp, { kind: 'ember', lk: 1.2 }); }
 function flameBurst(G, p, s = 1, up = false) {
   G.fx.burst(p, 26 * s | 0, FIRES, 7 * s, up ? { dir: new V3(0, 1, 0), spread: 1.1 } : {});
@@ -68,7 +86,7 @@ function explosion(G, p, s = 1) {
 // 사슬 낚아채기: 왼손에서 사슬 갈고리가 날아가 상대를 끌어온다
 class ChainHook {
   constructor(G, f, target) {
-    this.G = G; this.f = f; this.t = 0; this.done = false; this.phase = 'out'; this.hooked = null;
+    this.G = G; this.f = f; this.t = 0; this.done = false; this.phase = 'out'; this.hooked = null; this.pullTo = 1.05;
     const hand = f.model.J.handL.getWorldPosition(new V3());
     this.from = hand.clone(); this.pos = hand.clone();
     const aim = target && !target.gone && f.dist() < 10 ? target.chest(new V3()) : f.local([0, 1.1, 9]);
@@ -86,7 +104,7 @@ class ChainHook {
       for (const t of f.foes()) if (t.hurtHit(this.pos, 0.3)) { this.hooked = t; this.phase = 'pull'; this.t = 0; sfx('block'); sfx('hit'); t.takeHit(f, { dmg: 28, kb: [0, 0], stun: 1.1, hs: 0.06, daze: 20 }, this.dir.clone().negate()); G.fx.burst(this.pos, 16, FIRES, 5); f.hooked = t; break; }
       if (this.phase === 'out' && this.pos.distanceTo(this.from) > this.max) { this.phase = 'back'; this.t = 0; }
     } else if (this.phase === 'pull') {
-      const t = this.hooked, k = Math.min(1, this.t / 0.24), dest = f.local([0, 0, 1.45 + 0.35 * t.scale]);
+      const t = this.hooked, k = Math.min(1, this.t / 0.24), dest = f.local([0, 0, this.pullTo + 0.3 * t.scale]);
       if (!t.gone) { t.pos.x += (dest.x - t.pos.x) * Math.min(1, k * 0.5 + dt * 12); t.pos.z += (dest.z - t.pos.z) * Math.min(1, k * 0.5 + dt * 12); t.vel.set(0, Math.min(t.vel.y, 0), 0); this.pos.copy(t.chest(new V3())); }
       if (this.t > 0.26) { this.phase = 'back'; this.t = 0; }
     } else { this.pos.lerp(hand, Math.min(1, dt * 18)); if (this.pos.distanceTo(hand) < 0.15 || this.t > 0.5) this.kill(); }
@@ -100,11 +118,45 @@ class ChainHook {
   kill() { this.done = true; this.G.scene.remove(this.links); this.G.scene.remove(this.head); this.links.geometry.dispose(); this.head.geometry.dispose(); if (this.f.chainHook === this) this.f.chainHook = null; }
 }
 
+
+// 바닥에 남는 불길 (양키 돌격의 철퇴 자국) — 잠시 타오르며 밟은 상대에게 짧은 화상
+class FireZone {
+  constructor(G, f, p) { this.G = G; this.f = f; this.p = p.clone(); this.t = 0; this.life = 2.4; this.done = false; this.tick = 0; }
+  update(dt) {
+    const G = this.G, f = this.f; this.t += dt; this.tick -= dt; if (this.t > this.life) { this.done = true; return; }
+    const k = 1 - this.t / this.life;
+    if (Math.random() < 0.7 * k + 0.2) G.fx.p(this.p.clone().add(new V3(rand(-0.25, 0.25), 0.05, rand(-0.25, 0.25))), { vel: [rand(-0.3, 0.3), rand(1.2, 2.6), rand(-0.3, 0.3)], size: rand(0.25, 0.5) * (0.5 + k), size1: 0.04, life: rand(0.3, 0.5), color: Math.random() < 0.5 ? FIRE : EMBER, alpha: 0.85, drag: 1.5 });
+    if (this.tick <= 0) {
+      this.tick = 0.15; f.burnCd = f.burnCd || {};
+      for (const t of f.foes()) { if (Math.hypot(t.pos.x - this.p.x, t.pos.z - this.p.z) > 0.75 * t.scale + 0.3 || t.pos.y - this.p.y > 0.5) continue; const last = f.burnCd[t.id] || -9; if (G.time - last < 0.45) continue; f.burnCd[t.id] = G.time; t.takeHit(f, { dmg: 10, kb: [0.6, 0], stun: 0.22, daze: 5, noCrit: true }, new V3(0, 0, 0).subVectors(t.pos, this.p).setY(0).normalize()); }
+    }
+  }
+}
+// 화염 숨결: 입에서 부채꼴로 뿜는 불길 + 0.12초마다 부채꼴 안 상대에게 피해
+function breathTick(f, G, t, dt) {
+  const J = f.model.J; J.head.updateMatrixWorld(true);
+  const mouth = J.head.localToWorld(new V3(0, 0.06, 0.1)), fw = f.fwd(new V3()), dir = fw.clone().add(new V3(0, -0.12, 0)).normalize();
+  for (let i = 0; i < 7; i++) {
+    const sp = new V3(rand(-0.22, 0.22), rand(-0.12, 0.12), rand(-0.22, 0.22)), v = dir.clone().add(sp).normalize().multiplyScalar(rand(11, 16));
+    G.fx.p(mouth.clone().addScaledVector(dir, rand(0, 0.2)), { vel: [v.x, v.y, v.z], size: rand(0.15, 0.3), size1: rand(1.0, 1.6), life: rand(0.32, 0.42), color: [HOT, EMBER, FIRE][i % 3], alpha: 0.9, drag: 2.2 });
+  }
+  if (Math.random() < dt * 12) G.fx.p(mouth.clone().addScaledVector(dir, 4.5), { vel: [0, 1.5, 0], size: 1.2, size1: 2.2, life: 0.5, color: 0x3a2a26, alpha: 0.4, drag: 1 });
+  f.breathAcc = (f.breathAcc || 0) + dt;
+  if (f.breathAcc >= 0.12) {
+    f.breathAcc = 0; sfx('swing');
+    for (const o of f.foes()) {
+      const rel = new V3().subVectors(o.pos, f.pos), y = rel.y; rel.y = 0; const d = rel.length(); if (d > 5.6 + 0.3 * o.scale || y > 2.2 || y < -1) continue;
+      const ang = d < 0.5 ? 0 : Math.acos(Math.max(-1, Math.min(1, rel.normalize().dot(fw)))); if (ang > 0.5 + Math.atan2(0.4 * o.scale, d)) continue;
+      o.takeHit(f, { dmg: 12, kb: [1.3, 0], stun: 0.32, daze: 7, noScale: true }, fw);
+    }
+  }
+}
+
 /* =====================================================================
-   기술
+   기술 — 거친 싸움꾼: 철퇴 + 발차기 · 몸통박치기 · 박치기 · 사슬 · 마족의 불
    ===================================================================== */
 const moves = {
-  /* --- 공중 좌클: 낙하 공격 — 불붙은 철퇴로 내리꽂아 화염 폭발 --- */
+  /* --- 공중 좌클: 낙하 공격 — 철퇴를 거꾸로 쥐고 내리꽂아 화염 폭발 --- */
   ...makePlunge({
     up: 'raised',
     fall: { ...poses.raised, spine: [0.25, 0, 0], head: [-0.3, 0, 0], shoulderR: [-2.0, 0, -0.15], elbowR: [-0.5, 0, 0], weapon: [-1.35, 0, 1.57], hipL: [-1.1, 0, 0.1], kneeL: [1.5, 0, 0], hipR: [-0.5, 0, -0.1], kneeR: [1.2, 0, 0] },
@@ -113,147 +165,151 @@ const moves = {
     fx: (f, o, G, c) => { fireCrack(G, c, 2.6, 9); flameBurst(G, c, 1.1, true); },
   }),
 
-  /* --- 기본 공격 4연타: 가로 휘두르기 → 역방향 올려치기 → 내려찍기 → 불꽃 어퍼 --- */
-  light1: { dur: 0.48, cancel: 0.28, next: 'light2', trail: true, track: 0.1,
-    keys: [[0, { hips: [0, -0.5, 0], spine: [0.1, -0.4, 0], chest: [0, -0.5, 0], head: [0, 0.3, 0], shoulderR: [-1.2, 0, -1.0], elbowR: [-0.4, 0, 0], weapon: [0.25, 2.1, 0.2] }], [0.08, { weapon: [0.25, 2.35, 0.2] }],
-      [0.18, { hips: [0, 0.45, 0], spine: [0.25, 0.35, 0], chest: [0.1, 0.6, 0], head: [0, -0.3, 0], shoulderR: [-1.4, 0, 0.4], elbowR: [-0.2, 0, 0], weapon: [0.1, -1.5, 0.2], ...LEGS_LUNGE }],
-      [0.3, { weapon: [0.15, -1.9, 0.2] }], [0.48, 'base']],
-    lunge: [[0.05, 0.18, 6]],
-    ev: [[0.09, (f, o, G) => { sfx('heavy'); fireSlash(f, { tilt: 0.12, r: 2.3, at: [0, 1.05, 0.3] }); }]],
-    hits: [{ t0: 0.09, t1: 0.21, dmg: 46, kb: [3, 0], stun: 0.36, daze: 14 }] },
-  light2: { dur: 0.48, cancel: 0.28, next: 'light3', trail: true, track: 0.08,
-    keys: [[0, { hips: [0, 0.4, 0], spine: [0.2, 0.35, 0], chest: [0.1, 0.7, 0], shoulderR: [-1.4, 0, 0.4], elbowR: [-0.2, 0, 0], weapon: [0.1, -1.7, -0.3], ...LEGS_LUNGE }], [0.07, { weapon: [0.05, -1.95, -0.3] }],
-      [0.2, { hips: [0, -0.45, 0], spine: [0.05, -0.4, 0], chest: [-0.05, -0.7, 0], shoulderR: [-1.7, 0, -1.1], elbowR: [-0.15, 0, 0], weapon: [0.65, 1.8, -0.35] }],
-      [0.3, { weapon: [0.75, 2.05, -0.35] }], [0.48, 'base']],
-    lunge: [[0.05, 0.17, 4]],
-    ev: [[0.09, (f) => { sfx('heavy'); fireSlash(f, { tilt: -0.45, r: 2.3, at: [0, 1.15, 0.3], flip: true }); }]],
-    hits: [{ t0: 0.09, t1: 0.22, dmg: 50, kb: [2, 0.5], stun: 0.42, daze: 14 }] },
-  light3: { dur: 0.62, cancel: 0.4, next: 'light4', trail: true, track: 0.1,
-    keys: [[0, 'raised'], [0.1, { weapon: [2.6, -0.1, 1.57], spine: [-0.25, 0, 0] }], [0.22, 'slam'], [0.36, {}], [0.62, 'base']],
-    lunge: [[0.04, 0.2, 6.5]],
-    ev: [[0.12, (f) => { sfx('heavy'); fireSlash(f, { tilt: Math.PI / 2, r: 2.2, at: [0, 1.3, 0.3] }); }],
-      [0.21, (f, o, G) => { const c = f.local([0, 0.05, 1.45]); fireCrack(G, c, 1.6, 6); flameBurst(G, c, 0.8, true); G.shake(0.12); sfx('boom'); }]],
-    hits: [{ t0: 0.12, t1: 0.25, dmg: 62, kb: [3, 4], stun: 0.5, hs: 0.08, daze: 20 }] },
-  light4: { dur: 0.72, trail: true, track: 0.12,
-    keys: [[0, { hips: [0, -0.6, 0], spine: [0.3, -0.4, 0], chest: [0.1, -0.5, 0], shoulderR: [0.3, 0, -0.7], elbowR: [-0.3, 0, 0], weapon: [-0.7, 2.5, 0.9], hipL: [-0.7, 0, 0.2], kneeL: [1.0, 0, 0], hipR: [0.4, 0, -0.2], kneeR: [0.7, 0, 0] }], [0.12, {}],
-      [0.27, { hips: [0, 0.4, 0], spine: [-0.15, 0.3, 0], chest: [-0.1, 0.5, 0], head: [-0.3, 0, 0], shoulderR: [-2.7, 0, -0.1], elbowR: [-0.2, 0, 0], weapon: [1.55, -0.3, 1.2], hipL: [-0.3, 0, 0.1], kneeL: [0.3, 0, 0], hipR: [0.4, 0, -0.1], kneeR: [0.2, 0, 0] }],
-      [0.42, {}], [0.72, 'base']],
-    lunge: [[0.1, 0.26, 6]],
-    ev: [[0.13, (f) => { sfx('heavy'); sfx('charge'); fireSlash(f, { tilt: Math.PI / 2 - 0.3, r: 2.6, at: [0, 1.0, 0.4], flip: true, life: 0.32 }); }],
-      [0.2, (f, o, G) => { const c = f.local([0, 0, 1.6]); G.fx.beam(c, { r: 0.55, h: 5, color: FIRE, life: 0.4 }); flameBurst(G, c, 1, true); }]],
-    hits: [{ t0: 0.13, t1: 0.29, dmg: 74, kb: [2.5, 10], stun: 0.7, hs: 0.1, shake: 0.14, daze: 26, snd: 'big' }] },
+  /* --- 기본 공격: 한 손 내리치기 → 앞차기 → 어깨 몸통박치기 → 두 손 홈런 스윙 --- */
+  light1: { dur: 0.42, cancel: 0.22, next: 'light2', trail: true, track: 0.08, ikOff: true,
+    keys: [[0, 'bashUp'], [0.1, 'bashDn'], [0.2, { weapon: [-0.78, 0.2, 1.57] }], [0.42, 'base']],
+    lunge: [[0.03, 0.15, 7.5]],
+    ev: [[0.05, () => sfx('swing')], [0.1, (f, o, G) => { sfx('heavy'); fireSlash(f, { tilt: Math.PI / 2 - 0.35, r: 1.9, at: [-0.1, 1.2, 0.3] }); G.fx.burst(f.local([-0.15, 0.05, 1.3]), 8, FIRES, 3, { kind: 'ember' }); }]],
+    hits: [{ t0: 0.05, t1: 0.15, dmg: 42, kb: [2.5, 0], stun: 0.38, daze: 13 }] },
+  light2: { dur: 0.46, cancel: 0.25, next: 'light3', track: 0.08, ikOff: true,
+    keys: [[0, 'kickCh'], [0.09, 'kickEx'], [0.2, {}], [0.3, { hipL: [-0.6, 0, 0.1], kneeL: [0.6, 0, 0] }], [0.46, 'base']],
+    lunge: [[0.04, 0.14, 4]],
+    ev: [[0.08, (f, o, G) => { sfx('hit'); G.fx.burst(f.local([-0.09, 0.8, 0.9]), 10, [0xffffff, EMBER], 4); G.fx.ring(f.local([-0.09, 0.8, 0.95]), { r0: 0.1, r1: 0.7, life: 0.2, color: 0xffffff, billboard: true }); }]],
+    hits: [{ t0: 0.07, t1: 0.16, weapon: false, at: [-0.09, 0.8, 0.82], r: 0.46, dmg: 40, kb: [2.6, 0], stun: 0.48, daze: 14 }] },
+  light3: { dur: 0.5, cancel: 0.28, next: 'light4', track: 0.1, ikOff: true,
+    keys: [[0, { hips: [0, -0.9, 0], spine: [0.3, -0.6, 0], chest: [0.1, -0.5, 0], shoulderL: [0.2, 0, 0.2], elbowL: [-1.7, 0, 0], hipL: [-0.7, 0, 0.2], kneeL: [0.9, 0, 0], hipR: [0.4, 0, -0.2], kneeR: [0.5, 0, 0] }],
+      [0.07, {}], [0.16, { hips: [0, -1.2, 0], spine: [0.5, -0.85, 0], hipL: [-1.0, 0, 0.15], kneeL: [0.8, 0, 0], hipR: [0.7, 0, -0.1], kneeR: [0.3, 0, 0] }], [0.3, {}], [0.5, 'base']],
+    lunge: [[0.04, 0.22, 12]],
+    ev: [[0.06, () => sfx('dash')], [0.13, (f, o, G) => { sfx('big'); G.shake(0.1); G.fx.burst(f.local([0.15, 1.15, 0.55]), 14, [0xffffff, FIRE], 5); }]],
+    hits: [{ t0: 0.06, t1: 0.24, weapon: false, at: [0.15, 1.12, 0.55], r: 0.58, dmg: 48, kb: [3.2, 0], stun: 0.6, hs: 0.08, daze: 18 }] },
+  light4: { dur: 0.82, track: 0.18, trail: true,
+    keys: [[0, 'batter'], [0.2, { weapon: [0.62, 2.78, 0.3], chest: [0, -0.8, 0] }], [0.3, 'swingThru'], [0.42, 'follow'], [0.62, {}], [0.82, 'base']],
+    start: (f, o, G) => sfx('charge'),
+    lunge: [[0.22, 0.32, 5]],
+    ev: [[0.23, () => sfx('swing')], [0.29, (f, o, G) => { sfx('heavy'); fireSlash(f, { tilt: 0.05, r: 2.6, at: [0, 1.0, 0.25], life: 0.32 }); }]],
+    hits: [{ t0: 0.24, t1: 0.36, dmg: 80, kb: [13, 4.5], stun: 0.9, hs: 0.18, shake: 0.3, daze: 34, snd: 'big', br: 0.2 }] },
 
-  /* --- 우클: 작렬 찌르기 — 끌어당겼다 찔러 넣고, 철퇴 끝에서 화염 폭발 --- */
-  heavy: { dur: 0.78, cd: 'heavy', trail: true, aim: true, track: 0.28,
-    keys: [[0, { hips: [0, -0.7, 0], spine: [0.1, -0.45, 0], chest: [0, -0.6, 0], shoulderR: [-0.5, 0, -0.3], elbowR: [-1.6, 0, 0], weapon: [0.05, 0.12, 0], hipL: [-0.6, 0, 0.2], kneeL: [0.9, 0, 0], hipR: [0.4, 0, -0.2], kneeR: [0.6, 0, 0] }], [0.24, {}],
-      [0.32, { hips: [0, 0.15, 0], spine: [0.45, 0.2, 0], chest: [0.15, 0.35, 0], shoulderR: [-1.5, 0, 0.05], elbowR: [-0.05, 0, 0], weapon: [0.02, 0, 0], ...LEGS_LUNGE }], [0.5, {}], [0.78, 'base']],
-    start: (f, o, G) => { G.say(f, '"터져라!"'); sfx('charge'); },
-    tick: (f, o, G, t) => { if (t < 0.28) { const p = f.model.clubTip(new V3()); G.fx.p(p, { vel: [rand(-1, 1), rand(0, 2), rand(-1, 1)], size: 0.35, size1: 0.05, life: 0.2, color: Math.random() < 0.5 ? FIRE : HOT, alpha: 0.9 }); } },
-    lunge: [[0.28, 0.4, 10]],
-    ev: [[0.3, () => sfx('zap')], [0.38, (f, o, G) => {
-      const p = f.model.clubTip(new V3()).addScaledVector(f.fwd(new V3()), 0.25); explosion(G, p, 1);
-      areaHit(f, p.clone().setY(f.pos.y), 1.8, { dmg: 88, kb: [9, 5], stun: 0.7, hs: 0.12, shake: 0.2, daze: 45, snd: 'big', unblock: true }, 2.2);
-    }]],
-    hits: [{ t0: 0.3, t1: 0.4, dmg: 54, kb: [3, 0], stun: 0.4, daze: 16 }] },
-
-  /* --- Shift: 사슬 낚아채기 — 손목 사슬을 던져 끌어온 뒤 후려친다 --- */
-  s1: { dur: 1.05, cd: 's1', ikOff: true, aim: true, track: 0.15, trail: true,
-    keys: [[0, { ...poses.base, spine: [0.1, 0.35, 0], chest: [0.05, 0.4, 0], shoulderL: [-0.6, 0, 0.9], elbowL: [-1.6, 0, 0] }],
-      [0.12, { shoulderL: [-1.65, 0, 0.2], elbowL: [-0.1, 0, 0], ...LEGS_LUNGE }], [0.36, { shoulderL: [-0.6, 0, 0.5], elbowL: [-1.4, 0, 0] }],
-      [0.5, { hips: [0, -0.5, 0], spine: [0.1, -0.4, 0], chest: [0, -0.55, 0], shoulderR: [-1.2, 0, -1.0], elbowR: [-0.4, 0, 0], weapon: [0.3, 2.2, 0.2], shoulderL: [0.2, 0, 0.6], elbowL: [-1.2, 0, 0] }],
-      [0.64, { hips: [0, 0.45, 0], spine: [0.25, 0.35, 0], chest: [0.1, 0.65, 0], shoulderR: [-1.4, 0, 0.4], elbowR: [-0.2, 0, 0], weapon: [0.1, -1.6, 0.2], ...LEGS_LUNGE }], [0.8, {}], [1.05, 'base']],
+  /* --- 우클: 사슬 낚아채기 → 박치기 --- */
+  heavy: { dur: 0.98, cd: 'heavy', ikOff: true, aim: true, track: 0.14, shout: true,
+    keys: [[0, { spine: [0.1, 0.35, 0], chest: [0.05, 0.4, 0], shoulderL: [-0.6, 0, 0.9], elbowL: [-1.6, 0, 0] }],
+      [0.12, { shoulderL: [-1.65, 0, 0.2], elbowL: [-0.1, 0, 0], ...LEGS_LUNGE }], [0.34, { spine: [-0.2, 0.1, 0], chest: [-0.15, 0.1, 0], head: [-0.4, 0, 0], shoulderL: [-0.4, 0, 0.5], elbowL: [-1.7, 0, 0] }],
+      [0.45, { spine: [0.6, 0, 0], chest: [0.25, 0, 0], head: [0.5, 0, 0], hipL: [-0.9, 0, 0.1], kneeL: [0.9, 0, 0], hipR: [0.6, 0, -0.1], kneeR: [0.3, 0, 0] }], [0.6, {}], [0.98, 'base']],
     start: (f, o, G) => { f.hooked = null; G.say(f, '"어딜 도망가!"'); },
     ev: [[0.12, (f, o, G) => { sfx('shot'); sfx('dash'); G.spawn(new ChainHook(G, f, o)); }],
-      [0.56, (f) => { sfx('heavy'); fireSlash(f, { tilt: 0.1, r: 2.5, at: [0, 1.05, 0.3], life: 0.3 }); }]],
-    hits: [{ t0: 0.56, t1: 0.7, dmg: 72, kb: [7, 3], stun: 0.6, hs: 0.1, shake: 0.15, daze: 30, snd: 'big' }],
+      [0.45, (f, o, G) => { const p = f.model.J.head.getWorldPosition(new V3()).addScaledVector(f.fwd(new V3()), 0.3); sfx('big'); sfx('block'); G.shake(0.2);
+        G.fx.ring(p, { r0: 0.1, r1: 1.1, life: 0.25, color: 0xffffff, billboard: true }); for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; G.fx.p(p.clone().add(new V3(Math.cos(a) * 0.4, 0.35 + Math.sin(a) * 0.12, Math.sin(a) * 0.4)), { size: 0.22, size1: 0.05, life: 0.6, color: 0xffe060, alpha: 1 }); } }]],
+    hits: [{ t0: 0.44, t1: 0.54, weapon: false, at: [0, 1.38, 0.55], r: 0.48, dmg: 70, kb: [6, 2], stun: 1.1, hs: 0.16, shake: 0.15, daze: 55, snd: 'big' }],
     end: (f) => { if (f.chainHook) f.chainHook.phase = 'back'; } },
 
-  /* --- E: 마염 선풍 — 불꽃 소용돌이 2회전, 마지막에 화염이 터지며 띄움 --- */
-  s2: { dur: 1.3, cd: 's2', ikOff: true, aim: true, trail: true,
-    keys: [[0, { hips: [0, 0.3, 0], spine: [0.2, 0.3, 0], chest: [0, 0.4, 0], shoulderR: [-1.5, 0, -1.2], elbowR: [-0.05, 0, 0], weapon: [0.05, 1.35, 0], shoulderL: [-0.6, 0, 1.1], elbowL: [-0.4, 0, 0], hipL: [-0.5, 0, 0.3], kneeL: [0.7, 0, 0], hipR: [0.35, 0, -0.3], kneeR: [0.6, 0, 0] }],
-      [0.1, { weapon: [0.0, 1.5, 0] }], [1.0, {}], [1.08, { ...poses.raised, weapon: [1.4, 0.2, 1.57] }], [1.3, 'base']],
-    start: (f, o, G) => { G.say(f, '"다 태워주지!"'); sfx('charge'); },
+  /* --- Shift: 양키 돌격 — 철퇴를 바닥에 끌며 돌진(불길 자국), 골프 스윙으로 띄움 --- */
+  s1: { dur: 1.12, cd: 's1', aim: true, trail: true, ikOff: true,
+    keys: [[0, { spine: [0.5, 0, 0], chest: [0.15, 0, 0], head: [-0.35, 0, 0], shoulderR: [0.55, 0, -0.35], elbowR: [-0.2, 0, 0], weapon: [-0.42, 2.85, 0.5], shoulderL: [-0.8, 0, 0.3], elbowL: [-1.3, 0, 0], hipL: [-0.9, 0, 0.1], kneeL: [1.0, 0, 0], hipR: [0.5, 0, -0.1], kneeR: [0.6, 0, 0] }],
+      ...[0.12, 0.24, 0.36, 0.48, 0.6].map((t, i) => [t, i % 2 ? { hipL: [-0.9, 0, 0.1], kneeL: [0.9, 0, 0], hipR: [0.6, 0, -0.1], kneeR: [0.9, 0, 0], shoulderL: [-0.8, 0, 0.3] } : { hipL: [0.6, 0, 0.1], kneeL: [0.9, 0, 0], hipR: [-0.9, 0, -0.1], kneeR: [0.9, 0, 0], shoulderL: [0.6, 0, 0.3] }]),
+      [0.7, { hips: [0, -0.5, 0], spine: [0.45, -0.35, 0], chest: [0.1, -0.4, 0], shoulderR: [0.3, 0, -0.65], weapon: [-0.65, 2.1, 0.9], hipL: [-0.7, 0, 0.2], kneeL: [1.0, 0, 0], hipR: [0.4, 0, -0.2], kneeR: [0.7, 0, 0] }],
+      [0.86, { hips: [0, 0.45, 0], spine: [-0.15, 0.4, 0], chest: [-0.1, 0.6, 0], head: [-0.3, 0, 0], shoulderR: [-2.75, 0, -0.1], elbowR: [-0.2, 0, 0], weapon: [1.55, -0.3, 1.2], hipL: [-0.3, 0, 0.1], kneeL: [0.3, 0, 0], hipR: [0.4, 0, -0.1], kneeR: [0.2, 0, 0] }], [0.98, {}], [1.12, 'base']],
+    start: (f, o, G) => { G.say(f, '"비켜, 방해야!"'); sfx('dash'); f.zoneT = 0; },
     tick: (f, o, G, t, dt) => {
-      if (t > 0.08 && t < 1.0) {
-        f.yaw -= dt * (TAU * 2.2);
-        // 회전하며 상대 쪽으로 미끄러져 다가간다 (최대 4.5m/s, 1.4m 앞에서 멈춤)
-        if (o && !o.gone && f.dist() < 8) { const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z, d = Math.hypot(dx, dz), sp = Math.min(4.5, Math.max(0, d - 1.4) * 4); f.vel.x = dx / d * sp; f.vel.z = dz / d * sp; }
-        const p = f.model.clubTip(new V3()); for (let i = 0; i < 3; i++) G.fx.p(p.clone().add(new V3(rand(-0.15, 0.15), rand(-0.15, 0.15), rand(-0.15, 0.15))), { vel: [rand(-1, 1), rand(0.5, 2.5), rand(-1, 1)], size: rand(0.4, 0.75), size1: 0.05, life: rand(0.3, 0.5), color: FIRES[i], alpha: 0.85, drag: 2 });
-        if (Math.random() < dt * 14) sfx('swing');
-      }
+      if (t > 0.06 && t < 0.7) {
+        if (o && !o.gone && f.dist() < 12) f.faceOpp(5, dt);
+        const fw = f.fwd(new V3()); f.vel.x = fw.x * 12.5; f.vel.z = fw.z * 12.5;
+        if (o && !o.gone && f.dist() < 0.95 + 0.3 * o.scale && f.hitDone.size) f.at = Math.max(f.at, 0.66); // 붙으면 바로 올려치기로
+        f.zoneT -= dt; const tip = f.model.clubTip(new V3()); tip.y = f.pos.y + 0.02;
+        if (f.zoneT <= 0) { f.zoneT = 0.06; G.spawn(new FireZone(G, f, tip)); }
+        G.fx.burst(tip, 2, [HOT, EMBER], 3, { kind: 'ember', lk: 0.6 }); if (Math.random() < dt * 20) sfx('swing');
+      } else if (t >= 0.7 && t < 0.75) { f.vel.x *= 0.3; f.vel.z *= 0.3; }
     },
-    ev: [[0.1, (f, o, G) => { G.fx.ring(f.pos.clone().setY(f.pos.y + 0.9), { normal: new V3(0, 1, 0), r0: 0.5, r1: 3.2, life: 0.5, color: FIRE }); }],
-      [0.55, (f, o, G) => { G.fx.ring(f.pos.clone().setY(f.pos.y + 0.6), { normal: new V3(0, 1, 0), r0: 0.5, r1: 3.4, life: 0.5, color: EMBER }); }],
-      [1.02, (f, o, G) => { const c = f.pos.clone().setY(f.pos.y + 0.05); explosion(G, c.clone().setY(c.y + 0.8), 1.2); fireCrack(G, c, 3, 10); G.fx.beam(c, { r: 1.2, h: 6, color: FIRE, life: 0.5 }); areaHit(f, c, 3, { dmg: 70, kb: [5, 8.5], stun: 0.7, hs: 0.12, shake: 0.25, daze: 40, snd: 'big' }, 1.5); }]],
-    hits: [0.1, 0.25, 0.4, 0.55, 0.7, 0.85].map((t0) => ({ t0, t1: t0 + 0.15, dmg: 22, kb: [1, 0], stun: 0.42, daze: 10, br: 0.22 })) },
+    ev: [[0.76, (f, o, G) => { sfx('heavy'); sfx('charge'); fireSlash(f, { tilt: Math.PI / 2 - 0.25, r: 2.3, at: [0, 0.9, 0.35], flip: true }); const c = f.local([0, 0, 1.3]); G.fx.beam(c, { r: 0.4, h: 3.5, color: FIRE, life: 0.3 }); }]],
+    hits: [{ t0: 0.08, t1: 0.68, weapon: false, at: [0, 1.0, 0.6], r: 0.62, dmg: 30, kb: [3, 0], stun: 0.5, daze: 12 }, { t0: 0.74, t1: 0.9, dmg: 64, kb: [3, 10.5], stun: 0.7, hs: 0.12, shake: 0.15, daze: 30, snd: 'big', br: 0.2 }] },
 
-  /* --- 극한 회피 뒤 좌클: 순간 돌진 찌르기 + 작은 폭발 --- */
-  counter: { dur: 0.6, trail: true, aim: true,
-    keys: [[0, { hips: [0, -0.6, 0], chest: [0, -0.5, 0], shoulderR: [-0.5, 0, -0.3], elbowR: [-1.6, 0, 0], weapon: [0.05, 0.12, 0] }],
-      [0.08, { hips: [0, 0.15, 0], spine: [0.45, 0.2, 0], chest: [0.15, 0.35, 0], shoulderR: [-1.5, 0, 0.05], elbowR: [-0.05, 0, 0], weapon: [0.02, 0, 0], ...LEGS_LUNGE }], [0.35, {}], [0.6, 'base']],
+  /* --- E: 마족의 숨결 — 숨을 들이켰다가 입으로 화염을 뿜는다 (부채꼴 지속 피해) --- */
+  s2: { dur: 1.4, cd: 's2', aim: true, track: 1.15, shout: true,
+    keys: [[0, { spine: [-0.32, 0, 0], chest: [-0.25, 0, 0], head: [-0.5, 0, 0], shoulderL: [-0.2, 0, 0.6], elbowL: [-0.6, 0, 0], hipL: [-0.2, 0, 0.15], kneeL: [0.3, 0, 0], hipR: [0.2, 0, -0.15], kneeR: [0.2, 0, 0] }],
+      [0.26, { spine: [0.42, 0, 0], chest: [0.22, 0, 0], head: [0.15, 0, 0], shoulderL: [-0.5, 0, 0.9], elbowL: [-0.3, 0, 0], hipL: [-0.65, 0, 0.2], kneeL: [0.75, 0, 0], hipR: [0.45, 0, -0.2], kneeR: [0.4, 0, 0] }],
+      [1.15, {}], [1.4, 'base']],
+    start: (f, o, G) => { G.say(f, '"다 태워주지!"'); sfx('charge'); f.breathAcc = 0; },
+    tick: (f, o, G, t, dt) => {
+      if (t < 0.24) { const m = f.model.J.head.localToWorld(new V3(0, 0.06, 0.1)); const p = m.clone().add(new V3(rand(-1.2, 1.2), rand(-0.6, 0.8), rand(0.4, 1.6)).applyAxisAngle(new V3(0, 1, 0), f.yaw)); const v = m.clone().sub(p).multiplyScalar(4); G.fx.p(p, { vel: [v.x, v.y, v.z], size: 0.12, size1: 0.02, life: 0.25, color: EMBER, alpha: 0.8 }); f.breathing = false; }
+      else if (t < 1.15) { f.breathing = true; breathTick(f, G, t, dt); if (Math.random() < dt * 6) G.fx.light(f.local([0, 1.3, 1.5]), FIRE, 60, 0.2, 8); }
+      else f.breathing = false;
+    },
+    end: (f) => { f.breathing = false; } },
+
+  /* --- 극한 회피 뒤 좌클: 드롭킥 --- */
+  counter: { dur: 0.66, aim: true, ikOff: true,
+    keys: [[0, { hips: [-0.5, 0, 0], spine: [-0.35, 0, 0], head: [0.3, 0, 0], hipL: [-1.55, 0, 0.12], kneeL: [0.15, 0, 0], footL: [0.5, 0, 0], hipR: [-1.45, 0, -0.12], kneeR: [0.2, 0, 0], footR: [0.5, 0, 0], shoulderL: [0.6, 0, 1.0], elbowL: [-0.3, 0, 0] }],
+      [0.3, {}], [0.45, { hips: [0, 0, 0], spine: [0.2, 0, 0], ...LEGS_LUNGE }], [0.66, 'base']],
     ev: [[0, (f, o, G) => {
       const from = f.chest();
-      if (o) { const d = new V3().subVectors(f.pos, o.pos).setY(0).normalize(); f.pos.copy(o.pos).setY(o.onGround ? 0 : o.pos.y).addScaledVector(d, 1.9 + 0.4 * o.scale); f.faceOpp(); }
-      for (let i = 0; i <= 8; i++) G.fx.p(from.clone().lerp(f.chest(), i / 8), { size: 0.8, size1: 0.2, life: 0.3, color: FIRE, alpha: 0.7 });
+      if (o) { const d = new V3().subVectors(f.pos, o.pos).setY(0).normalize(); f.pos.copy(o.pos).setY(o.onGround ? 0 : o.pos.y).addScaledVector(d, 1.6 + 0.4 * o.scale); f.faceOpp(); }
+      f.vel.y = 3.5; f.onGround = false; for (let i = 0; i <= 8; i++) G.fx.p(from.clone().lerp(f.chest(), i / 8), { size: 0.8, size1: 0.2, life: 0.3, color: FIRE, alpha: 0.7 });
       sfx('dash'); G.flash(FIRE, 0.2); f.model.resetCloth();
-    }], [0.12, (f, o, G) => explosion(G, f.model.clubTip(new V3()), 0.6)]],
-    hits: [{ t0: 0.05, t1: 0.2, dmg: 96, kb: [7, 4], stun: 0.6, hs: 0.12, shake: 0.15, daze: 45, snd: 'big' }] },
+    }], [0.08, (f, o, G) => { sfx('big'); explosion(G, f.local([0, 0.9, 0.9]), 0.55); }]],
+    lunge: [[0, 0.22, 7]],
+    hits: [{ t0: 0.04, t1: 0.24, weapon: false, at: [0, 0.9, 0.75], r: 0.55, dmg: 96, kb: [9, 3], stun: 0.6, hs: 0.12, shake: 0.15, daze: 45, snd: 'big' }] },
 
-  /* --- Q: 마왕 각성 · OVERLORD — 포효 → 도약 → 화염 강타 → 올려치기, 이후 15초 각성 --- */
-  ult: { dur: 2.95, ult: true, aim: true, ikOff: true,
-    keys: [[0, 'roar'], [0.5, 'roar'], [0.6, { hipL: [-1.2, 0, 0], kneeL: [1.6, 0, 0], hipR: [-0.5, 0, 0], kneeR: [1.3, 0, 0], ...poses.raised, weapon: [2.0, 0, 1.57] }], [1.0, 'raised'], [1.12, { ...poses.slam, weapon: [-1.0, 0, 1.57] }], [1.85, {}],
-      [1.95, { hips: [0, -0.7, 0], spine: [0.3, -0.5, 0], chest: [0, -0.6, 0], shoulderR: [0.2, 0, -0.7], elbowR: [-0.3, 0, 0], weapon: [-0.6, 2.3, 0.9] }],
-      [2.15, { hips: [0, 0.4, 0], spine: [-0.15, 0.4, 0], chest: [-0.1, 0.6, 0], head: [-0.3, 0, 0], shoulderR: [-2.8, 0, 0.2], elbowR: [-0.1, 0, 0], weapon: [1.55, -0.4, 1.2], ...LEGS_LUNGE }], [2.55, {}], [2.95, 'win']],
-    cam: [[0, { ref: 'self', p: [0.8, 0.4, 2.2], l: [0, 1.5, 0], fov: 40 }], [0.5, { ref: 'self', p: [3, 1.2, 1.6], l: [0, 2.2, 2.5], fov: 50 }],
-      [1.05, { ref: 'target', p: [4.5, 0.9, -3.2], l: [0, 1.1, 0], fov: 55 }], [1.8, { ref: 'target', p: [-4, 0.6, -4], l: [0, 1.6, 0], fov: 55 }],
-      [2.3, { ref: 'target', p: [-1.5, 2.2, -8.5], l: [0, 2.8, 0], fov: 58 }], [2.95, { ref: 'target', p: [-1.5, 2.6, -9.5], l: [0, 3.2, 0], fov: 58 }]],
+  /* --- Q: OVERLORD — 족쇄 사슬을 스스로 끊고 → 돌진 → 난타 → 풀스윙 홈런. 이후 12초 각성 --- */
+  ult: { dur: 3.3, ult: true, aim: true, ikOff: true, shout: true,
+    keys: [[0, { ...poses.roar, shoulderR: [-1.0, 0, -0.9], shoulderL: [-1.0, 0, 0.9], elbowR: [-1.4, 0, 0], elbowL: [-1.4, 0, 0], weapon: [0.6, 1.4, 0.4] }],
+      [0.4, { shoulderR: [-1.1, 0, -1.1], shoulderL: [-1.1, 0, 1.1], elbowR: [-1.2, 0, 0], elbowL: [-1.2, 0, 0] }],
+      [0.5, { spine: [-0.35, 0, 0], head: [-0.5, 0, 0], shoulderR: [-2.3, 0, -1.2], elbowR: [-0.2, 0, 0], shoulderL: [-2.3, 0, 1.2], elbowL: [-0.2, 0, 0] }],
+      [0.62, { hips: [0, 0, 0], spine: [0.55, 0, 0], chest: [0.1, 0, 0], head: [-0.3, 0, 0], shoulderR: [0.6, 0, -0.3], elbowR: [-0.4, 0, 0], weapon: [0.2, 2.9, 1.2], shoulderL: [0.8, 0, 0.3], elbowL: [-0.6, 0, 0], hipL: [-0.9, 0, 0], kneeL: [0.5, 0, 0], hipR: [0.6, 0, 0], kneeR: [0.9, 0, 0] }],
+      [0.86, 'bashUp'], [0.98, 'bashDn'], [1.06, { ...poses.bashUp, weapon: [1.3, -1.0, 1.0], shoulderR: [-2.2, 0, 0.2] }], [1.16, { ...poses.bashDn, weapon: [0.1, 1.6, 0.3], chest: [0.1, -0.6, 0], shoulderR: [-1.5, 0, -1.0] }],
+      [1.24, 'kickCh'], [1.32, 'kickEx'], [1.44, 'bashUp'], [1.54, 'bashDn'],
+      [1.75, 'batter'], [2.2, { weapon: [0.7, 2.85, 0.3], chest: [0, -0.85, 0] }], [2.32, 'swingThru'], [2.46, 'follow'], [2.8, {}], [3.3, 'win']],
+    cam: [[0, { ref: 'self', p: [0.6, 0.35, 1.9], l: [0, 1.25, 0], fov: 38 }], [0.5, { ref: 'self', p: [1.6, 0.6, 2.4], l: [0, 1.3, 0], fov: 46 }],
+      [0.85, { ref: 'target', p: [3.6, 0.8, -1.4], l: [0, 1.1, 0], fov: 52 }], [1.6, { ref: 'target', p: [2.6, 0.5, -2.6], l: [0, 1.2, 0], fov: 50 }],
+      [2.15, { ref: 'self', p: [-1.4, 1.5, -2.2], l: [0, 1.2, 3], fov: 52 }], [2.5, { ref: 'self', p: [-2.2, 1.8, -3.2], l: [0, 1.6, 8], fov: 58 }], [3.3, { ref: 'self', p: [-2.4, 2.4, -4], l: [0, 2.4, 14], fov: 60 }]],
     ev: [
-      [0, (f, o, G) => {
-        f.ultTgt = o; o.lock(); if (o.pos.y < 0.2) o.pos.y = 0; f.awakenT = 15; G.setTint(FIRE, 0.4); sfx('charge'); sfx('boom');
-        G.say(f, '"차별의 사슬 따위… 전부 물어뜯어 주마!"');
-        const c = f.pos.clone(); flameBurst(G, c.clone().setY(c.y + 1), 1.6, true); G.fx.ring(c.clone().setY(c.y + 0.05), { normal: new V3(0, 1, 0), r0: 0.3, r1: 5, life: 0.7, color: FIRE }); G.fx.beam(c, { r: 0.9, h: 9, color: FIRE, life: 0.7 });
-        f.ultFrom = f.pos.clone(); f.ultTo = o.pos.clone().addScaledVector(new V3().subVectors(f.pos, o.pos).setY(0).normalize(), 1.7 * o.scale);
+      [0, (f, o, G) => { f.ultTgt = o; o.lock(); if (o.pos.y < 0.2) o.pos.y = 0; G.setTint(FIRE, 0.38); sfx('charge'); G.say(f, '"차별의 사슬 따위…"'); f.ultFrom = f.pos.clone(); }],
+      [0.5, (f, o, G) => {
+        f.awakenT = 12; f.heat = 100; sfx('boom'); sfx('parry'); G.shake(0.35); G.flash(0xffa060, 0.4); G.say(f, '"…전부 물어뜯어 주마!"');
+        for (const h of [f.model.J.handL, f.model.J.handR]) { const p = h.getWorldPosition(new V3()); G.fx.burst(p, 18, [0x8a8a94, 0xc8c8d0], 7, { kind: 'dust', sk: 0.5 }); G.fx.burst(p, 20, FIRES, 6); G.fx.ring(p, { r0: 0.1, r1: 1.2, life: 0.3, color: EMBER, billboard: true }); }
+        flameBurst(G, f.pos.clone().setY(f.pos.y + 1), 1.4, true); G.fx.beam(f.pos.clone(), { r: 0.8, h: 8, color: FIRE, life: 0.6 });
       }],
-      [0.5, (f) => { f.float = true; f.onGround = false; sfx('jump'); sfx('dash'); }],
-      [1.1, (f, o, G) => { o = f.ultTgt || o; if (!o) return;
-        const c = o.pos.clone().setY(0); f.pos.copy(f.ultTo).setY(0); f.float = false; f.onGround = true; f.vel.set(0, 0, 0);
-        explosion(G, c.clone().setY(1.0), 2); fireCrack(G, c, 6, 14); G.fx.beam(c, { r: 2.2, h: 26, color: FIRE, life: 0.9 }); G.fx.ring(c.clone().setY(0.06), { normal: new V3(0, 1, 0), r0: 0.5, r1: 8, life: 0.8, color: EMBER });
-        G.shake(0.6); G.flash(0xffc080, 0.7); G.stage.flashSky && G.stage.flashSky(0.5);
-        o.takeHit(f, { dmg: 180, kb: [0, 0], stun: 99, hs: 0.2, shake: 0.5, nokill: true, noScale: true, force: true, daze: 120, snd: 'big' }, new V3().subVectors(o.pos, f.pos).setY(0).normalize());
-        for (const t of f.foes()) if (t !== o && t.pos.distanceTo(c) < 6) t.takeHit(f, { dmg: 120, kb: [6, 9], stun: 0.8, force: true, noCrit: true }, new V3().subVectors(t.pos, c).setY(0).normalize());
-      }],
-      [1.3, (f, o, G) => { o = f.ultTgt || o; if (!o) return; for (let i = 0; i < 9; i++) G.spawn({ done: false, t: -i * 0.06, update(dt) { this.t += dt; if (this.t >= 0 && !this.d) { this.d = true; const p = o.pos.clone().add(new V3(rand(-3.2, 3.2), 0, rand(-3.2, 3.2))).setY(0.05); G.fx.beam(p, { r: 0.45, h: 6, color: i % 2 ? FIRE : EMBER, life: 0.4 }); flameBurst(G, p, 0.6, true); sfx('zap'); } if (this.t > 0.3) this.done = true; } }); }],
-      [1.98, (f, o, G) => { o = f.ultTgt || o; if (!o) return;
-        o.release(); sfx('heavy'); sfx('boom'); G.say(f, '"이게 마족의 영광이다!"');
-        fireSlash(f, { r: 3.6, color: EMBER, tilt: Math.PI / 2 - 0.25, life: 0.4, at: [0, 1.3, 0.3] }); explosion(G, o.chest(new V3()), 1.2);
-        o.takeHit(f, { dmg: 140, kb: [5, 13], stun: 0.9, hs: 0.18, shake: 0.4, noScale: true, force: true, daze: 80, snd: 'big' }, new V3().subVectors(o.pos, f.pos).setY(0).normalize());
-        G.slow(0.35, 0.5); G.flash(0xffffff, 0.45);
+      ...[0.98, 1.16, 1.32, 1.54].map((t, i) => [t, (f, o, G) => { o = f.ultTgt || o; if (!o) return; sfx(i % 2 ? 'heavy' : 'big'); const p = o.chest(new V3()); explosion(G, p, 0.5); o.takeHit(f, { dmg: 38, kb: [0, 0], stun: 99, hs: 0.06, nokill: true, noScale: true, force: true, daze: 20 }, f.fwd(new V3())); }]),
+      [2.0, (f, o, G) => { G.say(f, '"날아가버려!!"'); sfx('charge'); }],
+      [2.3, (f, o, G) => { o = f.ultTgt || o; if (!o) return;
+        o.release(); sfx('boom'); sfx('big'); const p = o.chest(new V3()); explosion(G, p, 2); fireSlash(f, { tilt: 0.05, r: 3.4, at: [0, 1.0, 0.25], life: 0.4, color: EMBER });
+        G.fx.beam(p.clone().setY(0), { r: 1.4, h: 14, color: FIRE, life: 0.6 }); G.shake(0.6); G.stage.flashSky && G.stage.flashSky(0.5);
+        o.takeHit(f, { dmg: 220, kb: [17, 8], stun: 1.0, hs: 0.25, shake: 0.5, noScale: true, force: true, daze: 100, snd: 'big' }, f.fwd(new V3()));
+        for (const t of f.foes()) if (t !== o && t.pos.distanceTo(f.pos) < 5) t.takeHit(f, { dmg: 110, kb: [9, 6], stun: 0.8, force: true, noCrit: true }, new V3().subVectors(t.pos, f.pos).setY(0).normalize());
+        G.slow(0.3, 0.55);
       }],
     ],
     tick: (f, o, G, t) => {
+      o = f.ultTgt || o;
       if (t < 0.5) { const p = f.pos.clone().add(new V3(rand(-0.6, 0.6), rand(0, 1.8), rand(-0.6, 0.6))); G.fx.p(p, { vel: [0, rand(2, 5), 0], size: rand(0.3, 0.7), size1: 0.05, life: 0.5, color: Math.random() < 0.5 ? FIRE : EMBER, alpha: 0.9, drag: 1 }); }
-      if (t > 0.5 && t < 1.1 && f.ultFrom) { const k = (t - 0.5) / 0.6; f.pos.lerpVectors(f.ultFrom, f.ultTo, k); f.pos.y = Math.sin(k * Math.PI) * 5.5 * (1 - k * 0.3); f.faceOpp(); G.fx.p(f.chest(), { size: 0.9, size1: 0.2, life: 0.3, color: FIRE, alpha: 0.7 }); }
+      // 돌진: 0.6 ~ 0.84 초에 상대 바로 앞까지
+      if (t > 0.6 && t < 0.85 && o && f.ultFrom) { if (!f.ultTo) f.ultTo = o.pos.clone().addScaledVector(new V3().subVectors(f.ultFrom, o.pos).setY(0).normalize(), 1.35 * o.scale); const k = Math.min(1, (t - 0.6) / 0.24); f.pos.lerpVectors(f.ultFrom, f.ultTo, k * k * (3 - 2 * k)); f.faceOpp(); G.fx.p(f.chest(), { size: 0.9, size1: 0.2, life: 0.3, color: FIRE, alpha: 0.7 }); }
+      if (t > 0.85 && o) f.faceOpp();
     },
-    end: (f, o, G) => { G.setTint(0, 0); f.float = false; } },
+    end: (f, o, G) => { G.setTint(0, 0); f.ultTo = null; } },
 };
 
 function hitFx(G, p, dir, h, att) {
-  const big = h.dmg >= 70, aw = att.awakenT > 0;
-  G.fx.impact(p, aw ? EMBER : FIRE, big ? 1.9 : 1.2, dir);
+  const big = h.dmg >= 70, fk = att.fireK || 0;
+  G.fx.impact(p, fk > 0.5 ? EMBER : FIRE, big ? 1.9 : 1.2, dir);
   const a = rand(0, TAU), n = new V3(Math.cos(a) * 0.3, Math.sin(a), Math.cos(a)).normalize();
   G.fx.slash(p.clone().addScaledVector(dir, -0.3), { fwd: dir, normal: n, r: big ? 1.6 : 1.1, color: big ? HOT : FIRE, life: 0.2 });
   G.fx.burst(p, big ? 18 : 8, FIRES, 5, { kind: 'ember' });
-  if (aw) G.fx.burst(p, 8, FIRES, 3, { dir: new V3(0, 1, 0), spread: 0.8 });
+  if (fk > 0.5) { G.fx.burst(p, 10, FIRES, 4, { dir: new V3(0, 1, 0), spread: 0.8 }); G.fx.light(p, FIRE, 40, 0.15, 6); }
+  // 열기: 때릴 때마다 쌓인다 (각성·발화 중에는 쌓지 않음)
+  if (!(att.awakenT > 0) && !(att.igniteT > 0)) att.heat = Math.min(100, (att.heat || 0) + h.dmg * 0.32);
 }
 
-// 각성 상태 갱신 (공격력 ×1.25 · 궤적 색)
-const baseCreate = createModel;
-function createModelWithAwaken(pal) {
-  const m = baseCreate(pal), up = m.update;
+// 열기 · 발화 · 각성 상태 갱신 → 모델 불꽃 세기(fireK) · 공격력 배율 · 궤적 색
+function createModelWithHeat(pal) {
+  const m = createModel(pal), up = m.update;
   m.update = (dt, f) => {
-    if (f.awakenT > 0) { f.awakenT -= dt; if (f.awakenT <= 0) { f.awakenT = 0; f.G.say && f.G.say(f, '"…쳇, 시간 다 됐네."'); } }
-    f.dmgMul = f.awakenT > 0 ? 1.25 : 1;
-    if (f.trail && f.trail.mesh.material.uniforms) f.trail.mesh.material.uniforms.uColor.value.setHex(f.awakenT > 0 ? EMBER : f.palette.accent);
+    if (f.awakenT > 0) { f.awakenT -= dt; if (f.awakenT <= 0) { f.awakenT = 0; f.heat = 0; f.G.say && f.G.say(f, '"…쳇, 시간 다 됐네."'); } }
+    if (f.igniteT > 0) { f.igniteT -= dt; if (f.igniteT <= 0) { f.igniteT = 0; f.heat = 0; } }
+    else if ((f.heat || 0) >= 100 && !(f.awakenT > 0)) {
+      f.igniteT = 8; f.heat = 100; f.G.say && f.G.say(f, '"불 붙었다!"'); sfx('charge');
+      const p = m.clubTip(new V3()); f.G.fx.burst(p, 30, FIRES, 6); f.G.fx.ring(p, { r0: 0.1, r1: 1.4, life: 0.35, color: EMBER, billboard: true });
+    }
+    f.fireK = f.awakenT > 0 ? 1 : f.igniteT > 0 ? 0.8 : ((f.heat || 0) / 100) * 0.35;
+    f.dmgMul = f.awakenT > 0 ? 1.25 : f.igniteT > 0 ? 1.15 : 1;
+    if (f.trail && f.trail.mesh.material.uniforms) f.trail.mesh.material.uniforms.uColor.value.setHex(f.fireK > 0.5 ? EMBER : f.palette.accent);
     up(dt, f);
   };
   return m;
@@ -261,13 +317,15 @@ function createModelWithAwaken(pal) {
 
 export default {
   id: 'azazel', name: '아자젤', short: '아자젤', title: 'OVERLORD · 양키 마족', scale: 1.0,
-  desc: '근거리 · 화염 · 파워. "차별이라는 사슬을 끊어내고, 잃어버린 마족의 영광을 되찾겠어." 가시 철퇴 GRIGORI 를 휘두르는 양키 여고생. 각성하면 철퇴가 불길에 휩싸인다.',
-  stats: { hp: 980, speed: 7.4, jump: 10, crit: 0.22 },
+  desc: '근거리 · 난타 · 화염. "차별이라는 사슬을 끊어내고, 잃어버린 마족의 영광을 되찾겠어." 철퇴·발차기·박치기로 들이받는 양키 싸움꾼. 때릴수록 열기가 쌓이고, 가득 차면 철퇴에 불이 붙는다.',
+  stats: { hp: 980, speed: 7.6, jump: 10, crit: 0.22 },
   palettes: [{ accent: FIRE, lining: 0xc8102a, hair: 0xd01c30, band: '#3a0a10' }, { accent: 0xb05aff, lining: 0x5a1a9a, hair: 0x8a2ad0, band: '#1a0a3a' }],
-  skills: { heavy: { name: '작렬 찌르기', cd: 7 }, s1: { name: '사슬 낚아채기', cd: 9 }, s2: { name: '마염 선풍', cd: 12 }, ult: { name: '마왕 각성', sub: 'OVERLORD' } },
-  moveList: [['좌클 ×4', '가로 휘두르기 → 올려치기 → 내려찍기(땅 균열) → 불꽃 어퍼(띄움)'], ['공중 좌클', '불붙은 철퇴로 낙하 강타 · 화염 폭발'],
-    ['우클 · 작렬 찌르기', '돌진 찌르기 54 + 철퇴 끝 화염 폭발 88 (방어 불가)'], ['Shift · 사슬 낚아채기', '사슬을 던져 맞은 상대를 끌어온 뒤 후려치기 72'],
-    ['E · 마염 선풍', '상대에게 파고드는 불꽃 소용돌이 2회전(22×6) → 화염 폭발 70, 띄움'], ['Q · 마왕 각성', '포효 → 도약 화염 강타 180 → 올려치기 140, 이후 15초 각성(공격력 ×1.25)'],
-    ['C (타이밍) · 극한 회피', '순간 돌진 찌르기 + 폭발']],
-  createModel: createModelWithAwaken, poses, moves, hitFx,
+  skills: { heavy: { name: '사슬 낚아채기', cd: 7 }, s1: { name: '양키 돌격', cd: 9 }, s2: { name: '마족의 숨결', cd: 11 }, ult: { name: 'OVERLORD', sub: '사슬을 끊은 마왕' } },
+  // HUD 고유 자원: 열기 게이지
+  resource: (f) => f.awakenT > 0 ? { v: f.awakenT / 12, label: '각성', color: 0xffa52a, full: true } : f.igniteT > 0 ? { v: f.igniteT / 8, label: '발화', color: 0xff4a1a, full: true } : { v: (f.heat || 0) / 100, label: '열기', color: 0xc8102a },
+  moveList: [['좌클 ×4', '한 손 내리치기 → 앞차기 → 어깨 몸통박치기 → 두 손 홈런 스윙(멀리 날림)'], ['공중 좌클', '불붙은 철퇴로 낙하 강타 · 화염 폭발'],
+    ['우클 · 사슬 낚아채기', '사슬을 던져 끌어온 뒤 박치기 70, 기절'], ['Shift · 양키 돌격', '철퇴를 바닥에 끌며 돌진(불타는 자국이 남음) → 골프 스윙으로 띄움 64'],
+    ['E · 마족의 숨결', '숨을 들이켰다가 입으로 부채꼴 화염 방사 (0.12초마다 12)'], ['Q · OVERLORD', '족쇄 사슬을 스스로 끊음 → 돌진 → 4연속 난타 → 풀스윙 홈런 220, 이후 12초 각성(공격력 ×1.25)'],
+    ['열기', '때릴수록 쌓이고 가득 차면 8초간 발화: 철퇴에 불이 붙고 공격력 ×1.15'], ['C (타이밍) · 극한 회피', '순간이동 드롭킥 + 폭발'], ['가만히', '양키 쪼그려 앉기']],
+  createModel: createModelWithHeat, poses, moves, hitFx,
 };

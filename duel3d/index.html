@@ -50,6 +50,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 .hpbar .chip{background:rgba(255,120,110,.85)}
 .hpbar .fill{background:linear-gradient(180deg,#fff,#e2e6ee);box-shadow:inset 0 -3px 0 color-mix(in srgb,var(--acc) 65%,transparent)}
 .hpbar::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,transparent 0 calc(5% - 2px),rgba(8,8,16,.85) calc(5% - 2px) 5%)}
+.rsbar{position:relative;height:7px;margin-top:5px;width:62%;transform:skewX(-14deg);background:rgba(10,10,18,.6);box-shadow:0 0 0 1px rgba(255,255,255,.18)}
+.rsbar i{position:absolute;inset:0;transform-origin:left center;background:var(--rs,#ff6a2a)}
+.rsbar span{position:absolute;left:calc(100% + 10px);top:-5px;transform:skewX(14deg);font:700 11px var(--f-body);white-space:nowrap;color:var(--rs,#ff6a2a);letter-spacing:.06em}
+.rsbar.full i{animation:rsP .5s ease-in-out infinite alternate}@keyframes rsP{from{filter:brightness(1)}to{filter:brightness(1.6)}}
 .ph.low .hpbar .fill{background:linear-gradient(180deg,#ff8a80,#ff4a4a)}
 .ph.low .hpnum b{color:var(--danger)}
 .ult{position:absolute;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));width:96px;height:96px;transform:translateX(-50%)}
@@ -219,13 +223,13 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
   <div id="pop"></div>
   <div id="say"></div>
   <div class="ph p1">
-    <div class="me"><div class="who"><b class="nm"></b><span class="tt"></span></div><div class="hpnum"><b></b><span></span></div><div class="hpbar"><i class="chip"></i><i class="fill"></i></div></div>
+    <div class="me"><div class="who"><b class="nm"></b><span class="tt"></span></div><div class="hpnum"><b></b><span></span></div><div class="hpbar"><i class="chip"></i><i class="fill"></i></div><div class="rsbar" hidden><i></i><span></span></div></div>
     <div class="ult"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42"/><circle class="arc" cx="50" cy="50" r="42"/></svg><div class="uin"><b>0%</b><span></span></div><div class="uname"></div></div>
     <div class="skills"></div>
     <div class="combo" hidden></div>
   </div>
   <div class="ph p2">
-    <div class="me"><div class="who"><b class="nm"></b><span class="tt"></span></div><div class="hpnum"><b></b><span></span></div><div class="hpbar"><i class="chip"></i><i class="fill"></i></div></div>
+    <div class="me"><div class="who"><b class="nm"></b><span class="tt"></span></div><div class="hpnum"><b></b><span></span></div><div class="hpbar"><i class="chip"></i><i class="fill"></i></div><div class="rsbar" hidden><i></i><span></span></div></div>
     <div class="ult"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42"/><circle class="arc" cx="50" cy="50" r="42"/></svg><div class="uin"><b>0%</b><span></span></div><div class="uname"></div></div>
     <div class="skills"></div>
     <div class="combo" hidden></div>
