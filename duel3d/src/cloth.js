@@ -103,7 +103,7 @@ export class Rope {
 // 로프를 따라가는 굵기 변화 관 (땋은 머리 등). prof(v) = 반지름, 매 프레임 링을 다시 놓는다
 export class RopeTube {
   constructor(rope, mat, o = {}) {
-    this.rope = rope; this.sub = o.sub ?? 3; this.rad = o.rad ?? 10; this.prof = o.prof || (() => 0.02); this.twist = o.twist ?? 0;
+    this.rope = rope; this.sub = o.sub ?? 3; this.rad = o.rad ?? 10; this.prof = o.prof || (() => 0.02); this.twist = o.twist ?? 0; this.flat = o.flat ?? 1; this.wave = o.wave || null; this.side = o.side ? o.side.clone() : null; // flat: 납작한 리본(머리 다발) · wave(v): 옆으로 물결
     const rows = (rope.n - 1) * this.sub + 1, cols = this.rad + 1; this.rows = rows; this.cols = cols;
     const g = new THREE.BufferGeometry(), pos = new Float32Array(rows * cols * 3), uv = new Float32Array(rows * cols * 2), idx = [];
     for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) { uv[(j * cols + i) * 2] = i / this.rad; uv[(j * cols + i) * 2 + 1] = (j / (rows - 1)) * (o.uvV ?? 1); }
@@ -117,9 +117,9 @@ export class RopeTube {
     this.curve.points = this.rope.p; let prevN = null;
     for (let j = 0; j < rows; j++) {
       const v = j / (rows - 1); this.curve.getPoint(v, P); this.curve.getTangent(v, T);
-      if (!prevN) { N.crossVectors(T, up); if (N.lengthSq() < 1e-6) N.set(1, 0, 0); N.normalize(); } else { N.copy(prevN).addScaledVector(T, -prevN.dot(T)).normalize(); }
-      prevN = N.clone(); B.crossVectors(T, N); const r = this.prof(v), tw = v * this.twist;
-      for (let i = 0; i < cols; i++) { const th = (i / rad) * TAU + tw, k = (j * cols + i) * 3, c = Math.cos(th) * r, s = Math.sin(th) * r; pos.array[k] = P.x + N.x * c + B.x * s; pos.array[k + 1] = P.y + N.y * c + B.y * s; pos.array[k + 2] = P.z + N.z * c + B.z * s; }
+      if (!prevN) { if (this.side) N.copy(this.side).addScaledVector(T, -this.side.dot(T)); else N.crossVectors(T, up); if (N.lengthSq() < 1e-6) N.set(1, 0, 0); N.normalize(); } else { N.copy(prevN).addScaledVector(T, -prevN.dot(T)).normalize(); }
+      prevN = N.clone(); B.crossVectors(T, N); const r = this.prof(v), tw = v * this.twist, wv = this.wave ? this.wave(v) : 0;
+      for (let i = 0; i < cols; i++) { const th = (i / rad) * TAU + tw, k = (j * cols + i) * 3, c = Math.cos(th) * r + wv, s = Math.sin(th) * r * this.flat; pos.array[k] = P.x + N.x * c + B.x * s; pos.array[k + 1] = P.y + N.y * c + B.y * s; pos.array[k + 2] = P.z + N.z * c + B.z * s; }
     }
     pos.needsUpdate = true; this.mesh.geometry.computeVertexNormals(); this.mesh.geometry.computeBoundingSphere();
   }

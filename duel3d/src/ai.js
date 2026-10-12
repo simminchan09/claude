@@ -10,7 +10,8 @@ export class AICtrl {
     const dx = o.pos.x - f.pos.x, dz = o.pos.z - f.pos.z, dist = Math.hypot(dx, dz) || 1, tx = dx / dist, tz = dz / dist;
     if (this.guardT > 0) { out.guard = true; return out; }
     if (f.state === 'act') {
-      if (f.actName && f.actName.startsWith('light') && f.hitConfirm && Math.random() < 0.25) out.press = 'light';
+      if (f.actName && f.actName.startsWith('light') && (f.hitConfirm || (f.def.aiRange && dist < f.def.aiRange[1] + 2)) && Math.random() < 0.25) out.press = 'light';
+      if (f.def.aiRange && dist < f.def.aiRange[0]) { out.mx = -tx; out.mz = -tz; } // 원거리: 쏘면서 뒤로 물러난다
       if (f.actName === 'light3' && f.hitConfirm && Math.random() < 0.08) out.press = 'heavy';
       return out;
     }
@@ -22,6 +23,12 @@ export class AICtrl {
       if (o.state === 'down' || o.held) this.mode = dist > 3 ? 'approach' : 'circle';
       else if (f.energy >= 100 && dist < 12 && Math.random() < 0.4) out.press = 'ult';
       else if (custom) out.press = custom;
+      else if (f.def.aiRange) { // 원거리: 사거리 안에서 쏘고, 너무 가까우면 물러나거나 회피
+        const [mn, mx] = f.def.aiRange;
+        if (dist < mn * 0.55 && Math.random() < 0.3) { out.press = 'dash'; out.mx = -tx; out.mz = -tz; }
+        else if (dist <= mx && Math.random() < 0.7) out.press = Math.random() < 0.85 ? 'light' : 'heavy';
+        this.mode = dist < mn ? 'retreat' : dist > mx ? 'approach' : Math.random() < 0.6 ? 'circle' : 'hold';
+      }
       else if (dist > 6 && f.cd.s1 <= 0 && Math.random() < 0.4) out.press = 's1';
       else if (dist < 4 && f.cd.s2 <= 0 && Math.random() < 0.2) out.press = 's2';
       else if (dist < 2.3) out.press = Math.random() < 0.75 ? 'light' : 'heavy';
@@ -31,7 +38,8 @@ export class AICtrl {
       if (Math.random() < 0.2) this.strafe *= -1;
     }
     if (this.mode === 'approach') { out.mx = tx; out.mz = tz; }
-    else if (this.mode === 'circle') { out.mx = -tz * this.strafe * 0.8 + tx * 0.2; out.mz = tx * this.strafe * 0.8 + tz * 0.2; }
+    else if (this.mode === 'circle') { const k = f.def.aiRange ? 0 : 0.2; out.mx = -tz * this.strafe * 0.8 + tx * k; out.mz = tx * this.strafe * 0.8 + tz * k; }
+    else if (this.mode === 'retreat') { out.mx = -tx * 0.85 - tz * this.strafe * 0.5; out.mz = -tz * 0.85 + tx * this.strafe * 0.5; }
     // 장애물 회피: 앞이 막히면 낮은 건 뛰어넘고, 높은 건 옆으로 돌아간다
     const W = G.stage && G.stage.world;
     if (W && (out.mx || out.mz)) {

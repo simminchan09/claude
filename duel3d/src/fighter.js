@@ -61,7 +61,7 @@ export class Fighter {
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
@@ -160,7 +160,7 @@ export class Fighter {
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
     this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear(); this.teleDone = false;
     // 자동 조준: 가까운 대상이 있으면 그쪽을 본다
-    if (m.aim !== false && this.opp && (this.team === 1 || this.dist() < 10)) this.faceOpp();
+    if (m.aim !== false && this.opp && (this.team === 1 || this.dist() < (this.def.aimRange || 10))) this.faceOpp();
     m.start && m.start(this, this.opp, this.G);
     if (m.ult) { this.energy = 0; this.inv = 99; this.G.startCine(this); }
   }

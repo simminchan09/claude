@@ -20,6 +20,9 @@ export default {
   moves,                                    // 기술 (아래 5번)
   hitFx(G, point, dir, hit, attacker),      // (선택) 타격 이펙트 교체
   aiPick(f, opp, dist),                     // (선택) CPU가 쓸 기술 이름 반환
+  aiRange: [min, max],                      // (선택) 원거리 캐릭터: CPU가 이 거리를 유지하며 사거리 안에서 쏜다 (아리엘)
+  aimRange,                                 // (선택) 기술 시작 시 자동으로 상대를 바라보는 거리 (기본 10m)
+  resource(f),                              // (선택) HP 아래 고유 게이지 { v, label, color, full }
 };
 ```
 
@@ -39,6 +42,7 @@ export default {
 - `Cloth(scene, W, H, len, mat)`: 위쪽 줄이 고정된 천 (망토). 매 프레임 `anchors` 를 옮기고 `step()`.
 - `Rope(n, seg)`: 첫 점이 고정된 로프 (땋은 머리 · 사슬 · 키링). `step(dt, 고정점, 충돌 캡슐, 바닥, 기본 방향)`.
 - `RopeTube` / `RopeChain`: 로프를 굵기가 변하는 관 / 사슬 고리로 그린다. 아자젤의 `m.ropes` 처리 참고.
+  `RopeTube` 의 `flat`(납작한 리본) · `wave(v)`(옆으로 물결) · `side`(넓은 면 방향, 매 프레임 갱신 가능)로 긴 웨이브 머리를 만든다 — 아리엘 참고. 머리칼 충돌에는 피격 캡슐 대신 짧은 몸통 캡슐 + 머리 구를 쓴다 (몸통 캡슐 윗부분이 뒷머리 고정점을 삼키면 머리칼이 위로 튄다).
 - 몸 밖(씬)에 두는 메시는 `extras` 에 넣어 컷인 초상에서 숨긴다.
 
 ### 3-1. 조형 도구 (`src/sculpt.js`)
@@ -107,6 +111,7 @@ const moves = {
 - 이펙트: `f.slashFx({ tilt, r, at, flip })`, `G.fx.burst / ring / slash / beam / light / impact / p`
 - 화면: `G.shake(a)`, `G.flash(color, a)`, `G.slow(배율, 초)`, `G.setTint(color, a)`, `G.stage.flashSky(a)`
 - 판정: `new Projectile(G, {...})` + `G.spawn()`, `areaHit(f, 중심, 반경, hit)`
+- 원거리 기술: `G.spawn()` 에는 `update(dt)` · `done` · `kill()` 을 가진 무엇이든 넣을 수 있다. 아리엘의 `WaterOrb`(유도 · 관통 · 폭발) · `WaterLance` · `BubblePrison`(lock/release 로 가둠) · `Whirlpool`(끌어당김 + 연속 피해) 참고. 기술의 `move`(0~1)로 시전 중 이동 속도를 정한다.
 - 궁극기 고정: `o.lock()` / `o.release()`
 - 대사: `G.say(f, '"대사"')` (화면 아래 자막)
 - 소리: `sfx('swing' | 'heavy' | 'hit' | 'big' | 'zap' | 'shot' | 'boom' | 'charge' | 'dash' ...)`
