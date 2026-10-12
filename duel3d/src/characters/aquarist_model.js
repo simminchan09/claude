@@ -10,7 +10,7 @@ import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { clamp } from '../core.js';
 import { Cloth, Rope, RopeTube } from '../cloth.js';
-import { animeHead, paintEye } from '../face.js';
+import { animeHead, faceMapper, faceLayout, paintFace } from '../face.js';
 import { surf, loft, loftAt, loftRing, strand, spl, lathe, ang, gauss, smooth, envCube, cached } from '../sculpt.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
@@ -107,40 +107,21 @@ function skirtTex() {
   return tex(c);
 }
 
-/* ---------- 얼굴 (머리 UV: P(az, el)) — 'n' 기본 · 'o' 입 벌림 · 'w' 윙크 ---------- */
+/* ---------- 얼굴 (머리 UV) — 실제 사람 비율 · 무표정 ('o' = 주문을 외칠 때 살짝 벌린 입) ---------- */
 function faceTex(mode) {
-  const W = 2048, H = 1024, [c, g] = cv(W, H), P = (az, el) => [(az / TAU + 0.5) * W, (0.5 - el / Math.PI) * H], K = W / TAU;
-  g.fillStyle = '#fde2d2'; g.fillRect(0, 0, W, H);
-  const [fx, fy] = P(0, 0.05), gr = g.createRadialGradient(fx, fy, 30, fx, fy, K * 1.5); gr.addColorStop(0, 'rgba(255,245,236,0.6)'); gr.addColorStop(0.6, 'rgba(255,232,220,0)'); gr.addColorStop(1, 'rgba(200,130,120,0.32)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
-  const [, cy0] = P(0, -0.62), cg = g.createLinearGradient(0, cy0, 0, H * 0.8); cg.addColorStop(0, 'rgba(210,130,120,0)'); cg.addColorStop(1, 'rgba(200,120,110,0.45)'); g.fillStyle = cg; g.fillRect(0, cy0, W, H);
-  // 볼 홍조 (크게) + 홍조 빗금
-  g.save(); g.filter = 'blur(16px)'; g.fillStyle = 'rgba(255,120,130,0.45)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.5, -0.17); g.beginPath(); g.ellipse(x, y, K * 0.17, K * 0.065, 0, 0, TAU); g.fill(); } g.restore();
-  // (볼 빗금 없이 은은한 홍조만)
-  g.save(); g.filter = 'blur(10px)'; g.fillStyle = 'rgba(220,120,110,0.22)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.37, 0.1); g.beginPath(); g.ellipse(x, y, K * 0.2, K * 0.07, 0, 0, TAU); g.fill(); } g.restore();
-  // 코
-  { const [x, y] = P(-0.015, -0.15); g.save(); g.filter = 'blur(2px)'; g.fillStyle = 'rgba(200,120,110,0.45)'; g.beginPath(); g.ellipse(x, y, 7, 3, -0.3, 0, TAU); g.fill(); g.restore(); }
-  // 눈썹: 가늘고 둥글게 올라간 (밝은 표정)
-  g.strokeStyle = '#b8743e'; g.lineCap = 'round';
-  for (const sd of [-1, 1]) { const [x0, y0] = P(sd * 0.15, 0.22), [x1, y1] = P(sd * 0.36, 0.3), [x2, y2] = P(sd * 0.56, 0.25); for (let k = 0; k < 2; k++) { g.lineWidth = 4.5 - k * 2; g.beginPath(); g.moveTo(x0, y0 + k); g.quadraticCurveTo(x1, y1 - 6 + k, x2, y2 + k); g.stroke(); } }
-  // 입: 턱 가까이 작고 얇게 (명조풍) — 'o' 는 작게 벌린 입
-  if (mode === 'o') {
-    const [x, y] = P(0, -0.5); g.fillStyle = '#7a2230'; g.beginPath(); g.ellipse(x, y, 20, 14, 0, 0, TAU); g.fill();
-    g.fillStyle = '#e07a88'; g.beginPath(); g.ellipse(x, y + 6, 13, 6, 0, 0, TAU); g.fill();
-    g.strokeStyle = 'rgba(150,60,70,0.7)'; g.lineWidth = 2.5; g.beginPath(); g.ellipse(x, y, 20, 14, 0, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
-  } else {
-    const [x0, y0] = P(-0.075, -0.475), [x1, y1] = P(0.075, -0.475), [xm, ym] = P(0, -0.49);
-    g.strokeStyle = '#a84a52'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(x0, y0 - 2); g.quadraticCurveTo(xm, ym + 3, x1, y1 - 2); g.stroke();
-    g.fillStyle = 'rgba(230,130,140,0.35)'; g.beginPath(); g.ellipse(xm, ym + 7, 16, 4, 0, 0, TAU); g.fill();
-  }
-  // 눈: 상냥한 호박색 눈 (공용 paintEye 'soft') / 윙크는 오른눈(-x)
-  for (const sd of [-1, 1]) paintEye(g, P, K, sd, { style: 'soft', az: 0.36, el: 0.04, wink: mode === 'w' && sd < 0 });
+  const W = 2048, H = 1024, [c, g] = cv(W, H), P = (az, el) => [(az / TAU + 0.5) * W, (0.5 - el / Math.PI) * H], K = W / TAU, M = faceMapper(headPt, HC, HR, W, H), Y = faceLayout(M, HEAD.L);
+  g.fillStyle = '#fbe0d0'; g.fillRect(0, 0, W, H);
+  const [fx, fy] = P(0, 0.05), gr = g.createRadialGradient(fx, fy, 30, fx, fy, K * 1.5); gr.addColorStop(0, 'rgba(255,245,236,0.55)'); gr.addColorStop(0.6, 'rgba(255,232,220,0)'); gr.addColorStop(1, 'rgba(200,130,120,0.32)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  const [, cy0] = P(0, -0.62), cg = g.createLinearGradient(0, cy0, 0, H * 0.8); cg.addColorStop(0, 'rgba(210,130,120,0)'); cg.addColorStop(1, 'rgba(200,120,110,0.4)'); g.fillStyle = cg; g.fillRect(0, cy0, W, H);
+  g.save(); g.filter = 'blur(18px)'; g.fillStyle = 'rgba(240,130,130,0.2)'; for (const sd of [-1, 1]) { const [x, y] = M(sd * 0.036, Y.noseY + 0.006); g.beginPath(); g.ellipse(x, y, 70, 30, 0, 0, TAU); g.fill(); } g.restore();
+  paintFace(g, M, { ...Y, iris: ['#f2c070', '#c87a28', '#5a3010', '#2e1608'], lash: '#2e1810', brow: '#9a5a2a', open: mode === 'o' });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 
 /* =====================================================================
    얼굴형 (아자젤과 같은 애니메 얼굴 — 조금 더 둥근 볼)
    ===================================================================== */
-const { HC, HR, headPt, headN, headAt, dirOf } = animeHead({ C: new V3(0, 0.103, 0.006), R: [0.072, 0.101, 0.09], nose: 0.55, jaw: 0.44 });
+const HEAD = animeHead({ C: new V3(0, 0.103, 0.006), R: [0.072, 0.101, 0.09] }), { HC, HR, headPt, headN, headAt, dirOf } = HEAD;
 
 /* =====================================================================
    모델
@@ -156,7 +137,7 @@ export function createModel(pal) {
     skin: phys({ color: 0xfde0d0, emissive: 0x7a5048, emissiveIntensity: 0.3, roughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color(0xffd0c0) }),
     hair: phys({ map: T('hair', hairTex), roughness: 0.42, sheen: 1, sheenColor: new THREE.Color(0xffd8a0), sheenRoughness: 0.35, emissive: 0x3a1a08, emissiveIntensity: 0.25 }),
     hairS: phys({ map: T('hairS', () => hairTex(false)), roughness: 0.42, sheen: 1, sheenColor: new THREE.Color(0xffd8a0), sheenRoughness: 0.35, emissive: 0x3a1a08, emissiveIntensity: 0.25 }),
-    face: faceM('n'), faceO: faceM('o'), faceW: faceM('w'),
+    face: faceM('n'), faceO: faceM('o'),
     blouse: phys({ map: T('silk', silkTex), roughness: 0.42, sheen: 1, sheenColor: new THREE.Color(0xdfe6ff), sheenRoughness: 0.3 }),
     lace: phys({ map: T('lace', laceTex), transparent: true, depthWrite: false, roughness: 0.6, sheen: 0.6, sheenColor: new THREE.Color(0xffffff) }),
     sheer: phys({ map: T('lace', laceTex), transparent: true, opacity: 0.45, depthWrite: false, roughness: 0.5, sheen: 0.8, sheenColor: new THREE.Color(0xdfe8ff) }),
@@ -452,9 +433,9 @@ export function createModel(pal) {
       r.joint.localToWorld(tmp.copy(r.local)); r.view.side.copy(r.sideL).applyQuaternion(hq);
       r.rope.step(dt, tmp, capsBody, f.pos.y + 0.01, r.rest.clone().applyQuaternion(rq), wind); r.view.update(); r.view.mesh.visible = f.root.visible;
     }
-    // 얼굴: 주문을 외칠 때 입을 벌리고, 승리 · 휴식 자세에서는 윙크
+    // 얼굴: 무표정 · 주문을 외칠 때만 입을 살짝 벌림
     const cast = f.state === 'act' && f.act && f.act.shout;
-    m.headMesh.material = cast ? M.faceO : (f.state === 'win' || (f.idleT || 0) > 4) ? M.faceW : M.face;
+    m.headMesh.material = cast ? M.faceO : M.face;
     // 보석 발광: 마법을 쓸 때(f.gemK) + 만조 상태
     const want = Math.max(f.gemK || 0, f.tideT > 0 ? 0.7 : 0);
     m.glow += (want - m.glow) * Math.min(1, dt * 10);

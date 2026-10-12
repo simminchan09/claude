@@ -7,7 +7,7 @@ import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { clamp } from '../core.js';
 import { Cloth } from '../cloth.js';
-import { paintEye } from '../face.js';
+import { faceMapper, paintFace } from '../face.js';
 import { surf, loft, loftAt, loftRing, onSurf, strand, spl, lathe, ang, fbm, gauss, smooth, heightToNormal, envCube, cached } from '../sculpt.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
@@ -175,10 +175,11 @@ function faceTex() {
   // 이마 주름 · 미간 주름
   g.strokeStyle = 'rgba(150,90,70,0.35)'; g.lineCap = 'round'; g.lineWidth = 3;
   for (let k = 0; k < 3; k++) { const [x0, y0] = P(-0.42 + k * 0.03, 0.44 + k * 0.07), [x1, y1] = P(0, 0.46 + k * 0.07), [x2, y2] = P(0.42 - k * 0.03, 0.44 + k * 0.07); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x1, y1 - 8, x2, y2); g.stroke(); }
-  for (const sd of [-1, 1]) { const [x0, y0] = P(sd * 0.05, 0.3), [x1, y1] = P(sd * 0.07, 0.2); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
   // 코 옆 그늘
   g.save(); g.filter = 'blur(3px)'; g.strokeStyle = 'rgba(160,95,80,0.45)'; g.lineWidth = 5; { const [x0, y0] = P(-0.07, 0.06), [x1, y1] = P(-0.06, -0.12); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 - 6, (y0 + y1) / 2, x1, y1); g.stroke(); } g.restore();
-  for (const sd of [-1, 1]) paintEye(g, P, K, sd, { style: 'stern', az: 0.37, el: 0.13, iris: ['#ffe48a', '#e2a832', '#8a5a12', '#4a3008'], pupil: '#2a1a06', lash: '#3a2c26' });
+  // 이목구비: 실제 비율 · 무표정 (입은 수염에 가려 그리지 않고, 눈썹은 가닥으로 따로 만든다)
+  const M = faceMapper(headPt, HC, [0.082, 0.112, 0.097], W, H);
+  paintFace(g, M, { male: true, eyeY: HC.y + 0.0146, browY: HC.y + 0.03, noseY: HC.y - 0.019, mouthY: HC.y - 0.04, lidDrop: 0.12, noBrow: true, noMouth: true, iris: ['#ffe08a', '#d8a030', '#7a4e10', '#3a2608'], pupil: '#1a1006', lash: '#3a2c26' });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 
@@ -447,9 +448,9 @@ export function createModel(pal) {
   for (const s of [-1, 1]) {
     // 눈: 흰자 · 홍채 · 동공 · 내리깐 윗눈꺼풀 (날카로운 눈매)
     // 눈은 얼굴 텍스처에 그린다 (faceTex · 공용 paintEye 'stern')
-    // 굵은 흰 눈썹: 안쪽이 낮게 찌푸림
+    // 굵은 흰 눈썹 (무표정: 거의 수평)
     for (let k = 0; k < 6; k++) {
-      const a0 = s * (0.12 + k * 0.012), pts = [headAt(a0, 0.24 - k * 0.004, 0.003), headAt(s * (0.3 + k * 0.01), 0.3 + k * 0.006, 0.0045), headAt(s * (0.52 + k * 0.006), 0.31 + k * 0.004, 0.003)];
+      const a0 = s * (0.12 + k * 0.012), pts = [headAt(a0, 0.28 - k * 0.004, 0.003), headAt(s * (0.3 + k * 0.01), 0.3 + k * 0.006, 0.0045), headAt(s * (0.52 + k * 0.006), 0.31 + k * 0.004, 0.003)];
       add(H, C(`brow${s}${k}`, () => strand(pts, 0.0042 - k * 0.0003, 0.0012, { seg: 10, rad: 5 })), M.hairSolid);
     }
   }
