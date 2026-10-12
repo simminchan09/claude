@@ -123,6 +123,10 @@ button:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
 #reticle.locked{opacity:1}#reticle.locked i{border-color:#ff5a4a}
 #pop{position:absolute;left:50%;top:62%;transform:translateX(-50%);font:italic 34px var(--f-display);letter-spacing:.06em;opacity:0;text-shadow:0 0 18px currentColor,0 3px 0 rgba(0,0,0,.6);white-space:nowrap}
 #pop.on{animation:popT 1s ease-out forwards}
+#say{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);max-width:min(80vw,760px);text-align:center;font:600 17px var(--f-body);color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.9);opacity:0}
+#say b{font:15px var(--f-display);margin-right:10px}
+#say.on{animation:sayT 2.6s ease-out forwards}
+@keyframes sayT{0%{opacity:0;transform:translateX(-50%) translateY(6px)}8%{opacity:1;transform:translateX(-50%)}80%{opacity:1}100%{opacity:0}}
 #pop.cyan{color:#9ad8ff}#pop.gold{color:#ffe08a}#pop.violet{color:#e0a8ff}
 @keyframes popT{0%{opacity:0;transform:translateX(-50%) scale(1.6)}12%{opacity:1;transform:translateX(-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-18px)}}
 @keyframes dn{0%{transform:translate(-50%,-50%) scale(1.8);opacity:1}15%{transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{transform:translate(-50%,-160%);opacity:0}}
@@ -213,6 +217,7 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
   <div id="ebars"></div>
   <div id="reticle" hidden><i></i><i></i><i></i><i></i></div>
   <div id="pop"></div>
+  <div id="say"></div>
   <div class="ph p1">
     <div class="me"><div class="who"><b class="nm"></b><span class="tt"></span></div><div class="hpnum"><b></b><span></span></div><div class="hpbar"><i class="chip"></i><i class="fill"></i></div></div>
     <div class="ult"><svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42"/><circle class="arc" cx="50" cy="50" r="42"/></svg><div class="uin"><b>0%</b><span></span></div><div class="uname"></div></div>

@@ -48,6 +48,8 @@ const G = (window.__G = {
   flash(c, a) { hud.flash(c, a); },
   slow(s, h) { G.tsT = s; G.ts = Math.min(G.ts, s); G.tsHold = h; },
   spawn(e) { G.ents.push(e); },
+  // 대사 자막 (플레이어 캐릭터만)
+  say(f, text) { if (f === G.player || (G.mode === 'pvp' && f.team === 1)) hud.say(f.def.short || f.def.name, text, f.palette.accent); },
   setTint(c, a, hold) { G.tint = { c, a }; G.tintT = hold || 0; if (a > 0) stage.setTint(c, G.tintA); },
   // 공격 대상: 다른 팀이면서 살아 있는 파이터
   foesOf(f) { return G.fighters.filter((o) => o.team !== f.team && o.state !== 'ko' && !o.gone); },
@@ -320,7 +322,7 @@ function update(rdt) {
   if (G.mode === 'training') {
     const b = G.fighters[1];
     if (pressed.Digit1) a.energy = b.energy = 100;
-    if (pressed.Digit2) { a.cd.s1 = a.cd.s2 = b.cd.s1 = b.cd.s2 = 0; }
+    if (pressed.Digit2) for (const f of [a, b]) for (const k in f.cd) f.cd[k] = 0;
     if (pressed.Digit3) { a.hp = a.dispHp = a.maxHp; b.hp = b.dispHp = b.maxHp; }
     if (pressed.Digit4) { b.ctrl.cycle(); updateTrainBar(); }
     if (pressed.Digit5) G.showHit = !G.showHit;
@@ -430,7 +432,7 @@ function renderPortrait(C) {
   pCam.aspect = w / h; pCam.updateProjectionMatrix();
   pCam.position.copy(head).addScaledVector(fw, dist).addScaledVector(sr, off).add(new V3(0, 0.04, 0)); pCam.lookAt(head.clone().addScaledVector(sr, off));
   pKey.position.copy(head).addScaledVector(fw, 1.4).addScaledVector(sr, -1.1).add(new V3(0, 0.9, 0)); pKey.target.position.copy(head); pKey.intensity = 40; pHemi.intensity = 1.1;
-  const hidden = [stage.group, ...G.fighters.filter((o) => o !== f).map((o) => o.root)], vis = hidden.map((o) => o.visible);
+  const hidden = [stage.group, ...G.fighters.filter((o) => o !== f).flatMap((o) => [o.root, ...(o.model.extras || [])])], vis = hidden.map((o) => o.visible);
   hidden.forEach((o) => (o.visible = false)); fx.setVisible(false); f.shield.m.visible = false;
   const fog = scene.fog; scene.fog = null; scene.background = bandColor.set(f.palette.band || '#101018');
   renderer.setScissorTest(true); renderer.setScissor(x, y, w, h); renderer.setViewport(x, y, w, h);

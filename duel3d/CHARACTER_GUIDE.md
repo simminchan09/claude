@@ -30,6 +30,10 @@ export default {
 - `sole`(발바닥 두께)로 접지 높이를 맞춘다. 발은 자동으로 바닥에 붙는다.
 - 피격 판정은 관절 위치로 만든 캡슐(머리·몸통·팔·다리)이다. 굵기는 어깨 폭(`dims.shW`) 기준이며 `hurtScale`(정의 객체)로 키우거나 줄이고, 머리 끝은 `dims.headTop`(기본 0.2m)으로 맞춘다. 훈련 모드 `5` 로 확인.
 - (선택) `update(dt, fighter)`로 머리카락·망토 같은 추가 애니메이션을 넣을 수 있다.
+- (선택) `attachScene(scene)` / `dispose(scene)`: 캐릭터 밖(씬)에 두는 메시(예: 천 시뮬레이션 망토)를 만들고 정리한다. 이런 메시는 `extras` 배열에 넣으면 컷인 초상 렌더 때 함께 숨겨진다.
+- (선택) `trailPts(base, tip)`: 궤적은 칼날만 그리고 판정은 `weaponPts`(자루 포함)로 하고 싶을 때.
+- (선택) `rigHook(fighter)`: 포즈 적용 직후 호출된다. 레오는 여기서 `weapon` 값을 손목 회전 대신 **몸 기준 창끝 방향 [피치(위+), 좌우(오른쪽+), 롤]** 로 해석한다 — 긴 무기는 이 방식이 궤적을 잡기 훨씬 쉽다.
+- 무기를 던지는 기술은 `setWeapon(false)` 동안 `weaponOut` 이 참이 되어 공격 입력이 막힌다.
 
 ## 4. 포즈
 포즈 = `{ hipY, 관절: [x, y, z] }` (라디안). 지정하지 않은 관절은 `base` 값을 따릅니다.
@@ -56,7 +60,9 @@ export default {
 | `lunge` | `[[t0, t1, 전진속도]]` |
 | `track` | 이 시간까지 상대 쪽으로 회전 |
 | `next`, `cancel` | 약공 연계 대상과 입력 허용 시점 |
-| `cd` | `'s1'`/`'s2'` 쿨타임 슬롯 |
+| `cd` | `'heavy'`/`'s1'`/`'s2'` 쿨타임 슬롯 (초는 `skills[슬롯].cd`) |
+| `onHit(f, att, h, dir)` | 이 기술 도중 맞았을 때 호출. `{ dmgK, armor }` 를 돌려주면 피해 배율·경직 무시 (예: 레오 반격 태세) |
+| `ikOff` | 레오 전용: 왼손 IK 끄기 (한 손 기술) |
 | `trail` | 무기 궤적 표시 |
 | `tele` | `[시간, 'yellow' \| 'red']` 공격 예고 빛 (주로 적 기술. 빨강이면 hits 에 `unblock: true`) |
 | hits 의 `daze` | 그로기 누적량 (기본: 피해 × 0.55) |
@@ -72,6 +78,7 @@ export default {
 - 화면: `G.shake(a)`, `G.flash(color, a)`, `G.slow(배율, 초)`, `G.setTint(color, a)`, `G.stage.flashSky(a)`
 - 판정: `new Projectile(G, {...})` + `G.spawn()`, `areaHit(f, 중심, 반경, hit)`
 - 궁극기 고정: `o.lock()` / `o.release()`
+- 대사: `G.say(f, '"대사"')` (화면 아래 자막)
 - 소리: `sfx('swing' | 'heavy' | 'hit' | 'big' | 'zap' | 'shot' | 'boom' | 'charge' | 'dash' ...)`
 
 ## 7. 몬스터 · 보스

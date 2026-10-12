@@ -40,6 +40,7 @@ export class HUD {
     this.boss.hidden = true; this.wave.hidden = !G.isPvE() || G.mode !== 'waves';
   }
   setWave(G) { if (G.mode !== 'waves') return; const n = G.fighters.filter((o) => o.team === 1 && !o.gone).length; this.wave.innerHTML = `<b>WAVE ${G.wave + 1}</b> / ${G.waveCount || 4} · 남은 적 ${n}`; }
+  say(name, text, col) { const el = this.sayEl || (this.sayEl = $('#say')); el.innerHTML = `<b style="color:${hex(col)}">${name}</b>${text}`; el.className = ''; void el.offsetWidth; el.className = 'on'; }
   pop(text, cls) { const el = this.popEl; el.textContent = text; el.className = ''; void el.offsetWidth; el.className = 'on ' + (cls || ''); }
   update(G, dt) {
     const views = G.views ? G.views() : [], pve = G.isPvE();
@@ -53,7 +54,7 @@ export class HUD {
       const en = Math.floor(f.energy);
       if (en !== s.lastEn) { s.arc.style.strokeDashoffset = 264 * (1 - f.energy / 100); s.ub.textContent = `${en}%`; s.ult.classList.toggle('ready', en >= 100); s.lastEn = en; }
       s.skills.querySelectorAll('.sk').forEach((el) => {
-        const k = el.dataset.k, max = k === 'heavy' ? 0 : f.def.skills[k].cd, cd = k === 'heavy' ? 0 : Math.max(0, f.cd[k]);
+        const k = el.dataset.k, max = (f.def.skills[k] && f.def.skills[k].cd) || 0, cd = max ? Math.max(0, f.cd[k] || 0) : 0;
         el.classList.toggle('cool', cd > 0); el.querySelector('.cd').style.setProperty('--p', max ? cd / max : 0); el.querySelector('.t').textContent = cd > 0 ? Math.ceil(cd) : '';
       });
       const pips = s.pips.children; for (let k = 0; k < pips.length; k++) pips[k].classList.toggle('on', k < f.wins);

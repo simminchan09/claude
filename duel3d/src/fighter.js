@@ -41,6 +41,7 @@ export class Fighter {
   constructor(def, slot, ctrl, G, palette) {
     this.def = prepareDef(def); this.slot = slot; this.ctrl = ctrl; this.G = G; this.palette = palette; this.id = ++UID; this.team = slot ? 1 : 0;
     this.model = def.createModel(palette); this.root = this.model.root; G.scene.add(this.root);
+    if (this.model.attachScene) this.model.attachScene(G.scene);
     this.scale = def.scale || 1; this.root.scale.setScalar(this.scale); this.maxDaze = def.stats.daze || 0;
     this.root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     this.pos = this.root.position; this.vel = new V3();
@@ -52,13 +53,14 @@ export class Fighter {
     this.reset(new V3(slot ? 4 : -4, 0, 0));
   }
   dispose() {
+    this.model.dispose && this.model.dispose(this.G.scene);
     this.G.scene.remove(this.root); this.G.scene.remove(this.trail.mesh); this.G.scene.remove(this.shield.m);
     this.G.fx.trails.splice(this.G.fx.trails.indexOf(this.trail), 1); this.G.fx.shields.splice(this.G.fx.shields.indexOf(this.shield), 1);
   }
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { s1: 0, s2: 0 }; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
@@ -91,6 +93,12 @@ export class Fighter {
   }
   // 구(중심 p, 반경 r)가 몸에 닿는가
   hurtHit(p, r) { for (const h of this.hurt) if (segDist(p, h.a, h.b) <= r + h.r) return true; return false; }
+  // 칼날 궤적 판정: 직전 프레임 → 지금 사이를 칼날 길이에 맞춰 여러 단계로 나눠 검사 (빠른 휘두르기도 놓치지 않음)
+  sweepHit(t, br) {
+    const n = Math.min(8, 1 + Math.ceil(this.pwt.distanceTo(this.wt) / 0.35));
+    for (let k = 0; k <= n; k++) { const u = k / n; tC.lerpVectors(this.pwb, this.wb, u); tD.lerpVectors(this.pwt, this.wt, u); if (t.hurtHitSeg(tC, tD, br)) return true; }
+    return false;
+  }
   // 캡슐(선분 a-b, 반경 r)이 몸에 닿는가
   hurtHitSeg(a, b, r) { for (const h of this.hurt) if (segSegDist(a, b, h.a, h.b) <= r + h.r) return true; return false; }
   /* ----- 이펙트 헬퍼 (기술 정의에서 사용) ----- */
@@ -109,8 +117,10 @@ export class Fighter {
     if (inp.lockP && this.G.toggleLock) this.G.toggleLock(this);
   }
   canAct(a) {
+    // 무기를 던져 손이 비었으면 공격 불가 (회피·점프는 가능)
+    if (this.model.weaponOut && a !== 'dash') return false;
     if (a === 'ult') return this.energy >= 100 && !!this.opp;
-    if (a === 's1' || a === 's2') return this.cd[a] <= 0;
+    if (this.def.skills[a] && this.def.skills[a].cd) return (this.cd[a] || 0) <= 0;
     if (a === 'dash') return this.dashCd <= 0 && this.onGround;
     return true;
   }
@@ -180,8 +190,11 @@ export class Fighter {
     if (this.brokenT > 0) dmg *= 1.5;
     // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
     if (this.maxDaze && this.brokenT <= 0) { this.daze = Math.min(this.maxDaze, this.daze + (h.daze ?? dmg * 0.55)); if (this.daze >= this.maxDaze) this.breakStart(att); }
+    // 기술 중 피격 훅 (예: 방어 태세 — 피해 감소 · 경직 없음 · 반격 예약)
+    const mod = this.act && this.act.onHit && !h.force ? this.act.onHit(this, att, h, dir) : null;
+    if (mod) dmg *= mod.dmgK ?? 1;
     // 슈퍼아머: 브레이크 전에는 경직·넉백 없이 버틴다
-    const armored = this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held;
+    const armored = (this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held) || !!(mod && mod.armor);
     this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
     this.energy = Math.min(100, this.energy + dmg * 0.1); att.energy = Math.min(100, att.energy + dmg * 0.14);
     att.hitConfirm = true;
@@ -212,7 +225,7 @@ export class Fighter {
   update(dt, live) {
     const o = this.opp, G = this.G;
     this.inv -= dt; this.counterT -= dt; if (this.brokenT > 0) { this.brokenT -= dt; if (this.brokenT <= 0) this.daze = 0; }
-    this.cd.s1 -= dt; this.cd.s2 -= dt; this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
+    for (const k in this.cd) this.cd[k] -= dt; this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
     if (this.comboT <= 0) this.combo = 0;
     if (live) this.energy = Math.min(100, this.energy + dt * 1.6);
@@ -233,10 +246,10 @@ export class Fighter {
           const hb = hits[i]; if (this.at < hb.t0 || this.at > hb.t1) continue;
           // 무기 공격은 칼날이 지나간 경로(직전 프레임 → 지금)로, 그 외에는 구로 판정
           const weap = (hb.weapon ?? m.trail) && this.hasW, br = (hb.br ?? 0.14) * this.scale;
-          if (weap) { tC.lerpVectors(this.pwb, this.wb, 0.5); tD.lerpVectors(this.pwt, this.wt, 0.5); } else this.local(hb.at.map((v) => v * this.scale), tB);
+          if (!weap) this.local(hb.at.map((v) => v * this.scale), tB);
           for (const t of foes) {
             const key = i * 100000 + t.id; if (this.hitDone.has(key)) continue;
-            const touch = weap ? t.hurtHitSeg(this.wb, this.wt, br) || t.hurtHitSeg(tC, tD, br) || t.hurtHitSeg(this.pwb, this.pwt, br) : t.hurtHit(tB, hb.r * this.scale);
+            const touch = weap ? this.sweepHit(t, br) : t.hurtHit(tB, hb.r * this.scale);
             if (touch && t.takeHit(this, hb)) this.hitDone.add(key);
           }
           if (this.act !== m) break;
@@ -348,7 +361,10 @@ export class Fighter {
       this.pwb.copy(this.wb); this.pwt.copy(this.wt); this.model.weaponPts(this.wb, this.wt);
       // 기술 시작·순간이동 등으로 크게 튀면 칼날 궤적을 잇지 않음
       if (!this.hasW || this.wJump || this.pwt.distanceToSquared(this.wt) > 9) { this.pwb.copy(this.wb); this.pwt.copy(this.wt); this.hasW = true; this.wJump = false; }
-      if (this.state === 'act' && this.act.trail) this.trail.push(this.wb, this.wt);
+      if (this.state === 'act' && this.act.trail) {
+        // 궤적은 칼날만 (모델이 trailPts 를 주면), 판정은 weaponPts 전체(자루 포함)
+        if (this.model.trailPts) { this.model.trailPts(tA, tB); this.trail.push(tA, tB); } else this.trail.push(this.wb, this.wt);
+      }
     }
     this.updateHurt();
     // 방어막
@@ -371,6 +387,8 @@ export class Fighter {
       want = -(Math.min(yL, yR) - this.pos.y - (this.model.sole || 0.07));
     }
     this.groundOff = damp(this.groundOff, want, 30, dt); b.position.y = this.groundOff; this.root.updateMatrixWorld(true);
+    // 모델별 후처리 (예: 무기 방향을 몸 기준으로 다시 계산)
+    if (this.model.rigHook) this.model.rigHook(this);
   }
   land() {
     const G = this.G; G.fx.burst(this.pos.clone().setY(0.08), 6, 0x8a7a90, 2, { kind: 'dust' });
