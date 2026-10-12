@@ -198,8 +198,9 @@ export function createKit(scene, seed = 1) {
     group.add(new THREE.HemisphereLight(o.sky ?? 0x8a74c0, o.ground ?? 0x2a1018, o.hemi ?? 1.2));
     const key = new THREE.DirectionalLight(o.key ?? 0xffffff, o.keyI ?? 2.5);
     const kd = o.keyDir ? new V3(...o.keyDir).normalize() : K.sunDir.clone(); key.position.copy(kd).multiplyScalar(40); if (key.position.y < 12) key.position.y = 12;
-    key.castShadow = true; key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
+    key.castShadow = true; key.shadow.mapSize.set(3072, 3072); Object.assign(key.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30, near: 1, far: 120 });
     key.shadow.bias = -0.0004; key.shadow.normalBias = 0.03; key.shadow.camera.updateProjectionMatrix(); group.add(key, key.target);
+    K.key = key; K.keyOff = key.position.clone();
     if (o.fillI) { const fill = new THREE.DirectionalLight(o.fill ?? 0x6f86ff, o.fillI); fill.position.set(-20, 14, 25); group.add(fill); }
   };
   K.point = (x, y, z, color, intensity, dist = 16, flicker = 0) => {
@@ -398,6 +399,12 @@ export function createKit(scene, seed = 1) {
   K.finish = () => ({
     group, sunDir: K.sunDir, world,
     flashSky(a) { K.flashA = Math.max(K.flashA, a); },
+    // 그림자 범위를 싸움이 벌어지는 곳으로 좁혀 따라가게 한다 (같은 해상도로 훨씬 선명한 그림자)
+    shadowFollow(c, ext) {
+      const k = K.key; if (!k) return; const q = 0.5, x = Math.round(c.x / q) * q, z = Math.round(c.z / q) * q, e = Math.max(11, Math.ceil(ext / 2) * 2), cam = k.shadow.camera;
+      k.target.position.set(x, 0, z); k.position.set(x + K.keyOff.x, K.keyOff.y, z + K.keyOff.z); k.target.updateMatrixWorld();
+      if (cam.right !== e) { cam.left = cam.bottom = -e; cam.right = cam.top = e; cam.updateProjectionMatrix(); }
+    },
     setTint(color, a) { if (!K.skyMat) return; K.skyMat.uniforms.uTint.value.setHex(color, THREE.LinearSRGBColorSpace); K.skyMat.uniforms.uTintA.value = a; },
     update(dt, t) {
       if (K.skyMat) { K.skyMat.uniforms.uTime.value = t; K.flashA = Math.max(0, K.flashA - dt * 2.5); K.skyMat.uniforms.uFlash.value = K.flashA; }

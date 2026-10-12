@@ -14,7 +14,9 @@ const V3 = THREE.Vector3, UP = new V3(0, 1, 0);
 const $ = (s) => document.querySelector(s);
 const canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+// 내부 해상도: 일반 모니터(배율 1)에서도 1.25배로 그려 계단 현상을 줄인다. ?q=low 면 기기 배율 그대로
+const LOWQ = new URLSearchParams(location.search).get('q') === 'low';
+renderer.setPixelRatio(LOWQ ? Math.min(1, window.devicePixelRatio || 1) : Math.min(2, Math.max(1.25, window.devicePixelRatio || 1)));
 renderer.outputColorSpace = THREE.SRGBColorSpace; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.1;
 renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap;
 const scene = new THREE.Scene();
@@ -412,6 +414,13 @@ const bandColor = new THREE.Color();
 function render() {
   dbgLines.visible = !!G.showHit && G.fighters.length > 0 && G.state !== 'title'; if (dbgLines.visible) drawCapsules();
   camFill.position.copy(camera.position).add(new V3(0, 3, 0)); camFill.target.position.copy(fcam.look);
+  // 그림자 범위: 살아 있는 캐릭터들을 감싸도록
+  if (stage.shadowFollow) {
+    const fs = G.fighters.filter((f) => !f.gone); let ext = 12;
+    if (fs.length) { tmpV.set(0, 0, 0); for (const f of fs) tmpV.add(f.pos); tmpV.divideScalar(fs.length); for (const f of fs) ext = Math.max(ext, Math.hypot(f.pos.x - tmpV.x, f.pos.z - tmpV.z) + 7); }
+    else tmpV.copy(fcam.look);
+    stage.shadowFollow(tmpV, ext);
+  }
   const views = G.views(), split = views.length > 1;
   renderer.setScissorTest(split);
   for (const v of views) {
@@ -449,5 +458,6 @@ function frame(now) {
 }
 // 개발용: 고정 간격으로 n프레임 진행 (헤드리스 테스트에서 사용)
 window.__step = (n, dt = 1 / 60) => { for (let i = 0; i < n; i++) { update(dt); endFrame(); } render(); };
+window.__setMap = (id) => setMap(id);
 window.__tick = (n, dt = 1 / 60) => { for (let i = 0; i < n; i++) { update(dt); endFrame(); } };
 buildSelect(); fcam.snap(); requestAnimationFrame(frame);
