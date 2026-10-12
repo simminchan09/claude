@@ -139,7 +139,7 @@ python3 -m http.server 8000   # → http://localhost:8000/duel3d/
 | 스킬 | 우클릭 · Shift · E | Num2 · Num4 · Num5 |
 | 궁극기 | Q | Num6 |
 | 점프 / 회피 / 방어 | Space / C / F | Num0 / Num. / Num3 |
-| 앉기 (누르고 있기) | X (또는 Z) | Num7 |
+| 앉기 (누르고 있기) | 좌 Ctrl (전투 중 Ctrl+W 는 브라우저 탭 닫기라 나가기 확인 창이 뜸) | Num7 |
 | 시점 · 대상 고정 | 마우스 · Tab / 휠 클릭 | (자동 추적) |
 
 `J K U I O`도 1P의 기본공격·스킬·궁극기로 쓸 수 있습니다. `Esc`/`P` 일시정지, `M` 소리.

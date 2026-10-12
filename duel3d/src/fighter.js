@@ -244,7 +244,8 @@ export class Fighter {
   update(dt, live) {
     const o = this.opp, G = this.G;
     this.inv -= dt; this.counterT -= dt; if (this.brokenT > 0) { this.brokenT -= dt; if (this.brokenT <= 0) this.daze = 0; }
-    for (const k in this.cd) this.cd[k] -= dt * (this.cdMul || 1); // cdMul: 쿨타임 회복 배율 this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
+    for (const k in this.cd) this.cd[k] -= dt * (this.cdMul || 1); // cdMul: 쿨타임 회복 배율
+    this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
     if (this.comboT <= 0) this.combo = 0;
     if (live) this.energy = Math.min(100, this.energy + dt * 1.6);

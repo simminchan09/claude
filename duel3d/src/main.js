@@ -172,13 +172,14 @@ function buildSelect() {
     waves: `적 무리를 ${WAVES.length - 1}웨이브 처치하면 보스가 나타납니다. 파편병 · 사수 · 파쇄자(슈퍼아머)`,
     duel: 'CPU 캐릭터와 3판 2선승 결투', pvp: '한 키보드로 두 사람이 3판 2선승 (화면 분할)', training: '시간 제한 없이 기술과 판정을 확인',
   }[G.mode];
-  document.querySelectorAll('#modes button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.mode === G.mode));
+  // 1단계: 모드 → 2단계: 그 모드에서 캐릭터
+  $('#stepMode').hidden = G.titleStep === 'char'; $('#stepChar').hidden = G.titleStep !== 'char'; $('#modeName').textContent = MODE_NAME[G.mode] || G.mode;
   const d = ROSTER[G.sel.p1];
   $('#charInfo').innerHTML = `<h3>${d.name}</h3><p>${d.desc}</p><dl class="mv">${d.moveList.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
   const k = (c) => `<kbd>${c}</kbd>`;
   $('#keyHelp').innerHTML = G.mode === 'pvp'
-    ? `1P ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 공격 · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기 · ${k('Space')} 점프 · ${k('C')} 회피 · ${k('F')} 방어 · ${k('X')} 앉기<br>2P 방향키 이동 · ${k('Num1')} 공격 · ${k('Num2')} ${k('Num4')} ${k('Num5')} 스킬 · ${k('Num6')} 궁극기 · ${k('Num0')} 점프 · ${k('Num.')} 회피 · ${k('Num3')} 방어 · ${k('Num7')} 앉기`
-    : `${k('마우스')} 시점 · ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 공격(연타) · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기<br>${k('C')} 회피(타이밍 = 극한 회피) · ${k('F')} 방어(타이밍 = 패리) · ${k('Space')} 점프(공중 좌클 = 낙하 공격) · ${k('X')} 앉기 · ${k('Tab')}/${k('휠클릭')} 대상 고정 · ${k('Esc')} 일시정지`;
+    ? `1P ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 공격 · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기 · ${k('Space')} 점프 · ${k('C')} 회피 · ${k('F')} 방어 · ${k('좌Ctrl')} 앉기<br>2P 방향키 이동 · ${k('Num1')} 공격 · ${k('Num2')} ${k('Num4')} ${k('Num5')} 스킬 · ${k('Num6')} 궁극기 · ${k('Num0')} 점프 · ${k('Num.')} 회피 · ${k('Num3')} 방어 · ${k('Num7')} 앉기`
+    : `${k('마우스')} 시점 · ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 공격(연타) · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기<br>${k('C')} 회피(타이밍 = 극한 회피) · ${k('F')} 방어(타이밍 = 패리) · ${k('Space')} 점프(공중 좌클 = 낙하 공격) · ${k('좌Ctrl')} 앉기 · ${k('Tab')}/${k('휠클릭')} 대상 고정 · ${k('Esc')} 일시정지`;
   rebuildPreview();
 }
 function rebuildPreview() {
@@ -190,7 +191,8 @@ function rebuildPreview() {
 }
 document.addEventListener('click', (e) => {
   const t = e.target.closest('button'); if (!t) return; audioInit();
-  if (t.dataset.mode) { G.mode = t.dataset.mode; sfx('ui'); buildSelect(); }
+  if (t.dataset.mode) { G.mode = t.dataset.mode; G.titleStep = 'char'; sfx('ui'); buildSelect(); }
+  else if (t.id === 'backMode') { G.titleStep = 'mode'; sfx('ui'); buildSelect(); }
   else if (t.dataset.slot) { G.sel[t.dataset.slot] = +t.dataset.i; sfx('ui'); buildSelect(); }
   else if (t.id === 'start') startMatch();
   else if (t.dataset.act === 'resume') { setPause(false); lockPointer(); }
@@ -200,7 +202,7 @@ document.addEventListener('click', (e) => {
 function showScreen(id) { for (const s of ['#title', '#pause', '#result']) $(s).hidden = s !== id; }
 function toTitle() {
   G.paused = false; clearMatch(); G.state = 'title'; fcam.mode = 'orbit'; fcam.focus = null; fcam.cine = null; fcam.follow = fcam2.follow = null; hud.show(false); hud.hideCutin(); hud.setTraining('');
-  if (document.pointerLockElement) document.exitPointerLock(); showScreen('#title'); buildSelect();
+  if (document.pointerLockElement) document.exitPointerLock(); G.titleStep = 'mode'; showScreen('#title'); buildSelect();
 }
 function setPause(p) {
   G.paused = p; $('#pause').hidden = !p;
@@ -308,8 +310,9 @@ function update(rdt) {
   stage.update(rdt, G.time);
   mouse.active = freeCam() && (G.state === 'fight' || G.state === 'intro') && !G.paused;
   if (G.state === 'title') {
-    if (pressed.Enter) startMatch();
-    if (pressed.Tab) { const m = Object.keys(MODE_NAME); G.mode = m[(m.indexOf(G.mode) + 1) % m.length]; buildSelect(); }
+    if (pressed.Enter) { if (G.titleStep === 'char') startMatch(); else { G.titleStep = 'char'; buildSelect(); } }
+    if (pressed.Escape && G.titleStep === 'char') { G.titleStep = 'mode'; buildSelect(); }
+    if (pressed.Tab && G.titleStep !== 'char') { const m = Object.keys(MODE_NAME); G.mode = m[(m.indexOf(G.mode) + 1) % m.length]; buildSelect(); }
     for (const f of G.preview) f.update(rdt, false);
     fx.update(rdt, camera); fcam.update(rdt, { fighters: [] }); mouse.dx = mouse.dy = 0; return;
   }
@@ -459,5 +462,7 @@ function frame(now) {
 // 개발용: 고정 간격으로 n프레임 진행 (헤드리스 테스트에서 사용)
 window.__step = (n, dt = 1 / 60) => { for (let i = 0; i < n; i++) { update(dt); endFrame(); } render(); };
 window.__setMap = (id) => setMap(id);
+// 앉기(좌 Ctrl)를 누른 채 W(앞으로)를 누르면 브라우저의 Ctrl+W(탭 닫기)가 된다 — 막을 수 없으므로 전투 중에는 나가기 전에 확인 창을 띄운다
+addEventListener('beforeunload', (e) => { if (G.state === 'fight' || G.state === 'intro') { e.preventDefault(); e.returnValue = ''; } });
 window.__tick = (n, dt = 1 / 60) => { for (let i = 0; i < n; i++) { update(dt); endFrame(); } };
 buildSelect(); fcam.snap(); requestAnimationFrame(frame);

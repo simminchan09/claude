@@ -172,6 +172,13 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 .seg{display:flex;flex-wrap:wrap;gap:8px}
 .seg button{background:var(--panel);border:1px solid var(--line);padding:10px 16px;font-weight:700;font-size:14px;clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
 .seg button[aria-pressed="true"]{background:var(--ink);color:#0a0812;border-color:var(--ink)}
+.modeGrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.modeGrid button{display:grid;gap:4px;text-align:left;background:var(--panel);border:1px solid var(--line);padding:14px 16px;clip-path:polygon(10px 0,100% 0,calc(100% - 10px) 100%,0 100%)}
+.modeGrid button b{font:20px var(--f-display)} .modeGrid button span{font-size:12px;color:var(--dim)}
+.modeGrid button:hover{border-color:var(--gold)}
+.stepHead{display:flex;align-items:center;gap:12px}
+.back{background:none;border:1px solid var(--line);padding:6px 12px;font-size:13px}
+#modeName{font:22px var(--f-display);color:var(--gold);letter-spacing:.02em}
 .roster{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
 .card{position:relative;text-align:left;background:var(--panel);border:1px solid var(--line);padding:8px 12px;min-height:58px;display:grid;align-content:space-between}
 .card b{font:18px var(--f-display)}
@@ -245,14 +252,18 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 <section id="title" class="screen">
   <div class="wrapT">
     <h1 class="logo">ECLIPSE DUEL<small>3D · 일식의 신전</small></h1>
-    <p class="lede">호수 위 원형 결투장에서 벌이는 1:1 3D 대전. 명조·젠레스 존 제로식 3D 액션. 보스전·토벌전·대전, 맵 10곳 중 하나가 무작위로 정해집니다. 지금은 시스템 확인용 기체 하나만 들어 있습니다.</p>
-    <div><div class="lbl">모드</div><div class="seg" id="modes">
-      <button data-mode="boss" aria-pressed="true">보스전</button><button data-mode="waves" aria-pressed="false">토벌전</button><button data-mode="duel" aria-pressed="false">1:1 결투</button><button data-mode="pvp" aria-pressed="false">2P 대전</button><button data-mode="training" aria-pressed="false">훈련</button>
-    </div><p class="mapInfo" id="modeInfo"></p></div>
-    <div><div class="lbl">1P 캐릭터</div><div class="roster" id="r1"></div></div>
-    <div id="r2wrap"><div class="lbl" id="r2lbl">상대 캐릭터</div><div class="roster" id="r2"></div></div>
-    <button class="go" id="start">결투 시작 <span style="font-size:.7em;opacity:.6">Enter</span></button>
-    <div class="info" id="charInfo"></div>
+    <p class="lede">명조·젠레스 존 제로식 3D 액션 전투. 먼저 게임 모드를 고르고, 그 모드에서 쓸 캐릭터를 고르세요. 맵 10곳 중 하나가 무작위로 정해집니다.</p>
+    <div id="stepMode"><div class="lbl">1 · 게임 모드</div><div class="modeGrid" id="modes">
+      <button data-mode="boss"><b>보스전</b><span>공허의 기사 니힐과 1:1</span></button><button data-mode="waves"><b>토벌전</b><span>적 무리 웨이브 → 보스</span></button><button data-mode="duel"><b>1:1 결투</b><span>CPU 캐릭터와 3판 2선승</span></button><button data-mode="pvp"><b>2P 대전</b><span>한 키보드로 두 사람 (화면 분할)</span></button><button data-mode="training"><b>훈련</b><span>시간 제한 없이 기술 · 판정 확인</span></button>
+    </div></div>
+    <div id="stepChar" hidden>
+      <div class="stepHead"><button class="back" id="backMode">← 모드 선택</button><div class="lbl" id="modeName"></div></div>
+      <p class="mapInfo" id="modeInfo"></p>
+      <div><div class="lbl">1P 캐릭터</div><div class="roster" id="r1"></div></div>
+      <div id="r2wrap"><div class="lbl" id="r2lbl">상대 캐릭터</div><div class="roster" id="r2"></div></div>
+      <button class="go" id="start">결투 시작 <span style="font-size:.7em;opacity:.6">Enter</span></button>
+      <div class="info" id="charInfo"></div>
+    </div>
     <div class="keys" id="keyHelp"></div>
   </div>
 </section>
@@ -272,7 +283,7 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
   <div class="pad dpad"><button class="u" data-k="KeyW">▲</button><button class="l" data-k="KeyA">◀</button><button class="d" data-k="KeyS">▼</button><button class="r" data-k="KeyD">▶</button></div>
   <div class="pad acts">
     <button data-k="KeyU">스킬1</button><button data-k="KeyI">스킬2</button><button data-k="KeyQ" style="border-color:var(--p2)">궁</button><button data-k="KeyF">방어</button>
-    <button data-k="KeyJ">공격</button><button data-k="KeyK">우클</button><button data-k="Space">점프</button><button data-k="KeyC">회피</button><button data-k="KeyX">앉기</button>
+    <button data-k="KeyJ">공격</button><button data-k="KeyK">우클</button><button data-k="Space">점프</button><button data-k="KeyC">회피</button><button data-k="ControlLeft">앉기</button>
   </div>
 </div>
 <script type="module" src="src/main.js"></script>
