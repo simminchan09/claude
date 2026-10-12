@@ -165,17 +165,27 @@ function faceTex(mode) {
 /* =====================================================================
    얼굴형 (아자젤과 같은 애니메 얼굴 — 조금 더 둥근 볼)
    ===================================================================== */
-const HC = new V3(0, 0.103, 0.006), HR = [0.074, 0.102, 0.087];
+const HC = new V3(0, 0.103, 0.006), HR = [0.072, 0.101, 0.09];
+// 구를 깎아 만든 애니메 얼굴: 각진 두개(옆면 평평) · 뒤로 나온 뒤통수 · 평평한 앞얼굴 · 눈두덩 · 작은 콧대 · 광대
+//                          V자 턱선(턱끝은 앞으로 뾰족) · 턱 아래 → 목으로 꺾이는 면
 function headPt(dx, dy, dz, out) {
-  const ax = Math.abs(dx), fz = Math.max(0, dz);
-  let x = dx * HR[0], y = dy * HR[1], z = dz * HR[2];
-  if (dz < 0) z *= 1.06;
-  const low = smooth(0.0, -0.92, dy);
-  x *= 1 - 0.33 * low * (0.55 + 0.45 * fz);
-  z += 0.005 * gauss(dy + 0.86, 0.2) * fz; y -= 0.006 * gauss(dy + 0.86, 0.2) * fz;
-  z += 0.005 * gauss(ax - 0.5, 0.25) * gauss(dy + 0.2, 0.25) * fz;
-  z -= 0.003 * gauss(ax - 0.38, 0.18) * gauss(dy - 0.02, 0.12) * fz;
-  z += 0.008 * gauss(dx, 0.055) * gauss(dy + 0.13, 0.08) * fz * fz * fz;
+  const ax = Math.abs(dx), fz = Math.max(0, dz), bz = Math.max(0, -dz), low = smooth(-0.05, -0.95, dy);
+  // 수평 단면을 약간 둥근 사각으로 (두개는 각지게, 아래로 갈수록 타원)
+  const h = Math.hypot(dx, dz) || 1e-6, cx = dx / h, cz = dz / h, n = 2 + 0.55 * (1 - low), sq = Math.pow(Math.pow(Math.abs(cx), n) + Math.pow(Math.abs(cz), n), -1 / n);
+  let x = dx * sq * HR[0] * 0.97, y = dy * HR[1], z = dz * sq * HR[2];
+  z *= 1 + 0.1 * bz * smooth(-0.5, 0.4, dy);                                   // 뒤통수
+  z *= 1 - 0.07 * fz * fz * (1 - low);                                          // 앞얼굴을 평평하게
+  // 턱: 아래로 갈수록 좁아지며 V 자 (앞쪽이 더 좁다), 옆·뒤 아래는 안으로 들어가 목으로 이어짐
+  x *= 1 - low * (0.28 + 0.4 * fz);
+  z *= 1 - 0.38 * low * bz;
+  y += 0.022 * low * bz * bz;                                                   // 턱 뒤 → 귀 아래 각
+  z -= 0.012 * low * low * (1 - fz) ;
+  z += 0.014 * gauss(dy + 0.86, 0.16) * Math.pow(fz, 3); y -= 0.006 * gauss(dy + 0.86, 0.16) * fz;   // 앞으로 나온 턱끝
+  z += 0.004 * gauss(ax - 0.5, 0.2) * gauss(dy + 0.12, 0.22) * fz;               // 광대
+  z -= 0.004 * gauss(ax - 0.36, 0.16) * gauss(dy - 0.04, 0.12) * fz;            // 눈두덩 (눈이 살짝 들어감)
+  z += 0.003 * gauss(ax - 0.34, 0.25) * gauss(dy - 0.24, 0.07) * fz;            // 눈썹뼈
+  z += (0.011 * gauss(dx, 0.04) * gauss(dy + 0.14, 0.065) + 0.004 * gauss(dx, 0.03) * gauss(dy + 0.02, 0.12)) * Math.pow(fz, 3); // 콧대 · 코끝
+  z += 0.003 * gauss(dx, 0.14) * gauss(dy + 0.43, 0.08) * fz;                   // 입술
   return out.set(HC.x + x, HC.y + y, HC.z + z);
 }
 const dirOf = (az, el, out = new V3()) => out.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
@@ -361,7 +371,7 @@ export function createModel(pal) {
   for (const s of [-1, 1]) add(H, C('ear' + s, () => strand([[s * 0.068, 0.1, -0.006], [s * 0.08, 0.104, -0.014], [s * 0.084, 0.09, -0.018]], 0.013, 0.006, { seg: 8, rad: 8, flat: 0.4, ref: [s, 0, 0] })), M.skin);
   {
     const line = (az) => { const w = Math.cos(az); return w > 0 ? 0.12 + 0.36 * w * w : 0.12 - 0.9 * w * w; };
-    add(H, C('hairCap', () => surf((u, v, p) => { const az = (u - 0.5) * TAU + Math.PI, e0 = line(az), el = e0 + (Math.PI / 2 - e0) * v; headAt(az, el, 0.007 + 0.016 * smooth(0, 0.4, v) + 0.008 * Math.max(0, -Math.cos(az)), p); }, 80, 22, { closedU: true, poles: [22], uvU: 8 })), M.hair);
+    add(H, C('hairCap', () => surf((u, v, p) => { const az = (u - 0.5) * TAU + Math.PI, e0 = line(az), el = e0 + (Math.PI / 2 - e0) * v; headAt(az, el, 0.006 + 0.012 * smooth(0, 0.4, v) + 0.006 * Math.max(0, -Math.cos(az)), p); }, 80, 22, { closedU: true, poles: [22], uvU: 8 })), M.hair);
     const r = rng(23), clump = (key, pts, r0, r1, flat = 0.4, ref) => add(H, C(key, () => strand(pts, r0, r1, { seg: 16, rad: 8, flat, ref: ref || [0, 0, 1] })), M.hairS);
     // 앞머리: 왼쪽(+x) 가르마에서 오른쪽으로 쓸어 넘긴 결
     for (let k = 0; k < 11; k++) {
@@ -371,13 +381,13 @@ export function createModel(pal) {
     }
     // 얼굴 옆 머리 (귀 앞, 턱까지 · 바깥으로 살짝 말림)
     for (const s of [-1, 1]) for (let k = 0; k < 3; k++) {
-      const az = s * (1.0 + k * 0.14), pts = [headAt(az * 0.9, 0.7, 0.024), headAt(az, 0.15, 0.026), headAt(az * 1.02, -0.45 - k * 0.1, 0.03), headAt(az * 1.1, -0.85 - k * 0.08, 0.05)];
-      const d = dirOf(az, 0); clump(`side${s}${k}`, pts, 0.036, 0.005, 0.28, [d.x, 0, d.z]);
+      const az = s * (1.0 + k * 0.14), pts = [headAt(az * 0.9, 0.7, 0.018), headAt(az, 0.15, 0.016), headAt(az * 1.02, -0.45 - k * 0.1, 0.014), headAt(az * 1.06, -0.85 - k * 0.08, 0.02)];
+      const d = dirOf(az, 0); clump(`side${s}${k}`, pts, 0.032, 0.005, 0.22, [d.x, 0, d.z]);
     }
     // 뒷머리 위쪽 덩어리 (모자 아래 볼륨)
     for (let k = 0; k < 16; k++) {
-      const az = Math.PI + (k - 7.5) * 0.24, pts = [headAt(az, 0.75, 0.02), headAt(az + (r() - 0.5) * 0.15, 0.0, 0.034), headAt(az + (r() - 0.5) * 0.2, -0.6, 0.04)];
-      const d = dirOf(az, 0); clump('back' + k, pts, 0.044, 0.022, 0.32, [d.x, 0, d.z]);
+      const az = Math.PI + (k - 7.5) * 0.24, pts = [headAt(az, 0.75, 0.016), headAt(az + (r() - 0.5) * 0.15, 0.0, 0.02), headAt(az + (r() - 0.5) * 0.2, -0.6, 0.016)];
+      const d = dirOf(az, 0); clump('back' + k, pts, 0.04, 0.02, 0.26, [d.x, 0, d.z]);
     }
     // 긴 웨이브 머리: 뒤 7가닥 + 앞으로 내린 2가닥 (로프 물리 · 납작한 리본 관 · 옆으로 물결)
     const locks = [...[-1.15, -0.92, -0.69, -0.46, -0.23, 0, 0.23, 0.46, 0.69, 0.92, 1.15].map((d) => [Math.PI + d, -0.52 + 0.14 * Math.abs(d), 11 - Math.round(Math.abs(d) * 1.5)]), [1.3, -0.55, 8], [-1.3, -0.55, 8]];
