@@ -73,7 +73,8 @@ export default {
 | `hits` | `[{ t0, t1, at: [오른쪽, 위, 앞], r, dmg, kb: [밀림, 띄움], stun, hs, unblock, force, nokill, noScale }]` |
 | 판정 방식 | `trail: true` 기술은 **칼날이 실제로 지나간 경로**(weaponPts 선분, 반경 `br` 기본 0.14m)로 판정한다. 칼날이 상대 몸 앞을 지나가도록 키프레임을 잡을 것. `weapon: false` 를 주면 `at`·`r` 구로 판정 |
 | `ev` | `[[시간, (f, o, G) => {}]]` — 이펙트·투사체·순간이동 등 |
-| `lunge` | `[[t0, t1, 전진속도]]` |
+| `lunge` | `[[t0, t1, 전진속도]]` (이 구간에는 기술 중 이동이 꺼짐) |
+| `move` / `noMove` | 기술 중 이동 속도 배율 (기본 0.28) / 이동 금지 |
 | `track` | 이 시간까지 상대 쪽으로 회전 |
 | `next`, `cancel` | 약공 연계 대상과 입력 허용 시점 |
 | `cd` | `'heavy'`/`'s1'`/`'s2'` 쿨타임 슬롯 (초는 `skills[슬롯].cd`) |

@@ -286,6 +286,12 @@ export class Fighter {
           const k = t1 > t0 ? clamp((this.at - t0) / (t1 - t0), 0, 1) : 1; lerpPose(this.tgt, p0, p1, ease.io(k)); target = this.tgt;
         }
         if (this.onGround) { const f = Math.exp(-dt * 9); this.vel.x *= f; this.vel.z *= f; }
+        // 기술 중 이동: 방향키 입력대로 천천히 움직인다 (기본 이동 속도의 28%, 기술별 move 로 조절)
+        // 돌진(lunge) 구간 · 궁극기 · noMove 기술 · 공중에서는 제외. 바라보는 방향은 바꾸지 않는다
+        if (this.act && live && !this.act.ult && !this.act.noMove && this.onGround && mag > 0.1) {
+          const lg = this.act.lunge, inLunge = lg && lg.some(([t0, t1]) => this.at >= t0 && this.at <= t1);
+          if (!inLunge) { const k = S.speed * (this.act.move ?? 0.28) * dt; this.pos.x += I.mx * k; this.pos.z += I.mz * k; }
+        }
         break;
       }
       case 'hit':
