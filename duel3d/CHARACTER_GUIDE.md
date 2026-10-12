@@ -82,6 +82,15 @@ export default {
 
 적중하면 강공·스킬로 캔슬할 수 있습니다(시스템 공통).
 
+**낙하 공격(공중 좌클릭)** 은 공통 시스템입니다. `src/plunge.js` 의 `makePlunge` 에 자세 3개만 넘겨 기술 목록에 펼치세요:
+```js
+const moves = {
+  ...makePlunge({ up: '치켜든 자세', fall: { ...떨어지며 무기 끝이 아래 }, land: { ...내려찍은 직후 }, color: 0xffc24a, dmg: 72, r: 2.5, fx: (f, o, G, c) => {} }),
+  light1: { ... },
+};
+```
+`plunge`(낙하)와 `plungeLand`(착지 충격파) 두 기술이 만들어집니다. 정의하지 않은 캐릭터는 공중 좌클릭이 그대로 `light1` 입니다.
+
 ## 6. 기술에서 쓸 수 있는 도구
 - 좌표: `f.local([오른쪽, 위, 앞])`, `f.fwd()`, `f.right()`, `f.chest()`, `f.faceOpp()`
 - 이펙트: `f.slashFx({ tilt, r, at, flip })`, `G.fx.burst / ring / slash / beam / light / impact / p`

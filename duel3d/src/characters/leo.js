@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { areaHit } from '../entities.js';
 import { rand, sfx } from '../core.js';
 import { createModel, GOLD, FIRE, SHIELD, ROSE } from './leo_model.js';
+import { makePlunge } from '../plunge.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
 
@@ -123,6 +124,14 @@ function barrier(G, f) {
 }
 
 const moves = {
+  /* --- 공중 좌클: 낙하 공격 — 창을 머리 위로 치켜들었다가 수직으로 내리꽂아 땅을 가른다 --- */
+  ...makePlunge({
+    up: 'raised',
+    fall: { ...poses.raised, spine: [0.25, 0, 0], head: [-0.3, 0, 0], shoulderR: [-2.0, 0, -0.15], elbowR: [-0.5, 0, 0], weapon: [-1.4, 0, 1.57], hipL: [-1.1, 0, 0.1], kneeL: [1.5, 0, 0], hipR: [-0.5, 0, -0.1], kneeR: [1.2, 0, 0] },
+    land: { ...poses.slamDown, weapon: [-1.2, 0, 1.57] },
+    color: GOLD, dmg: 78, r: 2.6,
+    fx: (f, o, G, c) => { crack(G, c, 2.8, GOLD, 9); embers(G, c, 18, GOLD); },
+  }),
   /* --- 기본 공격 4연타 (Action 1: 사선 내려베기 → 올려베기 → 회전 베기 → 찌르기) --- */
   light1: { dur: 0.5, cancel: 0.3, next: 'light2', trail: true, track: 0.1,
     keys: [[0, 'windup'], [0.09, { chest: [0.05, -0.55, 0], weapon: [-0.6, 2.45, 0.9] }],

@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { clamp, lerp, damp, rand, angDelta, angLerp, ease, sfx } from './core.js';
 import { POSE_LEN, applyPose, lerpPose, addRunCycle, prepareDef } from './rig.js';
 import { ARENA_R } from './stage.js';
+import { PLUNGE_MIN_H } from './plunge.js';
 
 const V3 = THREE.Vector3;
 export const GRAV = 26;
@@ -134,6 +135,8 @@ export class Fighter {
     }
     if (!this.onGround && a !== 'light' && a !== 'heavy' && a !== 'ult') return false;
     if (a === 'light' && this.counterT > 0 && this.def.moves.counter) { this.counterT = 0; this.start('counter'); return true; }
+    // 공중 좌클릭 = 낙하 공격 (충분히 높이 떠 있을 때)
+    if (a === 'light' && !this.onGround && this.def.moves.plunge && this.pos.y - (this.gy || 0) > PLUNGE_MIN_H && this.state !== 'act') { this.start('plunge'); return true; }
     this.start(a === 'light' ? 'light1' : a); return true;
   }
   start(name) {
@@ -275,7 +278,7 @@ export class Fighter {
         break;
       case 'down': {
         const f = Math.exp(-dt * 10); this.vel.x *= f; this.vel.z *= f; this.downT -= dt;
-        if (this.downT <= 0) { this.state = 'idle'; this.inv = 0.3; G.fx.burst(this.pos.clone().setY(0.1), 6, 0x8a7a90, 2, { kind: 'dust' }); }
+        if (this.downT <= 0) { this.state = 'idle'; this.inv = 0.3; this.riseT = 0.3; G.fx.burst(this.pos.clone().setY(0.1), 6, 0x8a7a90, 2, { kind: 'dust' }); }
         break;
       }
       case 'ko': case 'win': if (this.onGround) { const f = Math.exp(-dt * 6); this.vel.x *= f; this.vel.z *= f; } if (this.state === 'win') this.faceOpp(3, dt); break;
@@ -324,7 +327,7 @@ export class Fighter {
       }
     }
     // 바닥(또는 올라선 장애물 윗면)
-    const gy = W ? W.groundAt(this.pos.x, this.pos.z, this.pos.y) : 0;
+    const gy = W ? W.groundAt(this.pos.x, this.pos.z, this.pos.y) : 0; this.gy = gy;
     if (this.pos.y <= gy && !this.float && !this.held) {
       if (!this.onGround && this.vel.y <= 0) this.land();
       this.pos.y = gy; if (this.vel.y < 0) this.vel.y = 0; this.onGround = true;
@@ -353,7 +356,9 @@ export class Fighter {
       else { t.set(P.base); t[2] += br * 0.03; t[0] += br * 0.01; }
       target = t;
     }
-    const rate = this.state === 'act' ? 40 : this.state === 'hit' ? 30 : this.state === 'run' ? 20 : 13;
+    // 일어날 때는 빠르게 자세를 되찾는다
+    this.riseT = (this.riseT || 0) - dt;
+    const rate = this.state === 'act' ? 40 : this.state === 'hit' ? 30 : this.state === 'run' || this.riseT > 0 ? 22 : 13;
     lerpPose(this.pose, this.pose, target, 1 - Math.exp(-dt * rate));
     this.applyRig(dt);
     // 무기 궤적
@@ -393,7 +398,7 @@ export class Fighter {
   land() {
     const G = this.G; G.fx.burst(this.pos.clone().setY(0.08), 6, 0x8a7a90, 2, { kind: 'dust' });
     if (this.state === 'hit' && this.launched) {
-      this.launched = false; this.state = 'down'; this.downT = 0.75; this.inv = 1.05; this.vel.multiplyScalar(0.4); G.shake(0.08);
+      this.launched = false; this.state = 'down'; this.downT = 0.38; this.inv = 0.7; this.vel.multiplyScalar(0.4); G.shake(0.08);
       G.fx.burst(this.pos.clone().setY(0.1), 16, 0x8a7a90, 4, { kind: 'dust' }); sfx('land');
     } else if (this.state === 'ko') { this.launched = false; G.shake(0.12); G.fx.burst(this.pos.clone().setY(0.1), 22, 0x8a7a90, 5, { kind: 'dust' }); sfx('land'); }
     else if (this.state === 'jump') { this.state = 'idle'; sfx('land'); }

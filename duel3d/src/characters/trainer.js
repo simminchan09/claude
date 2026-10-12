@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { Projectile, areaHit } from '../entities.js';
 import { rand, sfx } from '../core.js';
+import { makePlunge } from '../plunge.js';
 
 const V3 = THREE.Vector3;
 const DIMS = { hipH: 0.98, spineL: 0.22, chestL: 0.3, neckL: 0.1, shW: 0.21, uArm: 0.29, lArm: 0.27, hipW: 0.1, thigh: 0.44, shin: 0.44 };
@@ -80,6 +81,12 @@ const ACC = (f) => f.palette.accent;
 // hits: [{ t0, t1, at: [오른쪽, 위, 앞], r: 반경, dmg, kb: [밀림, 띄움], stun, hs: 히트스톱 }]
 // lunge: [[t0, t1, 전진속도]]   ev: [[시간, (f, o, G) => {}]]
 const moves = {
+  // 공중 좌클: 낙하 공격 (공통 시스템, 자세만 지정)
+  ...makePlunge({
+    up: { spine: [-0.15, 0, 0], chest: [-0.1, 0, 0], head: [-0.2, 0, 0], shoulderR: [-2.9, 0, -0.3], elbowR: [-0.5, 0, 0], weapon: [0.9, 0, 0], shoulderL: [-0.4, 0, 0.6], elbowL: [-0.8, 0, 0], hipL: [-1.2, 0, 0], kneeL: [1.6, 0, 0], hipR: [-0.5, 0, 0], kneeR: [1.3, 0, 0] },
+    fall: { spine: [0.25, 0, 0], head: [-0.3, 0, 0], shoulderR: [-2.1, 0, -0.15], elbowR: [-0.3, 0, 0], weapon: [3.95, 0, 0], shoulderL: [-0.3, 0, 0.7], hipL: [-1.0, 0, 0], kneeL: [1.4, 0, 0], hipR: [-0.4, 0, 0], kneeR: [1.1, 0, 0] },
+    land: { hips: [0, -0.2, 0], spine: [0.75, 0, 0], chest: [0.25, 0, 0], head: [-0.4, 0, 0], shoulderR: [-1.1, 0, -0.1], elbowR: [-0.1, 0, 0], weapon: [1.35, 0, 0], shoulderL: [0.3, 0, 0.5], hipL: [-1.2, 0, 0.1], kneeL: [1.7, 0, 0], hipR: [-0.3, 0, -0.1], kneeR: [1.5, 0, 0] },
+  }),
   light1: { dur: 0.4, cancel: 0.22, next: 'light2', trail: true, track: 0.08,
     keys: [[0, { chest: [0.1, -1.0, 0], spine: [0.15, -0.3, 0], shoulderR: [-1.45, 0, -0.5], elbowR: [-0.25, 0, 0], weapon: [1.5, 0, 0] }], [0.09, { chest: [0.1, -1.15, 0] }],
       [0.18, { chest: [0.2, 0.95, 0], spine: [0.2, 0.35, 0], shoulderR: [-1.4, 0, 0.35] }], [0.27, { chest: [0.2, 1.1, 0] }], [0.4, 'base']],
