@@ -128,7 +128,7 @@ const moves = {
     keys: [[0, 'windup'], [0.09, { chest: [0.05, -0.55, 0], weapon: [-0.6, 2.45, 0.9] }],
       [0.2, { hips: [0, 0.35, 0], spine: [0.2, 0.3, 0], chest: [0.0, 0.5, 0], shoulderR: [-2.4, 0, -0.1], elbowR: [-0.3, 0, 0], weapon: [1.05, -0.7, 0.9], ...LEGS_LUNGE }],
       [0.3, { chest: [-0.05, 0.6, 0], weapon: [1.3, -1.3, 0.9] }], [0.5, 'base']],
-    lunge: [[0.1, 0.22, 4.5]],
+    lunge: [[0.07, 0.22, 6.5]],
     ev: [[0.12, (f) => { sfx('heavy'); goldSlash(f, { tilt: 0.95, r: 2.5, at: [0.2, 1.3, 0.3], flip: true }); }]],
     hits: [{ t0: 0.12, t1: 0.24, dmg: 44, kb: [2.5, 0], stun: 0.36, daze: 14 }] },
   light2: { dur: 0.5, cancel: 0.3, next: 'light3', trail: true, track: 0.08,
@@ -233,7 +233,7 @@ const moves = {
       [2.3, { ref: 'target', p: [-1.5, 2.5, -9], l: [0, 3, 0], fov: 58 }], [3.1, { ref: 'target', p: [-1.5, 3, -10], l: [0, 3.4, 0], fov: 58 }]],
     ev: [
       [0, (f, o, G) => {
-        o.lock(); if (o.pos.y < 0.2) o.pos.y = 0; G.setTint(GOLD, 0.35); sfx('charge'); G.say(f, '"짐은 감히 누구도 쳐다볼 수 없는 절대적인 공포다!"');
+        f.ultTgt = o; o.lock(); if (o.pos.y < 0.2) o.pos.y = 0; G.setTint(GOLD, 0.35); sfx('charge'); G.say(f, '"짐은 감히 누구도 쳐다볼 수 없는 절대적인 공포다!"');
         G.fx.burst(f.chest(), 50, [GOLD, 0xffffff], 7); G.fx.light(f.chest(), GOLD, 100, 0.6); f.ultFrom = f.pos.clone(); f.ultTo = o.pos.clone().addScaledVector(new V3().subVectors(f.pos, o.pos).setY(0).normalize(), 1.9 * o.scale);
         // 하늘의 왕관 인장
         const top = o.pos.clone().setY(9);
@@ -241,7 +241,7 @@ const moves = {
         for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU; G.fx.beam(top.clone().add(new V3(Math.cos(a) * 3.4, -0.5, Math.sin(a) * 3.4)), { r: 0.18, h: 2.5, color: GOLD, life: 1.2 }); }
       }],
       [0.5, (f) => { f.float = true; f.onGround = false; sfx('jump'); sfx('dash'); f.model.resetCloth && 0; }],
-      [1.1, (f, o, G) => {
+      [1.1, (f, o, G) => { o = f.ultTgt || o; if (!o) return;
         const c = o.pos.clone().setY(0); f.pos.copy(f.ultTo).setY(0); f.float = false; f.onGround = true; f.vel.set(0, 0, 0);
         sfx('boom'); sfx('thunder' in {} ? 'boom' : 'big'); G.shake(0.6); G.flash(0xfff0c0, 0.75); G.stage.flashSky(0.6);
         G.spawn(dome(G, c, 6, GOLD)); crack(G, c, 7, GOLD, 14); G.fx.beam(c, { r: 2.2, h: 30, color: GOLD, life: 0.9 });
@@ -250,8 +250,8 @@ const moves = {
         o.takeHit(f, { dmg: 150, kb: [0, 0], stun: 99, hs: 0.2, shake: 0.5, nokill: true, noScale: true, force: true, daze: 120, snd: 'big' }, new V3().subVectors(o.pos, f.pos).setY(0).normalize());
         for (const t of f.foes()) if (t !== o && t.pos.distanceTo(c) < 6) t.takeHit(f, { dmg: 120, kb: [6, 9], stun: 0.8, force: true, noCrit: true }, new V3().subVectors(t.pos, c).setY(0).normalize());
       }],
-      [1.3, (f, o, G) => { for (let i = 0; i < 8; i++) G.spawn({ done: false, t: -i * 0.07, update(dt) { this.t += dt; if (this.t >= 0 && !this.d) { this.d = true; const p = o.pos.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))); G.fx.beam(p, { r: 0.35, h: 8, color: GOLD, life: 0.35 }); G.fx.burst(p.clone().setY(0.3), 12, [GOLD, 0xffffff], 6, { dir: new V3(0, 1, 0), spread: 0.6 }); sfx('zap'); } if (this.t > 0.3) this.done = true; } }); }],
-      [1.98, (f, o, G) => {
+      [1.3, (f, o, G) => { o = f.ultTgt || o; if (!o) return; for (let i = 0; i < 8; i++) G.spawn({ done: false, t: -i * 0.07, update(dt) { this.t += dt; if (this.t >= 0 && !this.d) { this.d = true; const p = o.pos.clone().add(new V3(rand(-3, 3), 0, rand(-3, 3))); G.fx.beam(p, { r: 0.35, h: 8, color: GOLD, life: 0.35 }); G.fx.burst(p.clone().setY(0.3), 12, [GOLD, 0xffffff], 6, { dir: new V3(0, 1, 0), spread: 0.6 }); sfx('zap'); } if (this.t > 0.3) this.done = true; } }); }],
+      [1.98, (f, o, G) => { o = f.ultTgt || o; if (!o) return;
         o.release(); sfx('heavy'); sfx('boom'); G.say(f, '"엎드려라."');
         goldSlash(f, { r: 3.8, color: ROSE, tilt: Math.PI / 2 - 0.2, life: 0.4, at: [0, 1.4, 0.3] }); G.fx.light(o.chest(), ROSE, 140, 0.5);
         o.takeHit(f, { dmg: 160, kb: [5, 13], stun: 0.9, hs: 0.18, shake: 0.4, noScale: true, force: true, daze: 80, snd: 'big' }, new V3().subVectors(o.pos, f.pos).setY(0).normalize());

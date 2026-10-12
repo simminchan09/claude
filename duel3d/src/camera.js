@@ -32,7 +32,9 @@ export class FightCam {
       const C = this.cine; C.t += dt; const ks = C.keys;
       let i = 0; while (i < ks.length - 2 && C.t > ks[i + 1][0]) i++;
       const [t0, a] = ks[i], [t1, b] = ks[Math.min(i + 1, ks.length - 1)], u = t1 > t0 ? ease.io(clamp((C.t - t0) / (t1 - t0), 0, 1)) : 1;
-      const refA = a.ref === 'target' ? C.f.opp.pos : C.f.pos, refB = b.ref === 'target' ? C.f.opp.pos : C.f.pos;
+      // 연출 도중 대상이 사라져도(처치·제거) 마지막 위치를 기준으로 계속한다
+      if (C.f.opp && !C.f.opp.gone) (C.lastT || (C.lastT = new THREE.Vector3())).copy(C.f.opp.pos);
+      const tgt = C.lastT || C.f.pos, refA = a.ref === 'target' ? tgt : C.f.pos, refB = b.ref === 'target' ? tgt : C.f.pos;
       tP.lerpVectors(this.framePoint(refA, C.yaw, a.p, tF), this.framePoint(refB, C.yaw, b.p, tR), u);
       tL.lerpVectors(this.framePoint(refA, C.yaw, a.l, tF), this.framePoint(refB, C.yaw, b.l, tR), u);
       fov = lerp(a.fov ?? 50, b.fov ?? 50, u); k = 12;
