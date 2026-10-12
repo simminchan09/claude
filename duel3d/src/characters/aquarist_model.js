@@ -10,6 +10,7 @@ import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { clamp } from '../core.js';
 import { Cloth, Rope, RopeTube } from '../cloth.js';
+import { animeHead, paintEye } from '../face.js';
 import { surf, loft, loftAt, loftRing, strand, spl, lathe, ang, gauss, smooth, envCube, cached } from '../sculpt.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
@@ -114,83 +115,32 @@ function faceTex(mode) {
   const [, cy0] = P(0, -0.62), cg = g.createLinearGradient(0, cy0, 0, H * 0.8); cg.addColorStop(0, 'rgba(210,130,120,0)'); cg.addColorStop(1, 'rgba(200,120,110,0.45)'); g.fillStyle = cg; g.fillRect(0, cy0, W, H);
   // 볼 홍조 (크게) + 홍조 빗금
   g.save(); g.filter = 'blur(16px)'; g.fillStyle = 'rgba(255,120,130,0.45)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.5, -0.17); g.beginPath(); g.ellipse(x, y, K * 0.17, K * 0.065, 0, 0, TAU); g.fill(); } g.restore();
-  g.strokeStyle = 'rgba(230,90,110,0.55)'; g.lineWidth = 3; g.lineCap = 'round'; for (const sd of [-1, 1]) for (let k = 0; k < 3; k++) { const [x, y] = P(sd * (0.44 + k * 0.06), -0.16); g.beginPath(); g.moveTo(x - 6, y + 8); g.lineTo(x + 6, y - 8); g.stroke(); }
+  // (볼 빗금 없이 은은한 홍조만)
   g.save(); g.filter = 'blur(10px)'; g.fillStyle = 'rgba(220,120,110,0.22)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.37, 0.1); g.beginPath(); g.ellipse(x, y, K * 0.2, K * 0.07, 0, 0, TAU); g.fill(); } g.restore();
   // 코
-  { const [x, y] = P(0.01, -0.14); g.fillStyle = 'rgba(200,120,110,0.5)'; g.beginPath(); g.ellipse(x, y, 4, 3, 0, 0, TAU); g.fill(); }
+  { const [x, y] = P(-0.015, -0.15); g.save(); g.filter = 'blur(2px)'; g.fillStyle = 'rgba(200,120,110,0.45)'; g.beginPath(); g.ellipse(x, y, 7, 3, -0.3, 0, TAU); g.fill(); g.restore(); }
   // 눈썹: 가늘고 둥글게 올라간 (밝은 표정)
-  g.strokeStyle = '#a8602e'; g.lineCap = 'round';
-  for (const sd of [-1, 1]) { const [x0, y0] = P(sd * 0.15, 0.22), [x1, y1] = P(sd * 0.36, 0.3), [x2, y2] = P(sd * 0.56, 0.25); for (let k = 0; k < 2; k++) { g.lineWidth = 7 - k * 3; g.beginPath(); g.moveTo(x0, y0 + k); g.quadraticCurveTo(x1, y1 - 6 + k, x2, y2 + k); g.stroke(); } }
-  // 입
+  g.strokeStyle = '#b8743e'; g.lineCap = 'round';
+  for (const sd of [-1, 1]) { const [x0, y0] = P(sd * 0.15, 0.22), [x1, y1] = P(sd * 0.36, 0.3), [x2, y2] = P(sd * 0.56, 0.25); for (let k = 0; k < 2; k++) { g.lineWidth = 4.5 - k * 2; g.beginPath(); g.moveTo(x0, y0 + k); g.quadraticCurveTo(x1, y1 - 6 + k, x2, y2 + k); g.stroke(); } }
+  // 입: 턱 가까이 작고 얇게 (명조풍) — 'o' 는 작게 벌린 입
   if (mode === 'o') {
-    const [x0, y0] = P(-0.15, -0.41), [x1, y1] = P(0.15, -0.41), [xb, yb] = P(0, -0.56);
-    g.fillStyle = '#7a1a2a'; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2, y0 + 4, x1, y1); g.quadraticCurveTo(x1 - 8, yb, xb, yb); g.quadraticCurveTo(x0 + 8, yb, x0, y0); g.fill();
-    g.fillStyle = '#f08090'; g.beginPath(); g.ellipse(xb, yb - 12, 30, 12, 0, 0, TAU); g.fill();
-    g.fillStyle = '#fff'; g.fillRect(x0 + 16, y0, x1 - x0 - 32, 7);
-    g.strokeStyle = '#a8404a'; g.lineWidth = 3.5; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2, y0 + 4, x1, y1); g.stroke();
+    const [x, y] = P(0, -0.5); g.fillStyle = '#7a2230'; g.beginPath(); g.ellipse(x, y, 20, 14, 0, 0, TAU); g.fill();
+    g.fillStyle = '#e07a88'; g.beginPath(); g.ellipse(x, y + 6, 13, 6, 0, 0, TAU); g.fill();
+    g.strokeStyle = 'rgba(150,60,70,0.7)'; g.lineWidth = 2.5; g.beginPath(); g.ellipse(x, y, 20, 14, 0, Math.PI * 1.1, Math.PI * 1.9); g.stroke();
   } else {
-    // 활짝 웃는 입 (살짝 벌어진 D 모양)
-    const [x0, y0] = P(-0.13, -0.42), [x1, y1] = P(0.13, -0.42), [xb, yb] = P(0, -0.5);
-    g.fillStyle = '#8a2232'; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2, y0 + 2, x1, y1); g.quadraticCurveTo(x1 - 10, yb, xb, yb); g.quadraticCurveTo(x0 + 10, yb, x0, y0); g.fill();
-    g.fillStyle = '#f08898'; g.beginPath(); g.ellipse(xb, yb - 7, 20, 7, 0, 0, TAU); g.fill();
-    g.strokeStyle = '#a8404a'; g.lineWidth = 3.5; g.beginPath(); g.moveTo(x0 - 6, y0 - 5); g.quadraticCurveTo(x0, y0 + 2, x0 + 4, y0); g.moveTo(x1 + 6, y1 - 5); g.quadraticCurveTo(x1, y1 + 2, x1 - 4, y1); g.stroke();
+    const [x0, y0] = P(-0.075, -0.475), [x1, y1] = P(0.075, -0.475), [xm, ym] = P(0, -0.49);
+    g.strokeStyle = '#a84a52'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(x0, y0 - 2); g.quadraticCurveTo(xm, ym + 3, x1, y1 - 2); g.stroke();
+    g.fillStyle = 'rgba(230,130,140,0.35)'; g.beginPath(); g.ellipse(xm, ym + 7, 16, 4, 0, 0, TAU); g.fill();
   }
-  // 눈: 크고 둥근 호박색 눈 + 큰 반사광 / 윙크(오른눈 -x)는 ^ 모양
-  for (const sd of [-1, 1]) {
-    const [cx, cy] = P(sd * 0.36, 0.04), w = K * 0.43, inX = cx - sd * w * 0.46, outX = cx + sd * w * 0.5;
-    if (mode === 'w' && sd < 0) {
-      g.strokeStyle = '#3a1a10'; g.lineWidth = 9; g.lineCap = 'round'; g.beginPath(); g.moveTo(inX, cy + 6); g.quadraticCurveTo(cx, cy - 26, outX, cy + 4); g.stroke();
-      g.lineWidth = 5; g.beginPath(); g.moveTo(outX, cy + 4); g.lineTo(outX + sd * 14, cy + 10); g.stroke();
-      continue;
-    }
-    const top = new Path2D(); top.moveTo(inX, cy - 2); top.bezierCurveTo(cx - sd * w * 0.25, cy - 52, cx + sd * w * 0.28, cy - 52, outX, cy - 16);
-    const eye = new Path2D(); eye.moveTo(inX, cy - 2); eye.bezierCurveTo(cx - sd * w * 0.25, cy - 52, cx + sd * w * 0.28, cy - 52, outX, cy - 16); eye.bezierCurveTo(cx + sd * w * 0.3, cy + 42, cx - sd * w * 0.25, cy + 44, inX, cy - 2);
-    g.save(); g.clip(eye);
-    g.fillStyle = '#fffaf6'; g.fillRect(cx - w, cy - 60, w * 2, 120);
-    const ix = cx + sd * 3, iy = cy + 2, ir = g.createRadialGradient(ix, iy + 14, 4, ix, iy, 42); ir.addColorStop(0, '#ffe08a'); ir.addColorStop(0.45, '#f59a28'); ir.addColorStop(0.85, '#b85a10'); ir.addColorStop(1, '#5a2808');
-    g.fillStyle = ir; g.beginPath(); g.ellipse(ix, iy, 36, 46, 0, 0, TAU); g.fill(); g.strokeStyle = '#4a2008'; g.lineWidth = 3; g.stroke();
-    g.fillStyle = '#3a1806'; g.beginPath(); g.ellipse(ix, iy + 2, 11, 16, 0, 0, TAU); g.fill();
-    const sh = g.createLinearGradient(0, cy - 40, 0, cy - 6); sh.addColorStop(0, 'rgba(80,30,10,0.6)'); sh.addColorStop(1, 'rgba(80,30,10,0)'); g.fillStyle = sh; g.fillRect(cx - w, cy - 44, w * 2, 40);
-    g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ix - sd * 11, iy - 15, 10, 12, -0.4, 0, TAU); g.fill(); g.beginPath(); g.ellipse(ix + sd * 12, iy + 18, 5, 5, 0, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(255,255,255,0.5)'; g.beginPath(); g.ellipse(ix, iy + 24, 14, 6, 0, 0, TAU); g.fill();
-    g.restore();
-    g.strokeStyle = '#3a1a10'; g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 9; g.stroke(top);
-    g.lineWidth = 6; g.beginPath(); g.moveTo(outX - sd * 4, cy - 14); g.quadraticCurveTo(outX + sd * 10, cy - 18, outX + sd * 16, cy - 26); g.stroke(); // 속눈썹 끝
-    g.lineWidth = 3; g.strokeStyle = 'rgba(140,70,50,0.6)'; g.beginPath(); g.moveTo(inX + sd * 12, cy - 30); g.bezierCurveTo(cx - sd * w * 0.2, cy - 54, cx + sd * w * 0.25, cy - 54, outX - sd * 4, cy - 28); g.stroke();
-    g.lineWidth = 2.5; g.strokeStyle = 'rgba(60,24,12,0.6)'; g.beginPath(); g.moveTo(cx - sd * w * 0.1, cy + 34); g.quadraticCurveTo(cx + sd * w * 0.3, cy + 28, outX - sd * 2, cy - 8); g.stroke();
-  }
+  // 눈: 상냥한 호박색 눈 (공용 paintEye 'soft') / 윙크는 오른눈(-x)
+  for (const sd of [-1, 1]) paintEye(g, P, K, sd, { style: 'soft', az: 0.36, el: 0.04, wink: mode === 'w' && sd < 0 });
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 
 /* =====================================================================
    얼굴형 (아자젤과 같은 애니메 얼굴 — 조금 더 둥근 볼)
    ===================================================================== */
-const HC = new V3(0, 0.103, 0.006), HR = [0.072, 0.101, 0.09];
-// 구를 깎아 만든 애니메 얼굴: 각진 두개(옆면 평평) · 뒤로 나온 뒤통수 · 평평한 앞얼굴 · 눈두덩 · 작은 콧대 · 광대
-//                          V자 턱선(턱끝은 앞으로 뾰족) · 턱 아래 → 목으로 꺾이는 면
-function headPt(dx, dy, dz, out) {
-  const ax = Math.abs(dx), fz = Math.max(0, dz), bz = Math.max(0, -dz), low = smooth(-0.05, -0.95, dy);
-  // 수평 단면을 약간 둥근 사각으로 (두개는 각지게, 아래로 갈수록 타원)
-  const h = Math.hypot(dx, dz) || 1e-6, cx = dx / h, cz = dz / h, n = 2 + 0.55 * (1 - low), sq = Math.pow(Math.pow(Math.abs(cx), n) + Math.pow(Math.abs(cz), n), -1 / n);
-  let x = dx * sq * HR[0] * 0.97, y = dy * HR[1], z = dz * sq * HR[2];
-  z *= 1 + 0.1 * bz * smooth(-0.5, 0.4, dy);                                   // 뒤통수
-  z *= 1 - 0.07 * fz * fz * (1 - low);                                          // 앞얼굴을 평평하게
-  // 턱: 아래로 갈수록 좁아지며 V 자 (앞쪽이 더 좁다), 옆·뒤 아래는 안으로 들어가 목으로 이어짐
-  x *= 1 - low * (0.28 + 0.4 * fz);
-  z *= 1 - 0.38 * low * bz;
-  y += 0.022 * low * bz * bz;                                                   // 턱 뒤 → 귀 아래 각
-  z -= 0.012 * low * low * (1 - fz) ;
-  z += 0.014 * gauss(dy + 0.86, 0.16) * Math.pow(fz, 3); y -= 0.006 * gauss(dy + 0.86, 0.16) * fz;   // 앞으로 나온 턱끝
-  z += 0.004 * gauss(ax - 0.5, 0.2) * gauss(dy + 0.12, 0.22) * fz;               // 광대
-  z -= 0.004 * gauss(ax - 0.36, 0.16) * gauss(dy - 0.04, 0.12) * fz;            // 눈두덩 (눈이 살짝 들어감)
-  z += 0.003 * gauss(ax - 0.34, 0.25) * gauss(dy - 0.24, 0.07) * fz;            // 눈썹뼈
-  z += (0.011 * gauss(dx, 0.04) * gauss(dy + 0.14, 0.065) + 0.004 * gauss(dx, 0.03) * gauss(dy + 0.02, 0.12)) * Math.pow(fz, 3); // 콧대 · 코끝
-  z += 0.003 * gauss(dx, 0.14) * gauss(dy + 0.43, 0.08) * fz;                   // 입술
-  return out.set(HC.x + x, HC.y + y, HC.z + z);
-}
-const dirOf = (az, el, out = new V3()) => out.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
-const headN = (p) => new V3((p.x - HC.x) / (HR[0] * HR[0]), (p.y - HC.y) / (HR[1] * HR[1]), (p.z - HC.z) / (HR[2] * HR[2])).normalize();
-const headAt = (az, el, off = 0, out = new V3()) => { const d = dirOf(az, el), p = headPt(d.x, d.y, d.z, out); if (off) p.addScaledVector(headN(p), off); return p; };
+const { HC, HR, headPt, headN, headAt, dirOf } = animeHead({ C: new V3(0, 0.103, 0.006), R: [0.072, 0.101, 0.09], nose: 0.55, jaw: 0.44 });
 
 /* =====================================================================
    모델
@@ -364,7 +314,7 @@ export function createModel(pal) {
   m.resetCloth = () => { if (cloth) cloth.ok = false; for (const r of m.ropes) r.rope.ok = false; };
 
   /* ---------- 목 · 얼굴 · 머리카락 · 마녀 모자 ---------- */
-  add(J.neck, C('neck', () => loft((v) => ({ y: -0.03 + 0.13 * v, rx: 0.034, rzF: 0.034, rzB: 0.032 }), 20, 4)), M.skin);
+  add(J.neck, C('neck', () => loft((v) => ({ y: -0.03 + 0.13 * v, rx: 0.034 - 0.008 * smooth(0.2, 0.8, v), rzF: 0.033 - 0.006 * smooth(0.2, 0.8, v), rzB: 0.033 - 0.004 * v }), 20, 6)), M.skin); // 위로 갈수록 가늘게
   const H = J.head;
   m.headMesh = add(H, C('head', () => surf((u, v, p) => { const az = (u - 0.5) * TAU, el = -Math.PI / 2 + v * Math.PI, d = dirOf(az, el); headPt(d.x, d.y, d.z, p); }, 88, 66, { closedU: true, poles: [0, 66] })), M.face);
   H.scale.setScalar(1.12); // 애니메 비율: 머리를 조금 크게
@@ -374,10 +324,10 @@ export function createModel(pal) {
     add(H, C('hairCap', () => surf((u, v, p) => { const az = (u - 0.5) * TAU + Math.PI, e0 = line(az), el = e0 + (Math.PI / 2 - e0) * v; headAt(az, el, 0.006 + 0.012 * smooth(0, 0.4, v) + 0.006 * Math.max(0, -Math.cos(az)), p); }, 80, 22, { closedU: true, poles: [22], uvU: 8 })), M.hair);
     const r = rng(23), clump = (key, pts, r0, r1, flat = 0.4, ref) => add(H, C(key, () => strand(pts, r0, r1, { seg: 16, rad: 8, flat, ref: ref || [0, 0, 1] })), M.hairS);
     // 앞머리: 왼쪽(+x) 가르마에서 오른쪽으로 쓸어 넘긴 결
-    for (let k = 0; k < 11; k++) {
-      const t = k / 10, az = 0.95 - t * 1.9, side = Math.abs(az), tipEl = 0.2 - 0.05 * Math.sin(t * 9) - 0.32 * smooth(0.55, 1.0, side) + (r() - 0.5) * 0.04, sweep = -0.16 - 0.1 * t;
-      const pts = [headAt(0.3 + az * 0.3, 1.18, 0.02), headAt(az * 0.75 + sweep * 0.3, 0.8, 0.03), headAt(az * 0.95 + sweep * 0.7, 0.5, 0.03), headAt(az + sweep, (0.5 + tipEl) / 2, 0.026), headAt(az + sweep * 1.2, tipEl, 0.014)];
-      const d = dirOf(az, 0.5); clump('bang' + k, pts, 0.048 + r() * 0.01, 0.004, 0.2, [d.x, d.y, d.z]);
+    for (let k = 0; k < 19; k++) {
+      const t = k / 18, az = 1.0 - t * 2.0 + (r() - 0.5) * 0.04, side = Math.abs(az), long = k === 8 || k === 11 ? 0.2 : 0, tipEl = 0.2 - 0.07 * r() - 0.34 * smooth(0.55, 1.0, side) - long, sweep = -0.12 - 0.08 * t;
+      const pts = [headAt(0.3 + az * 0.3, 1.18, 0.02), headAt(az * 0.75 + sweep * 0.3, 0.8, 0.03), headAt(az * 0.95 + sweep * 0.7, 0.5, 0.03), headAt(az + sweep, (0.5 + tipEl) / 2, 0.025), headAt(az + sweep * 1.25 + (r() - 0.5) * 0.06, tipEl, 0.012)];
+      const d = dirOf(az, 0.5); clump('bang' + k, pts, (k % 2 ? 0.026 : 0.036) + r() * 0.008, 0.0012, 0.22, [d.x, d.y, d.z]);
     }
     // 얼굴 옆 머리 (귀 앞, 턱까지 · 바깥으로 살짝 말림)
     for (const s of [-1, 1]) for (let k = 0; k < 3; k++) {

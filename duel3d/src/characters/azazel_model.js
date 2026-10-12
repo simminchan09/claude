@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { clamp } from '../core.js';
 import { Rope, RopeTube, RopeChain } from '../cloth.js';
+import { animeHead, paintEye } from '../face.js';
 import { surf, loft, loftAt, loftRing, strand, spl, lathe, ang, fbm, gauss, smooth, heightToNormal, envCube, cached } from '../sculpt.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
@@ -209,51 +210,16 @@ function faceTex(open, glow) {
     // 반창고 (오른쪽 볼)
     { const [x, y] = P(-0.6, -0.2); g.save(); g.translate(x, y); g.rotate(-0.45); g.fillStyle = '#f2e6d8'; g.fillRect(-46, -16, 92, 32); g.fillStyle = '#e0ccb4'; g.fillRect(-14, -16, 28, 32); g.fillStyle = 'rgba(160,130,110,0.6)'; for (let i = 0; i < 6; i++) g.fillRect(-40 + (i % 3) * 8, -8 + Math.floor(i / 3) * 12, 3, 3); g.strokeStyle = 'rgba(150,120,100,0.7)'; g.lineWidth = 2; g.strokeRect(-46, -16, 92, 32); g.restore(); }
   }
-  // 눈 (양쪽): 반쯤 내리깐 날카로운 눈매 · 큰 붉은 홍조 · 반사광
-  for (const sd of [-1, 1]) {
-    const [cx, cy] = P(sd * 0.36, 0.035), w = K * 0.42, inX = cx - sd * w * 0.48, outX = cx + sd * w * 0.52;
-    const top = new Path2D(); top.moveTo(inX, cy + 6); top.bezierCurveTo(cx - sd * w * 0.25, cy - 30, cx + sd * w * 0.25, cy - 34, outX, cy - 12);
-    const eye = new Path2D(); eye.moveTo(inX, cy + 6); eye.bezierCurveTo(cx - sd * w * 0.25, cy - 30, cx + sd * w * 0.25, cy - 34, outX, cy - 12); eye.bezierCurveTo(cx + sd * w * 0.3, cy + 26, cx - sd * w * 0.2, cy + 30, inX, cy + 6);
-    g.save(); g.clip(eye);
-    if (!glow) { g.fillStyle = '#fff6f2'; g.fillRect(cx - w, cy - 60, w * 2, 120); }
-    const ix = cx + sd * 6, iy = cy + 2, ir = g.createRadialGradient(ix - 6, iy - 12, 4, ix, iy, 40); ir.addColorStop(0, glow ? '#ffd080' : '#ff8a6a'); ir.addColorStop(0.5, glow ? '#ff5a1a' : '#e01830'); ir.addColorStop(1, glow ? '#a02000' : '#5a0010');
-    g.fillStyle = ir; g.beginPath(); g.ellipse(ix, iy, 30, 36, 0, 0, TAU); g.fill();
-    if (!glow) {
-      g.strokeStyle = '#3a0008'; g.lineWidth = 3; g.stroke();
-      g.fillStyle = '#250006'; g.beginPath(); g.ellipse(ix, iy + 2, 10, 17, 0, 0, TAU); g.fill();
-      const sh = g.createLinearGradient(0, cy - 34, 0, cy - 4); sh.addColorStop(0, 'rgba(60,0,10,0.75)'); sh.addColorStop(1, 'rgba(60,0,10,0)'); g.fillStyle = sh; g.fillRect(cx - w, cy - 40, w * 2, 40);
-      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ix - sd * 10, iy - 14, 8, 10, -0.4, 0, TAU); g.fill(); g.beginPath(); g.ellipse(ix + sd * 12, iy + 16, 4, 4, 0, 0, TAU); g.fill();
-    }
-    g.restore();
-    if (!glow) {
-      g.strokeStyle = '#1a070c'; g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 10; g.stroke(top);
-      g.lineWidth = 7; g.beginPath(); g.moveTo(outX - sd * 6, cy - 12); g.quadraticCurveTo(outX + sd * 10, cy - 18, outX + sd * 18, cy - 28); g.stroke(); // 눈꼬리 날개
-      g.lineWidth = 3; g.strokeStyle = 'rgba(120,40,50,0.7)'; g.beginPath(); g.moveTo(inX + sd * 14, cy - 26); g.bezierCurveTo(cx - sd * w * 0.2, cy - 44, cx + sd * w * 0.25, cy - 46, outX - sd * 4, cy - 26); g.stroke(); // 쌍꺼풀
-      g.lineWidth = 3; g.strokeStyle = 'rgba(40,10,16,0.75)'; g.beginPath(); g.moveTo(cx - sd * w * 0.05, cy + 27); g.quadraticCurveTo(cx + sd * w * 0.3, cy + 22, outX - sd * 2, cy - 8); g.stroke(); // 아래 속눈썹
-    }
-  }
+  // 눈: 공용 paintEye 'sharp' (붉은 홍채) — glow 는 각성 오버레이용 (홍채만 발광색)
+  for (const sd of [-1, 1]) paintEye(g, P, K, sd, { style: 'sharp', az: 0.36, el: 0.035, glow, iris: glow ? ['#ffe0a0', '#ff6a1a', '#c02800', '#000'] : ['#ff9a7a', '#e01830', '#4a0010', '#2a0006'], pupil: '#200006', lash: '#1a070c' });
   const t = new THREE.CanvasTexture(c); if (!glow) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
 }
 
 /* =====================================================================
    얼굴: 애니메 얼굴 (둥근 볼 · 갸름한 V 턱 · 작은 코) — 눈·입은 데칼
    ===================================================================== */
-const HC = new V3(0, 0.103, 0.006), HR = [0.074, 0.103, 0.087];
-function headPt(dx, dy, dz, out) {
-  const ax = Math.abs(dx), fz = Math.max(0, dz);
-  let x = dx * HR[0], y = dy * HR[1], z = dz * HR[2];
-  if (dz < 0) z *= 1.06;
-  const low = smooth(0.0, -0.92, dy);
-  x *= 1 - 0.36 * low * (0.55 + 0.45 * fz); // 갸름한 턱
-  z += 0.006 * gauss(dy + 0.86, 0.2) * fz; y -= 0.007 * gauss(dy + 0.86, 0.2) * fz; // 뾰족한 턱끝
-  z += 0.004 * gauss(ax - 0.5, 0.25) * gauss(dy + 0.2, 0.25) * fz; // 둥근 볼
-  z -= 0.003 * gauss(ax - 0.38, 0.18) * gauss(dy - 0.02, 0.12) * fz; // 눈 자리
-  z += 0.009 * gauss(dx, 0.055) * gauss(dy + 0.13, 0.08) * fz * fz * fz; // 작은 코
-  return out.set(HC.x + x, HC.y + y, HC.z + z);
-}
-const dirOf = (az, el, out = new V3()) => out.set(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
-const headN = (p) => new V3((p.x - HC.x) / (HR[0] * HR[0]), (p.y - HC.y) / (HR[1] * HR[1]), (p.z - HC.z) / (HR[2] * HR[2])).normalize();
-const headAt = (az, el, off = 0, out = new V3()) => { const d = dirOf(az, el), p = headPt(d.x, d.y, d.z, out); if (off) p.addScaledVector(headN(p), off); return p; };
+// 공용 애니메 얼굴형 (V자 턱 · 평평한 앞얼굴 · 각진 두개) — 아리엘보다 턱이 조금 더 날렵
+const { HC, HR, headPt, headN, headAt, dirOf } = animeHead({ C: new V3(0, 0.103, 0.006), R: [0.073, 0.102, 0.089], jaw: 0.46, chin: 0.015, nose: 0.6 });
 // 얼굴 위에 붙이는 데칼 곡면 (방위 az0~az1, 고도 el0~el1)
 const decal = (az0, az1, el0, el1, off, n = 16) => surf((u, v, p) => headAt(az0 + (az1 - az0) * u, el0 + (el1 - el0) * v, off, p), n, Math.max(4, n >> 1));
 
@@ -454,7 +420,7 @@ export function createModel(pal) {
   }
 
   /* ---------- 목 · 철 목줄 · 얼굴 · 뿔 · 머리카락 ---------- */
-  add(J.neck, C('neck', () => loft((v) => ({ y: -0.03 + 0.13 * v, rx: 0.042, rzF: 0.04, rzB: 0.038 }), 20, 4)), M.skin);
+  add(J.neck, C('neck', () => loft((v) => ({ y: -0.03 + 0.13 * v, rx: 0.038 - 0.009 * smooth(0.2, 0.8, v), rzF: 0.036 - 0.006 * smooth(0.2, 0.8, v), rzB: 0.036 - 0.004 * v }), 20, 6)), M.skin); // 위로 갈수록 가늘게
   const coP = (v) => ({ y: 0.012 + 0.038 * v, rx: 0.052, rzF: 0.05, rzB: 0.048, n: 2.3 });
   add(J.neck, C('choker', () => loft(coP, 36, 3)), M.iron); lRim(J.neck, 'chkR0', coP, 0, 0.004, M.silver); lRim(J.neck, 'chkR1', coP, 1, 0.004, M.silver);
   { const g = new THREE.Group(); g.position.set(0, 0.03, 0.054); J.neck.add(g); const sh = new THREE.Shape(); sh.moveTo(0, 0.034); sh.lineTo(0.007, 0.01); sh.lineTo(0.026, 0.004); sh.lineTo(0.007, -0.002); sh.lineTo(0, -0.04); sh.lineTo(-0.007, -0.002); sh.lineTo(-0.026, 0.004); sh.lineTo(-0.007, 0.01); sh.closePath();

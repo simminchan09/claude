@@ -151,6 +151,7 @@ src/main.js        게임 진행 · 렌더 · 컷인 초상 렌더
 src/fighter.js     파이터 상태 머신 · 기술 실행 · 피격
 src/rig.js         휴머노이드 관절 · 포즈 보간
 src/sculpt.js      절차적 조형 도구 (곡면 로프트 · 가닥 · 노이즈 · 노멀맵)
+src/face.js        공용 애니메 얼굴: 얼굴형 조각 · 명조풍 눈 그리기
 src/cloth.js       물리 부품: 천(망토) · 로프(땋은 머리 · 사슬) + 렌더러
 src/plunge.js      공통 낙하 공격
 src/fx.js          이펙트 시스템

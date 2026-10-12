@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { clamp } from '../core.js';
 import { Cloth } from '../cloth.js';
+import { paintEye } from '../face.js';
 import { surf, loft, loftAt, loftRing, onSurf, strand, spl, lathe, ang, fbm, gauss, smooth, heightToNormal, envCube, cached } from '../sculpt.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
@@ -164,6 +165,23 @@ function fullerTex() {
   return tex(c);
 }
 
+// 얼굴 텍스처 (머리 UV: P(az, el)): 따뜻한 피부 · 음영 · 이마 주름 · 위엄 있는 금빛 눈 (공용 paintEye 'stern')
+function faceTex() {
+  const W = 2048, H = 1024, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d'), P = (az, el) => [(az / TAU + 0.5) * W, (0.5 - el / Math.PI) * H], K = W / TAU;
+  g.fillStyle = '#f2d0bc'; g.fillRect(0, 0, W, H);
+  const [fx, fy] = P(0, 0.1), gr = g.createRadialGradient(fx, fy, 30, fx, fy, K * 1.5); gr.addColorStop(0, 'rgba(255,240,228,0.5)'); gr.addColorStop(0.6, 'rgba(255,228,214,0)'); gr.addColorStop(1, 'rgba(170,110,95,0.35)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+  g.save(); g.filter = 'blur(14px)'; g.fillStyle = 'rgba(230,120,110,0.18)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.52, -0.08); g.beginPath(); g.ellipse(x, y, K * 0.15, K * 0.06, 0, 0, TAU); g.fill(); } g.restore();
+  g.save(); g.filter = 'blur(9px)'; g.fillStyle = 'rgba(150,80,70,0.3)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.37, 0.16); g.beginPath(); g.ellipse(x, y, K * 0.17, K * 0.06, 0, 0, TAU); g.fill(); } g.restore(); // 눈두덩 그늘
+  // 이마 주름 · 미간 주름
+  g.strokeStyle = 'rgba(150,90,70,0.35)'; g.lineCap = 'round'; g.lineWidth = 3;
+  for (let k = 0; k < 3; k++) { const [x0, y0] = P(-0.42 + k * 0.03, 0.44 + k * 0.07), [x1, y1] = P(0, 0.46 + k * 0.07), [x2, y2] = P(0.42 - k * 0.03, 0.44 + k * 0.07); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x1, y1 - 8, x2, y2); g.stroke(); }
+  for (const sd of [-1, 1]) { const [x0, y0] = P(sd * 0.05, 0.3), [x1, y1] = P(sd * 0.07, 0.2); g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+  // 코 옆 그늘
+  g.save(); g.filter = 'blur(3px)'; g.strokeStyle = 'rgba(160,95,80,0.45)'; g.lineWidth = 5; { const [x0, y0] = P(-0.07, 0.06), [x1, y1] = P(-0.06, -0.12); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 - 6, (y0 + y1) / 2, x1, y1); g.stroke(); } g.restore();
+  for (const sd of [-1, 1]) paintEye(g, P, K, sd, { style: 'stern', az: 0.37, el: 0.13, iris: ['#ffe48a', '#e2a832', '#8a5a12', '#4a3008'], pupil: '#2a1a06', lash: '#3a2c26' });
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+
 /* =====================================================================
    얼굴: 구 하나를 조각한다 (방향 d → 머리 로컬 좌표)
    ===================================================================== */
@@ -181,11 +199,11 @@ function headPt(dx, dy, dz, out) {
   z -= 0.004 * gauss(ax - 0.5, 0.15) * gauss(dy + 0.32, 0.12) * fz; // 볼 꺼짐
   z += 0.011 * gauss(dy - 0.3, 0.09) * gauss(ax - 0.28, 0.32) * fz * fz; // 눈썹뼈
   z -= 0.012 * smooth(0.38, 0.92, dy) * fz; // 이마 경사
-  z -= 0.014 * gauss(ax - 0.36, 0.13) * gauss(dy - 0.13, 0.09) * fz * fz; // 눈두덩
+  z -= 0.004 * gauss(ax - 0.36, 0.13) * gauss(dy - 0.13, 0.09) * fz * fz; // 눈두덩 (그린 눈이 일그러지지 않게 얕게)
   x -= sx * 0.004 * gauss(ax - 0.85, 0.12) * gauss(dy - 0.25, 0.2); // 관자놀이
   // 코: 콧대 → 코끝 → 콧망울
   const nw = 0.05 + 0.05 * smooth(0.1, -0.1, dy);
-  z += 0.031 * gauss(dx, nw) * noseY(dy) * fz * fz;
+  z += 0.024 * gauss(dx, nw) * noseY(dy) * fz * fz;
   z += 0.009 * gauss(ax - 0.1, 0.045) * gauss(dy + 0.1, 0.05) * fz;
   // 입술 (콧수염 아래)
   z += 0.005 * gauss(dx, 0.22) * gauss(dy + 0.34, 0.05) * fz; z -= 0.003 * gauss(dy + 0.38, 0.02) * gauss(dx, 0.2) * fz;
@@ -221,7 +239,8 @@ export function createModel(pal) {
     fur: phys({ color: 0xf4f2ec, roughness: 0.85, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.6 }),
     furCard: phys({ map: T('furCard', furCardTex), alphaTest: 0.38, roughness: 0.85, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.55 }),
     furB: phys({ map: FT.map, normalMap: FT.normalMap, normalScale: new THREE.Vector2(1.4, 1.4), roughness: 0.9, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.6 }),
-    skin: phys({ color: 0xe4bea6, roughness: 0.6, sheen: 0.25, sheenColor: new THREE.Color(0xffc8b4) }),
+    skin: phys({ color: 0xf0cdb8, emissive: 0x6a4a3c, emissiveIntensity: 0.3, roughness: 0.55, sheen: 0.3, sheenColor: new THREE.Color(0xffc8b4) }),
+    face: phys({ map: T('face', faceTex), emissiveMap: T('face', faceTex), emissive: 0x5a4640, emissiveIntensity: 1, roughness: 0.55, sheen: 0.3, sheenColor: new THREE.Color(0xffc8b4) }),
     hairSolid: phys({ map: T('hairS', () => hairTex(false)), roughness: 0.42, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.35 }),
     hair: phys({ map: T('hairA', () => hairTex(true)), alphaTest: 0.35, color: 0xf2f2f6, roughness: 0.42, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.35 }),
     hairSh: phys({ map: T('hairA', () => hairTex(true)), alphaTest: 0.35, color: 0xc4c6d0, roughness: 0.5, sheen: 1, sheenColor: new THREE.Color(0xe8eaf4), sheenRoughness: 0.4 }),
@@ -424,16 +443,10 @@ export function createModel(pal) {
   /* ---------- 목 · 얼굴 ---------- */
   add(J.neck, C('neck', () => loft((v) => ({ y: -0.03 + 0.15 * v, rx: 0.058 - 0.008 * v, rzF: 0.054, rzB: 0.05 }), 24, 6)), M.skin);
   const H = J.head;
-  add(H, C('head', () => surf((u, v, p) => { const az = (u - 0.5) * TAU, el = -Math.PI / 2 + v * Math.PI, d = dirOf(az, el); headPt(d.x, d.y, d.z, p); }, 80, 60, { closedU: true, poles: [0, 60] })), M.skin);
+  add(H, C('head', () => surf((u, v, p) => { const az = (u - 0.5) * TAU, el = -Math.PI / 2 + v * Math.PI, d = dirOf(az, el); headPt(d.x, d.y, d.z, p); }, 96, 72, { closedU: true, poles: [0, 72] })), M.face);
   for (const s of [-1, 1]) {
     // 눈: 흰자 · 홍채 · 동공 · 내리깐 윗눈꺼풀 (날카로운 눈매)
-    const az = s * 0.37, el = 0.13, sp = headAt(az, el); const ec = new V3(sp.x * 0.97, sp.y, sp.z - 0.0085);
-    const eye = new THREE.Group(); eye.position.copy(ec); eye.rotation.y = s * 0.06; H.add(eye);
-    add(eye, C('eyeball', () => new THREE.SphereGeometry(0.0118, 28, 20)), M.white);
-    add(eye, C('iris', () => new THREE.CircleGeometry(0.0056, 24)), M.iris, [0, 0, 0.0117]);
-    add(eye, C('pupil', () => new THREE.CircleGeometry(0.0026, 16)), M.pupil, [0, 0, 0.01175]);
-    add(eye, C('lidU', () => new THREE.SphereGeometry(0.0128, 28, 14, 0, TAU, 0, Math.PI * 0.42)), M.skin, [0, 0, 0], [0.55, 0, s * -0.12]);
-    add(eye, C('lidL', () => new THREE.SphereGeometry(0.0125, 28, 10, 0, TAU, Math.PI * 0.68, Math.PI * 0.32)), M.skin, [0, 0, 0], [-0.25, 0, 0]);
+    // 눈은 얼굴 텍스처에 그린다 (faceTex · 공용 paintEye 'stern')
     // 굵은 흰 눈썹: 안쪽이 낮게 찌푸림
     for (let k = 0; k < 6; k++) {
       const a0 = s * (0.12 + k * 0.012), pts = [headAt(a0, 0.24 - k * 0.004, 0.003), headAt(s * (0.3 + k * 0.01), 0.3 + k * 0.006, 0.0045), headAt(s * (0.52 + k * 0.006), 0.31 + k * 0.004, 0.003)];
