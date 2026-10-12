@@ -24,6 +24,12 @@ export function prepareDef(def) {
   if (def._ready) return def;
   const base = def.poses.base;
   def._poses = {};
+  // 앉기 자세가 없으면 기본 자세에 다리·상체만 굽혀 만든다 (팔·무기는 기본 자세 그대로)
+  if (!def.poses.crouch) {
+    const sp = base.spine || [0, 0, 0];
+    def.poses.crouch = { spine: [sp[0] + 0.32, sp[1], sp[2]], head: [-0.2, (base.head || [0, 0, 0])[1], 0], hips: [0, (base.hips || [0, 0, 0])[1] * 0.5, 0],
+      hipL: [-1.35, 0, 0.16], kneeL: [2.15, 0, 0], footL: [-0.7, 0, 0], hipR: [-0.75, 0, -0.16], kneeR: [2.05, 0, 0], footR: [-1.1, 0, 0] };
+  }
   for (const k in def.poses) def._poses[k] = flat({ ...base, ...def.poses[k] });
   for (const name in def.moves) {
     const m = def.moves[name]; let cur = { ...base };

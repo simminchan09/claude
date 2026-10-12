@@ -35,6 +35,12 @@ export default {
 - (선택) `rigHook(fighter)`: 포즈 적용 직후 호출된다. 레오는 여기서 `weapon` 값을 손목 회전 대신 **몸 기준 창끝 방향 [피치(위+), 좌우(오른쪽+), 롤]** 로 해석한다 — 긴 무기는 이 방식이 궤적을 잡기 훨씬 쉽다.
 - 무기를 던지는 기술은 `setWeapon(false)` 동안 `weaponOut` 이 참이 되어 공격 입력이 막힌다.
 
+### 3-0. 물리 부품 (`src/cloth.js`)
+- `Cloth(scene, W, H, len, mat)`: 위쪽 줄이 고정된 천 (망토). 매 프레임 `anchors` 를 옮기고 `step()`.
+- `Rope(n, seg)`: 첫 점이 고정된 로프 (땋은 머리 · 사슬 · 키링). `step(dt, 고정점, 충돌 캡슐, 바닥, 기본 방향)`.
+- `RopeTube` / `RopeChain`: 로프를 굵기가 변하는 관 / 사슬 고리로 그린다. 아자젤의 `m.ropes` 처리 참고.
+- 몸 밖(씬)에 두는 메시는 `extras` 에 넣어 컷인 초상에서 숨긴다.
+
 ### 3-1. 조형 도구 (`src/sculpt.js`)
 기본 도형(원기둥·구·박스)을 이어 붙이면 도형 티가 납니다. 레오처럼 곡면을 직접 만드세요.
 - `loft(prof, nu, nv, { a0, a1, mod })`: 높이 v 마다 `{ y, rx, rz | rzF, rzB, n }` 단면(n>2 = 둥근 사각). 팔다리·몸통·갑옷판. `a0~a1` 로 일부 각도만(판갑), `mod` 로 능선·근육 같은 추가 변형.
@@ -55,7 +61,7 @@ export default {
 | 상체 숙이기 · 비틀기 | spine/chest x 양수 · y 양수 = 왼쪽 |
 | 팔 벌리기 | 왼팔 z 양수, 오른팔 z 음수 |
 
-필수 포즈 이름: `base`(대기) `run` `jump` `guard` `hit` `air`(공중 피격) `down`(누움) `dash` `win` `portrait`(컷인 초상).
+필수 포즈 이름: `base`(대기) `run` `jump` `guard` `hit` `air`(공중 피격) `down`(누움) `dash` `win` `portrait`(컷인 초상). `crouch`(앉기)는 없으면 기본 자세에 다리·상체만 굽혀 자동으로 만든다.
 
 ## 5. 기술
 이름 규칙과 키: `light1 → light2 → light3` = 좌클릭 연타, `heavy` = 우클릭, `s1` = Shift, `s2` = E, `ult` = Q, `counter` = 극한 회피 직후 좌클릭(선택).

@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { buildHumanoid } from '../rig.js';
 import { clamp } from '../core.js';
+import { Cloth } from '../cloth.js';
 import { surf, loft, loftAt, loftRing, onSurf, strand, spl, lathe, ang, fbm, gauss, smooth, heightToNormal, envCube, cached } from '../sculpt.js';
 
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
@@ -161,63 +162,6 @@ function fullerTex() {
   for (let i = 0; i < 5; i++) { scroll(g, 80, 120 + i * 190, 42, 0, 1.15, 1); scroll(g, 176, 215 + i * 190, 42, Math.PI, 1.15, -1); }
   g.lineWidth = 10; g.strokeRect(6, 6, 244, 1012);
   return tex(c);
-}
-
-/* =====================================================================
-   천 시뮬레이션 (망토): 위쪽 줄은 등에 고정, 몸 캡슐과 충돌
-   ===================================================================== */
-class Cloth {
-  constructor(scene, W, H, len, mat) {
-    this.W = W; this.H = H; this.len = len; this.n = W * H;
-    this.p = new Float32Array(this.n * 3); this.o = new Float32Array(this.n * 3); this.ok = false;
-    const geo = new THREE.PlaneGeometry(1, 1, W - 1, H - 1); geo.attributes.position.setUsage(THREE.DynamicDrawUsage);
-    this.mesh = new THREE.Mesh(geo, mat); this.mesh.frustumCulled = false; this.mesh.castShadow = true; this.mesh.receiveShadow = true; scene.add(this.mesh);
-    this.acc = 0; this.anchors = Array.from({ length: W }, () => new V3());
-  }
-  reset() {
-    const { W, H, p, o } = this;
-    for (let i = 0; i < W; i++) for (let j = 0; j < H; j++) { const a = this.anchors[i], k = (j * W + i) * 3; p[k] = o[k] = a.x; p[k + 1] = o[k + 1] = a.y - j * this.dy; p[k + 2] = o[k + 2] = a.z - j * 0.01; }
-    this.ok = true;
-  }
-  step(dt, caps, floor, wind) {
-    const { W, H, p, o } = this;
-    this.dx = this.anchors[0].distanceTo(this.anchors[1]); this.dy = this.len / (H - 1);
-    if (!this.ok) this.reset();
-    if (Math.hypot(p[0] - this.anchors[0].x, p[1] - this.anchors[0].y, p[2] - this.anchors[0].z) > 1.5) this.reset();
-    this.acc += Math.min(dt, 0.05); const h = 1 / 90;
-    while (this.acc >= h) {
-      this.acc -= h;
-      for (let j = 1; j < H; j++) for (let i = 0; i < W; i++) {
-        const k = (j * W + i) * 3;
-        for (let a = 0; a < 3; a++) { const v = (p[k + a] - o[k + a]) * 0.982; o[k + a] = p[k + a]; p[k + a] += v + (a === 1 ? -9.8 * h * h : wind[a] * h * h); }
-      }
-      for (let i = 0; i < W; i++) { const a = this.anchors[i], k = i * 3; p[k] = a.x; p[k + 1] = a.y; p[k + 2] = a.z; }
-      for (let it = 0; it < 5; it++) {
-        for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-          const k = (j * W + i) * 3;
-          if (i < W - 1) this.link(k, k + 3, this.dx, j === 0);
-          if (j < H - 1) this.link(k, k + W * 3, this.dy, j === 0);
-          if (i < W - 1 && j < H - 1) this.link(k, k + W * 3 + 3, Math.hypot(this.dx, this.dy), j === 0);
-          if (j < H - 2) this.link(k, k + W * 6, this.dy * 2, j === 0, 0.3); // 굽힘 강성: 잔주름 대신 큰 주름
-        }
-        for (let q = W * 3; q < this.n * 3; q += 3) {
-          for (const c of caps) {
-            const ax = c.a.x, ay = c.a.y, az = c.a.z, bx = c.b.x - ax, by = c.b.y - ay, bz = c.b.z - az, l2 = bx * bx + by * by + bz * bz;
-            let t = l2 ? ((p[q] - ax) * bx + (p[q + 1] - ay) * by + (p[q + 2] - az) * bz) / l2 : 0; t = t < 0 ? 0 : t > 1 ? 1 : t;
-            const cx = p[q] - (ax + bx * t), cy = p[q + 1] - (ay + by * t), cz = p[q + 2] - (az + bz * t), d = Math.hypot(cx, cy, cz), r = c.r;
-            if (d < r && d > 1e-5) { const s = r / d; p[q] = ax + bx * t + cx * s; p[q + 1] = ay + by * t + cy * s; p[q + 2] = az + bz * t + cz * s; }
-          }
-          if (p[q + 1] < floor) p[q + 1] = floor;
-        }
-      }
-    }
-    const pos = this.mesh.geometry.attributes.position; pos.array.set(p); pos.needsUpdate = true; this.mesh.geometry.computeVertexNormals();
-  }
-  link(a, b, rest, pinA, k = 1) {
-    const p = this.p, dx = p[b] - p[a], dy = p[b + 1] - p[a + 1], dz = p[b + 2] - p[a + 2], d = Math.hypot(dx, dy, dz) || 1e-6, f = ((d - rest) / d) * k;
-    if (pinA) { p[b] -= dx * f; p[b + 1] -= dy * f; p[b + 2] -= dz * f; }
-    else { const h = f * 0.5; p[a] += dx * h; p[a + 1] += dy * h; p[a + 2] += dz * h; p[b] -= dx * h; p[b + 1] -= dy * h; p[b + 2] -= dz * h; }
-  }
 }
 
 /* =====================================================================

@@ -38,9 +38,9 @@ export function endFrame() { for (const k in pressed) delete pressed[k]; }
 // 키 배치. 1P 단독(CPU·훈련) 모드에서는 방향키도 이동에 쓸 수 있다.
 export const MAPS = {
   // 좌클 = 기본공격 · 우클 / Shift / E = 스킬 · Q = 궁극기 (J K U I O 도 같은 동작)
-  p1solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['Space'], dash: ['KeyC'], lock: ['Tab', 'Mouse1'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'ShiftRight', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
-  p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], dash: ['KeyC'], guard: ['KeyF'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
-  p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight'], dash: ['NumpadDecimal', 'ShiftRight'], guard: ['Numpad3', 'Slash'], light: ['Numpad1', 'Comma'], heavy: ['Numpad2', 'Period'], s1: ['Numpad4', 'Semicolon'], s2: ['Numpad5', 'Quote'], ult: ['Numpad6', 'BracketRight'] },
+  p1solo: { up: ['KeyW', 'ArrowUp'], down: ['KeyS', 'ArrowDown'], left: ['KeyA', 'ArrowLeft'], right: ['KeyD', 'ArrowRight'], jump: ['Space'], dash: ['KeyC'], lock: ['Tab', 'Mouse1'], guard: ['KeyF'], crouch: ['KeyX', 'KeyZ'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'ShiftRight', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
+  p1: { up: ['KeyW'], down: ['KeyS'], left: ['KeyA'], right: ['KeyD'], jump: ['Space'], dash: ['KeyC'], guard: ['KeyF'], crouch: ['KeyX', 'KeyZ'], light: ['Mouse0', 'KeyJ'], heavy: ['Mouse2', 'KeyK'], s1: ['ShiftLeft', 'KeyU'], s2: ['KeyE', 'KeyI'], ult: ['KeyQ', 'KeyO'] },
+  p2: { up: ['ArrowUp'], down: ['ArrowDown'], left: ['ArrowLeft'], right: ['ArrowRight'], jump: ['Numpad0', 'ControlRight'], dash: ['NumpadDecimal', 'ShiftRight'], guard: ['Numpad3', 'Slash'], crouch: ['Numpad7', 'BracketLeft'], light: ['Numpad1', 'Comma'], heavy: ['Numpad2', 'Period'], s1: ['Numpad4', 'Semicolon'], s2: ['Numpad5', 'Quote'], ult: ['Numpad6', 'BracketRight'] },
 };
 export const ACTIONS = ['ult', 's1', 's2', 'heavy', 'light', 'dash'];
 export function keyName(code) {
@@ -61,7 +61,7 @@ export class KeyCtrl {
     const f = G.camFwdOf ? G.camFwdOf(fighter) : G.camFwd;
     let mx = f.x * iy - f.z * ix, mz = f.z * iy + f.x * ix;
     const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
-    return { mx, mz, guard: h('guard'), jumpP: p('jump'), lockP: this.m.lock ? p('lock') : false, press: ACTIONS.find(p) || null };
+    return { mx, mz, guard: h('guard'), crouch: this.m.crouch ? h('crouch') : false, jumpP: p('jump'), lockP: this.m.lock ? p('lock') : false, press: ACTIONS.find(p) || null };
   }
 }
 

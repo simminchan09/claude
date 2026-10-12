@@ -193,7 +193,7 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 #touch.on{display:flex}
 .pad{display:grid;gap:8px;pointer-events:auto}
 .dpad{grid-template-columns:repeat(3,52px);grid-template-rows:repeat(2,52px)}
-.acts{grid-template-columns:repeat(4,52px);grid-template-rows:repeat(2,52px)}
+.acts{grid-template-columns:repeat(5,52px);grid-template-rows:repeat(2,52px)}
 .pad button{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.28);border-radius:50%;font:700 13px var(--f-body);padding:0;touch-action:none}
 .pad button.down{background:rgba(255,255,255,.3)}
 .dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .d{grid-column:2;grid-row:2}.dpad .r{grid-column:3;grid-row:2}
@@ -268,7 +268,7 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
   <div class="pad dpad"><button class="u" data-k="KeyW">▲</button><button class="l" data-k="KeyA">◀</button><button class="d" data-k="KeyS">▼</button><button class="r" data-k="KeyD">▶</button></div>
   <div class="pad acts">
     <button data-k="KeyU">스킬1</button><button data-k="KeyI">스킬2</button><button data-k="KeyQ" style="border-color:var(--p2)">궁</button><button data-k="KeyF">방어</button>
-    <button data-k="KeyJ">공격</button><button data-k="KeyK">우클</button><button data-k="Space">점프</button><button data-k="KeyC">회피</button>
+    <button data-k="KeyJ">공격</button><button data-k="KeyK">우클</button><button data-k="Space">점프</button><button data-k="KeyC">회피</button><button data-k="KeyX">앉기</button>
   </div>
 </div>
 <script type="module" src="src/main.js"></script>
