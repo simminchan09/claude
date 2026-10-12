@@ -40,6 +40,9 @@ function flames(g, x0, x1, yBase, h, n, r, fill) {
 function hairTex(base, dark, light) {
   const W = 256, H = 512, [c, g] = cv(W, H), r = rng(51); g.fillStyle = base; g.fillRect(0, 0, W, H);
   for (let i = 0; i < 380; i++) { const x = r() * W, k = r(); g.strokeStyle = k < 0.45 ? dark : k > 0.85 ? light : base; g.globalAlpha = 0.35 + r() * 0.4; g.lineWidth = 1 + r() * 3; g.beginPath(); g.moveTo(x, H); g.quadraticCurveTo(x + (r() - 0.5) * 16, H / 2, x + (r() - 0.5) * 10, 0); g.stroke(); }
+  // 천사의 고리: 정수리 쪽 가로 하이라이트 띠 (톱니 모양)
+  g.globalAlpha = 0.55; g.fillStyle = light; const y0 = H * 0.32; g.beginPath(); g.moveTo(0, y0);
+  for (let x = 0; x <= W; x += 16) g.lineTo(x, y0 - 10 - r() * 22); for (let x = W; x >= 0; x -= 16) g.lineTo(x, y0 + 8 + r() * 16); g.closePath(); g.fill();
   g.globalAlpha = 1; return tex(c);
 }
 // 땋은 머리: 비스듬한 세 갈래 결
@@ -170,6 +173,68 @@ function furCardTex() {
 }
 function keyFaceTex() { const [c, g] = cv(128, 128); g.fillStyle = '#c8102a'; g.fillRect(0, 0, 128, 128); g.fillStyle = '#fff'; g.beginPath(); g.ellipse(44, 54, 14, 10, 0.3, 0, TAU); g.ellipse(84, 54, 14, 10, -0.3, 0, TAU); g.fill(); g.fillStyle = '#1a0a0e'; g.beginPath(); g.arc(46, 56, 5, 0, TAU); g.arc(82, 56, 5, 0, TAU); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 4; g.beginPath(); for (let i = 0; i <= 6; i++) g.lineTo(34 + i * 10, 84 + (i % 2) * 8); g.stroke(); return tex(c); }
 
+// 얼굴 전체를 머리 곡면의 UV(방위·고도)에 직접 그린다: 큰 눈 · 속눈썹 · 눈썹 · 볼 홍조 · 코·턱 음영 · 입 · 반창고
+//   open = 송곳니가 드러난 벌린 입 (화염 숨결 · 포효) / glow = 각성 시 빛나는 홍채만 그린 발광맵
+function faceTex(open, glow) {
+  const W = 2048, H = 1024, [c, g] = cv(W, H), P = (az, el) => [(az / TAU + 0.5) * W, (0.5 - el / Math.PI) * H], K = W / TAU;
+  if (glow) { g.fillStyle = '#000'; g.fillRect(0, 0, W, H); }
+  else {
+    g.fillStyle = '#fbdccb'; g.fillRect(0, 0, W, H);
+    // 입체 음영: 얼굴 옆 · 턱 밑은 어둡게, 볼·이마는 밝게
+    const [fx, fy] = P(0, 0.05), gr = g.createRadialGradient(fx, fy, 30, fx, fy, K * 1.5); gr.addColorStop(0, 'rgba(255,240,230,0.55)'); gr.addColorStop(0.6, 'rgba(255,230,215,0)'); gr.addColorStop(1, 'rgba(190,120,110,0.35)'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+    const [, cy0] = P(0, -0.62), cg = g.createLinearGradient(0, cy0, 0, H * 0.8); cg.addColorStop(0, 'rgba(200,120,110,0)'); cg.addColorStop(1, 'rgba(190,110,100,0.5)'); g.fillStyle = cg; g.fillRect(0, cy0, W, H);
+    // 볼 홍조
+    g.save(); g.filter = 'blur(14px)'; g.fillStyle = 'rgba(255,110,120,0.38)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.5, -0.18); g.beginPath(); g.ellipse(x, y, K * 0.16, K * 0.06, 0, 0, TAU); g.fill(); } g.restore();
+    // 눈두덩 그림자
+    g.save(); g.filter = 'blur(10px)'; g.fillStyle = 'rgba(190,80,90,0.28)'; for (const sd of [-1, 1]) { const [x, y] = P(sd * 0.37, 0.1); g.beginPath(); g.ellipse(x, y, K * 0.2, K * 0.07, 0, 0, TAU); g.fill(); } g.restore();
+    // 코: 옆 그림자 + 콧망울 점
+    g.save(); g.filter = 'blur(2px)'; g.strokeStyle = 'rgba(190,110,100,0.55)'; g.lineWidth = 4; g.lineCap = 'round'; { const [x0, y0] = P(-0.04, -0.04), [x1, y1] = P(-0.025, -0.14); g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(x0 - 4, (y0 + y1) / 2, x1, y1); g.stroke(); } g.restore();
+    { const [x, y] = P(0.01, -0.145); g.fillStyle = 'rgba(170,90,90,0.5)'; g.beginPath(); g.ellipse(x, y, 5, 3, 0, 0, TAU); g.fill(); }
+    // 눈썹: 짙은 붉은색, 안쪽이 낮게 (찌푸린 표정)
+    g.strokeStyle = '#7a1022'; g.lineCap = 'round';
+    for (const sd of [-1, 1]) { const [x0, y0] = P(sd * 0.14, 0.19), [x1, y1] = P(sd * 0.36, 0.275), [x2, y2] = P(sd * 0.6, 0.255); for (let k = 0; k < 3; k++) { g.lineWidth = 11 - k * 3; g.beginPath(); g.moveTo(x0, y0 + k); g.quadraticCurveTo(x1, y1 - 4 + k, x2, y2 + k * 2); g.stroke(); } }
+    // 입
+    if (!open) {
+      const [x0, y0] = P(-0.12, -0.43), [x1, y1] = P(0.13, -0.415), [xm, ym] = P(0, -0.445);
+      g.strokeStyle = '#8a3438'; g.lineWidth = 4.5; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(xm, ym + 4, x1, y1 - 3); g.stroke(); // 한쪽이 올라간 비웃음
+      const [fx2, fy2] = P(0.075, -0.432); g.fillStyle = '#fff'; g.beginPath(); g.moveTo(fx2 - 6, fy2); g.lineTo(fx2 + 6, fy2 - 1); g.lineTo(fx2 + 1, fy2 + 11); g.closePath(); g.fill(); // 삐져나온 송곳니
+      g.strokeStyle = 'rgba(180,100,100,0.35)'; g.lineWidth = 3; const [lx, ly] = P(0, -0.49); g.beginPath(); g.moveTo(lx - 18, ly); g.quadraticCurveTo(lx, ly + 5, lx + 18, ly); g.stroke();
+    } else {
+      const [x0, y0] = P(-0.16, -0.4), [x1, y1] = P(0.16, -0.4), [xb, yb] = P(0, -0.56);
+      g.fillStyle = '#4a0612'; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2, y0 - 8, x1, y1); g.quadraticCurveTo(x1 - 10, yb, xb, yb); g.quadraticCurveTo(x0 + 10, yb, x0, y0); g.fill();
+      g.fillStyle = '#c84a5a'; g.beginPath(); g.ellipse(xb, yb - 14, 34, 12, 0, 0, TAU); g.fill();
+      g.fillStyle = '#fff'; g.fillRect(x0 + 14, y0 - 3, x1 - x0 - 28, 8); for (const x of [x0 + 26, x1 - 26]) { g.beginPath(); g.moveTo(x - 8, y0); g.lineTo(x + 8, y0); g.lineTo(x, y0 + 26); g.closePath(); g.fill(); }
+      g.strokeStyle = '#8a3438'; g.lineWidth = 4; g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo((x0 + x1) / 2, y0 - 8, x1, y1); g.stroke();
+    }
+    // 반창고 (오른쪽 볼)
+    { const [x, y] = P(-0.6, -0.2); g.save(); g.translate(x, y); g.rotate(-0.45); g.fillStyle = '#f2e6d8'; g.fillRect(-46, -16, 92, 32); g.fillStyle = '#e0ccb4'; g.fillRect(-14, -16, 28, 32); g.fillStyle = 'rgba(160,130,110,0.6)'; for (let i = 0; i < 6; i++) g.fillRect(-40 + (i % 3) * 8, -8 + Math.floor(i / 3) * 12, 3, 3); g.strokeStyle = 'rgba(150,120,100,0.7)'; g.lineWidth = 2; g.strokeRect(-46, -16, 92, 32); g.restore(); }
+  }
+  // 눈 (양쪽): 반쯤 내리깐 날카로운 눈매 · 큰 붉은 홍조 · 반사광
+  for (const sd of [-1, 1]) {
+    const [cx, cy] = P(sd * 0.36, 0.035), w = K * 0.42, inX = cx - sd * w * 0.48, outX = cx + sd * w * 0.52;
+    const top = new Path2D(); top.moveTo(inX, cy + 6); top.bezierCurveTo(cx - sd * w * 0.25, cy - 30, cx + sd * w * 0.25, cy - 34, outX, cy - 12);
+    const eye = new Path2D(); eye.moveTo(inX, cy + 6); eye.bezierCurveTo(cx - sd * w * 0.25, cy - 30, cx + sd * w * 0.25, cy - 34, outX, cy - 12); eye.bezierCurveTo(cx + sd * w * 0.3, cy + 26, cx - sd * w * 0.2, cy + 30, inX, cy + 6);
+    g.save(); g.clip(eye);
+    if (!glow) { g.fillStyle = '#fff6f2'; g.fillRect(cx - w, cy - 60, w * 2, 120); }
+    const ix = cx + sd * 6, iy = cy + 2, ir = g.createRadialGradient(ix - 6, iy - 12, 4, ix, iy, 40); ir.addColorStop(0, glow ? '#ffd080' : '#ff8a6a'); ir.addColorStop(0.5, glow ? '#ff5a1a' : '#e01830'); ir.addColorStop(1, glow ? '#a02000' : '#5a0010');
+    g.fillStyle = ir; g.beginPath(); g.ellipse(ix, iy, 30, 36, 0, 0, TAU); g.fill();
+    if (!glow) {
+      g.strokeStyle = '#3a0008'; g.lineWidth = 3; g.stroke();
+      g.fillStyle = '#250006'; g.beginPath(); g.ellipse(ix, iy + 2, 10, 17, 0, 0, TAU); g.fill();
+      const sh = g.createLinearGradient(0, cy - 34, 0, cy - 4); sh.addColorStop(0, 'rgba(60,0,10,0.75)'); sh.addColorStop(1, 'rgba(60,0,10,0)'); g.fillStyle = sh; g.fillRect(cx - w, cy - 40, w * 2, 40);
+      g.fillStyle = '#fff'; g.beginPath(); g.ellipse(ix - sd * 10, iy - 14, 8, 10, -0.4, 0, TAU); g.fill(); g.beginPath(); g.ellipse(ix + sd * 12, iy + 16, 4, 4, 0, 0, TAU); g.fill();
+    }
+    g.restore();
+    if (!glow) {
+      g.strokeStyle = '#1a070c'; g.lineCap = 'round'; g.lineJoin = 'round'; g.lineWidth = 10; g.stroke(top);
+      g.lineWidth = 7; g.beginPath(); g.moveTo(outX - sd * 6, cy - 12); g.quadraticCurveTo(outX + sd * 10, cy - 18, outX + sd * 18, cy - 28); g.stroke(); // 눈꼬리 날개
+      g.lineWidth = 3; g.strokeStyle = 'rgba(120,40,50,0.7)'; g.beginPath(); g.moveTo(inX + sd * 14, cy - 26); g.bezierCurveTo(cx - sd * w * 0.2, cy - 44, cx + sd * w * 0.25, cy - 46, outX - sd * 4, cy - 26); g.stroke(); // 쌍꺼풀
+      g.lineWidth = 3; g.strokeStyle = 'rgba(40,10,16,0.75)'; g.beginPath(); g.moveTo(cx - sd * w * 0.05, cy + 27); g.quadraticCurveTo(cx + sd * w * 0.3, cy + 22, outX - sd * 2, cy - 8); g.stroke(); // 아래 속눈썹
+    }
+  }
+  const t = new THREE.CanvasTexture(c); if (!glow) t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t;
+}
+
 /* =====================================================================
    얼굴: 애니메 얼굴 (둥근 볼 · 갸름한 V 턱 · 작은 코) — 눈·입은 데칼
    ===================================================================== */
@@ -202,7 +267,7 @@ export function createModel(pal) {
   const phys = (o) => { const mt = new THREE.MeshPhysicalMaterial({ side: THREE.DoubleSide, ...o }); if ((o.metalness || 0) > 0.2) { mt.envMap = env; mt.envMapIntensity = o.envMapIntensity ?? 0.9; } return mt; };
   const hairRed = pal.hair ?? 0xd01c30;
   const M = {
-    skin: phys({ color: 0xfbd9c6, emissive: 0x6a2a1e, emissiveIntensity: 0.22, roughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color(0xffc8b0) }), // 약한 자체발광 = 애니메식 밝은 피부
+    skin: phys({ color: 0xfbd9c6, emissive: 0x7a4a3c, emissiveIntensity: 0.3, roughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color(0xffc8b0) }), // 약한 자체발광 = 애니메식 밝은 피부
     hair: phys({ map: T('hair' + hairRed, () => hairTex('#' + new THREE.Color(hairRed).getHexString(), '#7a0a1c', '#ff6a72')), roughness: 0.45, sheen: 1, sheenColor: new THREE.Color(0xff8a90), sheenRoughness: 0.35 }),
     braid: phys({ map: T('braid', braidTex), roughness: 0.45, sheen: 1, sheenColor: new THREE.Color(0xff8a90), sheenRoughness: 0.35 }),
     horn: phys({ map: T('horn', () => hornTex(false)), emissiveMap: T('hornG', () => hornTex(true)), emissive: 0xffffff, emissiveIntensity: 0, roughness: 0.25, metalness: 0.3, clearcoat: 1, clearcoatRoughness: 0.15 }),
@@ -212,8 +277,13 @@ export function createModel(pal) {
     red: phys({ color: pal.lining ?? 0xc8102a, roughness: 0.55, sheen: 0.8, sheenColor: new THREE.Color(0xff6070) }),
     black: phys({ color: 0x18171c, roughness: 0.6 }),
     leather: phys({ color: 0x1a181c, roughness: 0.45, clearcoat: 0.4 }),
-    wrap: phys({ map: T('wrapH', () => wrapTex(false)), roughness: 0.85 }),
-    bandage: phys({ map: T('wrapD', () => wrapTex(true)), roughness: 0.85 }),
+    rib: phys({ map: T('rib', () => { const [c, g] = cv(512, 32); g.fillStyle = '#141318'; g.fillRect(0, 0, 512, 32); for (let x = 0; x < 512; x += 6) { g.fillStyle = 'rgba(255,255,255,0.08)'; g.fillRect(x, 0, 2, 32); } return tex(c, [8, 1]); }), roughness: 0.8 }),
+    wrap: phys({ map: T('wrapH', () => wrapTex(false)), color: 0xfff1e6, roughness: 0.85, sheen: 0.5, sheenColor: new THREE.Color(0xffffff) }),
+    // 얼굴: 자기 텍스처를 약하게 자체발광시켜 그늘에서도 밝고 따뜻한 애니메 피부 / 각성 눈빛은 아래 가산 오버레이
+    face: phys({ map: T('face', () => faceTex(false, false)), emissiveMap: T('face', () => faceTex(false, false)), emissive: 0x6a5048, emissiveIntensity: 1, roughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color(0xffc8b0) }),
+    faceO: phys({ map: T('faceO', () => faceTex(true, false)), emissiveMap: T('faceO', () => faceTex(true, false)), emissive: 0x6a5048, emissiveIntensity: 1, roughness: 0.5, sheen: 0.4, sheenColor: new THREE.Color(0xffc8b0) }),
+    faceGlow: new THREE.MeshBasicMaterial({ map: T('faceG', () => faceTex(false, true)), transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false }),
+    bandage: phys({ map: T('wrapD', () => wrapTex(true)), color: 0xfff1e6, roughness: 0.85 }),
     iron: phys({ color: 0x5a5a62, metalness: 0.85, roughness: 0.35, clearcoat: 0.3 }),
     silver: phys({ color: 0xc8c8d0, metalness: 1, roughness: 0.22 }),
     ember: phys({ color: 0x3a0a00, emissive: 0xff7a1a, emissiveIntensity: 1.2, metalness: 0.4, roughness: 0.3 }),
@@ -223,8 +293,8 @@ export function createModel(pal) {
     sock: phys({ map: T('sock', sockTex), roughness: 0.75, sheen: 0.5, sheenColor: new THREE.Color(0x404048) }),
     shoe: phys({ map: T('shoe', shoeTex), roughness: 0.5, clearcoat: 0.3 }),
     sole: phys({ color: 0xeeece6, roughness: 0.6 }),
-    fur: phys({ map: T('furC', furCardTex), alphaTest: 0.38, roughness: 0.85, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.55 }),
-    furB: phys({ color: 0xeeebe4, roughness: 0.9, sheen: 1, sheenColor: new THREE.Color(0xffffff) }),
+    fur: phys({ map: T('furC', furCardTex), alphaTest: 0.38, roughness: 0.85, emissive: 0x48443e, emissiveIntensity: 0.5, sheen: 1, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.55 }),
+    furB: phys({ color: 0xf4f1ea, roughness: 0.9, emissive: 0x48443e, emissiveIntensity: 0.5, sheen: 1, sheenColor: new THREE.Color(0xffffff) }),
     eye: phys({ map: T('eye', eyeTex), alphaTest: 0.3, emissiveMap: T('eye', eyeTex), emissive: 0xff2a1a, emissiveIntensity: 0, roughness: 0.2, clearcoat: 1 }),
     mouth: phys({ map: T('mouth', mouthTex), alphaTest: 0.3, roughness: 0.5 }),
     mouthO: phys({ map: T('mouthO', mouthOpenTex), alphaTest: 0.3, roughness: 0.5, emissiveMap: T('mouthO', mouthOpenTex), emissive: 0xff5a1a, emissiveIntensity: 0 }),
@@ -283,22 +353,32 @@ export function createModel(pal) {
   const chP = (v) => ({ y: -0.02 + 0.28 * v, rx: chX(v), rzF: chF(v), rzB: chB(v), n: 2.2 });
   const chMod = (p, u, v, c, sn) => { if (sn > 0) { const ax = Math.abs(p.x); p.z += 0.03 * gauss(ax - 0.058, 0.042) * gauss(p.y - 0.13, 0.05) * Math.pow(sn, 1.5); } };
   add(J.chest, C('chest', () => loft(chP, 56, 24, { mod: chMod, uvU: 3, uvV: 1.5 })), M.wrap);
-  add(J.chest, C('chestTop', () => loft((v) => ({ y: 0.2 + 0.07 * v, rx: 0.11 - 0.05 * v, rzF: 0.072 - 0.022 * v, rzB: 0.068 - 0.02 * v }), 32, 5)), M.skin);
+  add(J.chest, C('chestTop', () => loft((v) => ({ y: 0.195 + 0.075 * v, rx: 0.125 - 0.075 * v ** 0.8, rzF: 0.075 - 0.028 * v, rzB: 0.07 - 0.026 * v }), 40, 8, {
+    mod: (p, u, v, c, sn) => { if (sn > 0) p.z += (0.005 * gauss(p.y - 0.232, 0.01) * gauss(Math.abs(p.x) - 0.055, 0.035) - 0.004 * gauss(p.x, 0.012) * gauss(p.y - 0.24, 0.02)) * sn; } })), M.skin); // 쇄골 · 목 아래 오목
   // 붉은 스카프 매듭 + 늘어진 끝 두 갈래
   { const p = loftAt(chP, 0.5, 0.86, new V3(), chMod);
     add(J.chest, C('tieKnot', () => new THREE.SphereGeometry(0.016, 18, 12)), M.red, [p.x, p.y, p.z + 0.012], [0, 0, 0], [1.2, 0.9, 0.7]);
     for (const s of [-1, 1]) add(J.chest, C('tie' + s, () => surf((u, v, q) => { const w = 0.03 * (1 - v * 0.6); q.set(s * 0.008 + (u - 0.5) * w + s * 0.022 * v, p.y - 0.01 - 0.095 * v, p.z + 0.016 + 0.01 * v - 0.004 * Math.sin(u * Math.PI)); }, 6, 8)), M.red); }
 
   /* ---------- 크롭 재킷 · 세운 깃 · 흰 털 ---------- */
-  const jv0 = 0.34, jkP = (v) => { const w = jv0 + (1 - jv0) * v, s = chP(w); return { ...s, rx: s.rx + 0.016, rzF: s.rzF + 0.02, rzB: s.rzB + 0.016 }; };
+  const jv0 = 0.34, jkP = (v) => { const w = jv0 + (1 - jv0) * v, s = chP(w); return { ...s, rx: s.rx + 0.03 + 0.008 * v, rzF: s.rzF + 0.034, rzB: s.rzB + 0.03 }; }; // 오버사이즈
   const ja0 = 0.565, ja1 = 1.435;
   const jkMod = (p, u, v, c, sn) => { const e = Math.min(Math.abs(u - ja0), Math.abs(u - ja1)), fold = 1 - smooth(0, 0.06, e); if (sn > 0) { p.z += 0.03 * gauss(Math.abs(p.x) - 0.058, 0.05) * gauss(p.y - 0.13, 0.06) * sn; } const n = new V3(p.x, 0, p.z).normalize(); p.addScaledVector(n, 0.012 * fold * (0.4 + v)); };
   add(J.chest, C('jacket', () => loft(jkP, 64, 12, { a0: ja0, a1: ja1, mod: jkMod, uvU: 1, uvV: 1 })), M.jacket);
   add(J.chest, C('jacketIn', () => loft((v) => { const s = jkP(v); return { ...s, rx: s.rx - 0.004, rzF: s.rzF - 0.004, rzB: s.rzB - 0.004 }; }, 48, 8, { a0: ja0, a1: ja1, mod: jkMod })), M.red);
   lRim(J.chest, 'jkHem', jkP, 0, 0.0045, M.silver, { a0: ja0, a1: ja1, mod: jkMod });
   for (const a of [ja0, ja1]) { const pts = []; for (let i = 0; i <= 10; i++) pts.push(loftAt(jkP, a, i / 10, new V3(), jkMod)); rim(J.chest, 'jkEdge' + a, pts, 0.005, false); }
+  // 붉은 라펠: 앞섶을 따라 바깥으로 젖혀진 넓은 깃 (아래로 갈수록 좁아짐) + 지그재그 은색 테
+  for (const [a0, dir] of [[ja0, 1], [ja1, -1]]) {
+    const lap = (u, v, p) => { const w = 0.012 + 0.07 * v ** 1.3, a = a0 + dir * w * u; loftAt(jkP, a, 0.18 + 0.82 * v, p, jkMod); const n = new V3(p.x, 0, p.z).normalize(); p.addScaledVector(n, 0.006 + 0.006 * u); };
+    add(J.chest, C('lapel' + dir, () => surf(lap, 6, 12)), M.red);
+    const pts = []; for (let i = 0; i <= 24; i++) { const v = i / 24, p = new V3(); lap(1, v, p); const n = new V3(p.x, 0, p.z).normalize(); pts.push(p.addScaledVector(n, (i % 2) * 0.004)); } rim(J.chest, 'lapRim' + dir, pts, 0.0032, false);
+  }
+  // 밑단 시보리 (골지 띠)
+  { const hb = (v) => { const s0 = jkP(0); return { ...s0, y: s0.y - 0.018 + 0.026 * v, rx: s0.rx + 0.004, rzF: s0.rzF + 0.006, rzB: s0.rzB + 0.004 }; };
+    add(J.chest, C('jkRib', () => loft(hb, 64, 3, { a0: ja0, a1: ja1, mod: jkMod, uvU: 1, uvV: 1 })), M.rib); }
   // 세운 깃: 목 뒤로 높이, 앞으로 갈수록 낮아지며 바깥으로 벌어진다
-  const colF = (inner) => (u, v, p) => { const a = 0.6 + 0.8 * u, [c, s] = ang(a), back = Math.max(0, -s), h = 0.035 + 0.075 * back * back, R = (0.098 + 0.03 * (1 - back)) * (1 + 0.45 * v) + (inner ? -0.004 : 0); p.set(c * R, 0.235 + h * v, s * R * 0.92 - 0.004); };
+  const colF = (inner) => (u, v, p) => { const a = 0.6 + 0.8 * u, [c, s] = ang(a), back = Math.max(0, -s), h = 0.04 + 0.085 * back * back, R = (0.106 + 0.034 * (1 - back)) * (1 + 0.5 * v) + (inner ? -0.004 : 0); p.set(c * R, 0.235 + h * v, s * R * 0.92 - 0.004); };
   add(J.chest, C('collarO', () => surf(colF(false), 48, 6)), M.jacket); add(J.chest, C('collarI', () => surf(colF(true), 48, 6)), M.red);
   { const pts = []; for (let i = 0; i <= 40; i++) { const p = new V3(); colF(false)(i / 40, 1, p); pts.push(p); } rim(J.chest, 'colRim', pts, 0.004, false);
     // 깃 윗단을 따라 흰 털 (털 관 + 털 카드)
@@ -315,18 +395,18 @@ export function createModel(pal) {
     }
     im.castShadow = true; J.chest.add(im); }
   // 어깨 덮개
-  for (const [sh, s] of [[J.shoulderL, 1], [J.shoulderR, -1]]) add(sh, C('shCap', () => new THREE.SphereGeometry(0.062, 28, 14, 0, TAU, 0, Math.PI * 0.55)), M.jacket, [s * 0.006, 0.012, 0], [0, 0, s * -0.25], [1, 0.85, 1]);
+  for (const [sh, s] of [[J.shoulderL, 1], [J.shoulderR, -1]]) add(sh, C('shCap', () => new THREE.SphereGeometry(0.074, 32, 16, 0, TAU, 0, Math.PI * 0.55)), M.jacket, [s * 0.01, 0.01, 0], [0, 0, s * -0.3], [1, 0.82, 1.05]);
 
   /* ---------- 팔: 왼팔 불꽃 긴소매 · 오른팔 반소매 + 맨팔 붕대 · 족쇄와 사슬 · 손가락 없는 장갑 ---------- */
   for (const [sh, el, ha, s] of [[J.shoulderL, J.elbowL, J.handL, 1], [J.shoulderR, J.elbowR, J.handR, -1]]) {
     const long = s > 0;
     if (long) {
-      add(sh, C('slvU', () => loft((v) => ({ y: 0.03 - (DIMS.uArm + 0.03) * v, rx: 0.057 - 0.008 * v, rz: 0.054 - 0.008 * v }), 24, 10)), M.jacket);
-      const flP = (v) => ({ y: 0.025 - (DIMS.lArm - 0.005) * v, rx: 0.049 + 0.01 * v * v, rz: 0.047 + 0.01 * v * v });
+      add(sh, C('slvU', () => loft((v) => ({ y: 0.03 - (DIMS.uArm + 0.03) * v, rx: 0.068 - 0.01 * v + 0.004 * Math.sin(v * Math.PI), rz: 0.064 - 0.01 * v }), 28, 12)), M.jacket);
+      const flP = (v) => ({ y: 0.03 - (DIMS.lArm - 0.0) * v, rx: 0.056 + 0.014 * v * v, rz: 0.054 + 0.013 * v * v }); // 소맷부리로 갈수록 넓어짐
       add(el, C('slvF', () => loft(flP, 28, 10, { uvU: 1, uvV: 1 })), M.sleeve); lRim(el, 'slvCuff', flP, 1, 0.005, M.red);
     } else {
       add(sh, C('uarmSkin', () => loft((v) => ({ y: 0.02 - (DIMS.uArm + 0.02) * v, rx: 0.042 - 0.007 * v, rz: 0.04 - 0.006 * v }), 20, 8)), M.skin);
-      const ssP = (v) => ({ y: 0.035 - 0.17 * v, rx: 0.058 - 0.002 * v, rz: 0.055 - 0.002 * v });
+      const ssP = (v) => ({ y: 0.035 - 0.17 * v, rx: 0.068 + 0.006 * v, rz: 0.064 + 0.006 * v });
       add(sh, C('slvS', () => loft(ssP, 28, 6, { uvU: 1, uvV: 1 })), M.patch); lRim(sh, 'slvSR', ssP, 1, 0.0045, M.red);
       add(el, C('farmSkin', () => loft((v) => ({ y: 0.02 - (DIMS.lArm + 0.0) * v, rx: 0.037 - 0.01 * v, rz: 0.035 - 0.01 * v }), 20, 8)), M.skin);
       add(el, C('bandage', () => loft((v) => ({ y: -0.1 - (DIMS.lArm - 0.1) * v, rx: 0.033 - 0.004 * v, rz: 0.031 - 0.004 * v }), 20, 6, { uvU: 1, uvV: 1.5 })), M.bandage);
@@ -338,15 +418,16 @@ export function createModel(pal) {
     const end = new THREE.Group(); add(end, C('diamond', diamond), M.iron);
     const rope = new Rope(6, 0.03, { damp: 0.975 }), view = new RopeChain(rope, linkGeo, M.iron, end);
     m.ropes.push({ rope, view, joint: el, local: new V3(s * 0.03, -DIMS.lArm + 0.004, -0.01), rest: new V3(0, -1, 0), caps: 'none', wrist: true });
-    // 손: 검은 장갑 손바닥 + 맨 손가락
-    add(ha, C('palm' + s, () => loft((v) => ({ y: -0.004 - 0.072 * v, rx: 0.021 + 0.003 * Math.sin(v * Math.PI), rz: 0.034 + 0.005 * v, n: 3, cx: s * 0.017 }), 18, 6)), M.leather);
+    // 손: 검은 장갑 손바닥 + 맨 손가락 (조금 작게)
+    const hg = new THREE.Group(); hg.scale.setScalar(0.86); hg.position.y = -0.006; ha.add(hg);
+    add(hg, C('palm' + s, () => loft((v) => ({ y: -0.004 - 0.072 * v, rx: 0.021 + 0.003 * Math.sin(v * Math.PI), rz: 0.034 + 0.005 * v, n: 3, cx: s * 0.017 }), 18, 6)), M.leather);
     for (let k = 0; k < 4; k++) {
       const z = 0.025 - k * 0.0165, L = k === 3 ? 0.86 : 1, pts = [];
       for (let i = 0; i <= 8; i++) { const th = -0.75 - i / 8 * 2.75 * L; pts.push(new V3(s * Math.cos(th) * 0.03 + s * 0.003, -0.052 + Math.sin(th) * 0.03, z)); }
-      add(ha, C(`fing${s}${k}`, () => strand(pts, 0.0082, 0.0068, { seg: 14, rad: 8 })), M.skin);
-      add(ha, C(`fingG${s}${k}`, () => strand(pts.slice(0, 4), 0.0092, 0.0088, { seg: 6, rad: 8 })), M.leather);
+      add(hg, C(`fing${s}${k}`, () => strand(pts, 0.0082, 0.0068, { seg: 14, rad: 8 })), M.skin);
+      add(hg, C(`fingG${s}${k}`, () => strand(pts.slice(0, 4), 0.0092, 0.0088, { seg: 6, rad: 8 })), M.leather);
     }
-    add(ha, C('thumb' + s, () => strand([[0, -0.016, 0.031], [-s * 0.01, -0.037, 0.046], [s * 0.003, -0.06, 0.045], [s * 0.018, -0.072, 0.037]], 0.0098, 0.0075, { seg: 12, rad: 8 })), M.skin);
+    add(hg, C('thumb' + s, () => strand([[0, -0.016, 0.031], [-s * 0.01, -0.037, 0.046], [s * 0.003, -0.06, 0.045], [s * 0.018, -0.072, 0.037]], 0.0098, 0.0075, { seg: 12, rad: 8 })), M.skin);
   }
 
   /* ---------- 다리: 니삭스(붉은 줄) · 발목 족쇄 · 하이탑 운동화 ---------- */
@@ -380,15 +461,13 @@ export function createModel(pal) {
     add(g, C('cross', () => new THREE.ExtrudeGeometry(sh, { depth: 0.004, bevelEnabled: true, bevelThickness: 0.002, bevelSize: 0.002, bevelSegments: 2 })), M.silver);
     m.crossGlow = add(g, C('crossG', () => new THREE.ExtrudeGeometry(sh, { depth: 0.002, bevelEnabled: false })), M.ember, [0, 0, 0.0055], [0, 0, 0], [0.55, 0.55, 1]); }
   const H = J.head;
-  add(H, C('head', () => surf((u, v, p) => { const az = (u - 0.5) * TAU, el = -Math.PI / 2 + v * Math.PI, d = dirOf(az, el); headPt(d.x, d.y, d.z, p); }, 72, 54, { closedU: true, poles: [0, 54] })), M.skin);
+  m.headMesh = add(H, C('head', () => surf((u, v, p) => { const az = (u - 0.5) * TAU, el = -Math.PI / 2 + v * Math.PI, d = dirOf(az, el); headPt(d.x, d.y, d.z, p); }, 88, 66, { closedU: true, poles: [0, 66] })), M.face);
+  H.scale.setScalar(1.07); // 애니메 비율: 머리를 조금 크게
+  m.faceGlow = add(H, C('head', () => null), M.faceGlow, [0, 0, 0], [0, 0, 0], [1.003, 1.003, 1.003]); m.faceGlow.castShadow = false; m.faceGlow.receiveShadow = false; m.faceGlow.renderOrder = 5;
   for (const s of [-1, 1]) {
-    add(H, C('eye' + s, () => decal(s > 0 ? 0.1 : -0.1, s > 0 ? 0.68 : -0.68, -0.15, 0.25, 0.0012, 16)), M.eye); // 바깥 눈꼬리가 텍스처 오른쪽
     // 뾰족 귀
     add(H, C('ear' + s, () => strand([[s * 0.066, 0.1, -0.005], [s * 0.088, 0.112, -0.016], [s * 0.112, 0.138, -0.03]], 0.015, 0.0015, { seg: 10, rad: 8, flat: 0.35, ref: [s, 0, 0] })), M.skin);
   }
-  m.mouth = add(H, C('mouth', () => decal(-0.22, 0.22, -0.5, -0.36, 0.0008, 10)), M.mouth);
-  m.mouthO = add(H, C('mouthO', () => decal(-0.26, 0.26, -0.56, -0.34, 0.001, 10)), M.mouthO); m.mouthO.visible = false;
-  add(H, C('plaster', () => decal(-0.95, -0.45, -0.34, 0.0, 0.0018, 10)), M.plaster);
   // 뿔: 관자놀이 위에서 바깥 → 위 → 앞으로 휘는 마디진 뿔
   for (const s of [-1, 1]) {
     const pts = [[s * 0.05, 0.168, -0.012], [s * 0.098, 0.182, -0.04], [s * 0.128, 0.226, -0.04], [s * 0.128, 0.284, -0.01], [s * 0.108, 0.33, 0.026]];
@@ -401,15 +480,15 @@ export function createModel(pal) {
     add(H, C('hairCap', () => surf((u, v, p) => { const az = (u - 0.5) * TAU + Math.PI, e0 = line(az), el = e0 + (Math.PI / 2 - e0) * v; headAt(az, el, 0.006 + 0.014 * smooth(0, 0.4, v) + 0.006 * Math.max(0, -Math.cos(az)), p); }, 80, 22, { closedU: true, poles: [22], uvU: 8 })), M.hair);
     const r = rng(19), clump = (key, pts, r0, r1, flat = 0.35, ref) => add(H, C(key, () => strand(pts, r0 * 1.15, r1, { seg: 16, rad: 8, flat: Math.min(0.55, flat * 1.35), ref: ref || [0, 0, 1] })), M.hair);
     // 앞머리: 정수리 앞 → 이마 → 눈썹 (오른쪽(-x)은 길게 눈을 덮는다)
-    for (let k = 0; k < 9; k++) {
-      const az = -0.95 + k * 0.24, right = az < -0.1, len = right ? 0.42 + 0.12 * gauss(az + 0.5, 0.25) : 0.26 + r() * 0.06;
+    for (let k = 0; k < 13; k++) {
+      const az = -0.98 + k * 0.165 + (r() - 0.5) * 0.04, right = az < -0.1, len = right ? 0.42 + 0.12 * gauss(az + 0.5, 0.25) : 0.26 + r() * 0.06;
       const pts = [headAt(az * 0.6, 1.05, 0.02), headAt(az * 0.85, 0.72, 0.024), headAt(az, 0.42, 0.02), headAt(az * 1.05 + (right ? 0.08 : 0), 0.42 - len, 0.016 + (right ? 0.006 : 0))];
-      clump('bang' + k, pts, 0.03, 0.004, 0.32, [0, 0, 1]);
+      clump('bang' + k, pts, 0.024 + r() * 0.012, 0.003, 0.32, [0, 0, 1]);
     }
     // 옆머리 · 뒷머리 (짧고 삐침)
-    for (let k = 0; k < 14; k++) {
-      const az = (k < 4 ? -1 : k < 8 ? 1 : 0) * (1.25 + (k % 4) * 0.14) + (k >= 8 ? Math.PI + (k - 11) * 0.38 : 0), el0 = k >= 8 ? 0.7 : 0.6;
-      const tipEl = k >= 8 ? -0.75 - r() * 0.15 : -0.55 - r() * 0.2, out = k >= 8 ? 0.03 : 0.02;
+    for (let k = 0; k < 22; k++) {
+      const az = k < 6 ? -(1.12 + k * 0.1) : k < 12 ? 1.12 + (k - 6) * 0.1 : Math.PI + (k - 16.5) * 0.26, el0 = k >= 12 ? 0.7 + (k % 2) * 0.25 : 0.6;
+      const tipEl = k >= 12 ? -0.72 - r() * 0.2 : -0.5 - r() * 0.25, out = k >= 12 ? 0.03 : 0.02;
       const pts = [headAt(az, el0, 0.018), headAt(az + (r() - 0.5) * 0.2, (el0 + tipEl) / 2, out), headAt(az + (r() - 0.5) * 0.3, tipEl, out + 0.01)];
       const d = dirOf(az, 0); clump('side' + k, pts, 0.028, 0.004, 0.35, [d.x, 0, d.z]);
     }
@@ -488,9 +567,9 @@ export function createModel(pal) {
     // 불: f.fireK (0..1, 열기·발화·각성) → 철퇴 발광과 불길 / 각성: 뿔 균열 · 눈 · 송곳니
     m.awake += ((f.fireK ?? 0) - m.awake) * Math.min(1, dt * 4); m.horned = (m.horned || 0) + ((f.awakenT > 0 ? 1 : 0) - (m.horned || 0)) * Math.min(1, dt * 4);
     const pulse = 0.85 + 0.15 * Math.sin(f.G.time * 9);
-    M.horn.emissiveIntensity = m.horned * 2.2 * pulse; M.eye.emissiveIntensity = m.horned * 0.5; M.club.emissiveIntensity = m.awake * 1.8 * pulse; M.clubR.emissiveIntensity = m.awake * 1.5;
-    M.ember.emissiveIntensity = 1 + m.awake * 1.5; M.mouthO.emissiveIntensity = f.breathing ? 1.2 : 0;
-    const open = f.breathing || m.horned > 0.5 || (f.state === 'act' && f.act && f.act.shout); m.mouth.visible = !open; m.mouthO.visible = open;
+    M.horn.emissiveIntensity = m.horned * 2.2 * pulse; M.faceGlow.opacity = m.horned * 0.9; m.faceGlow.visible = m.horned > 0.02; M.club.emissiveIntensity = m.awake * 1.8 * pulse; M.clubR.emissiveIntensity = m.awake * 1.5;
+    M.ember.emissiveIntensity = 1 + m.awake * 1.5;
+    const open = f.breathing || m.horned > 0.5 || (f.state === 'act' && f.act && f.act.shout); m.headMesh.material = open ? M.faceO : M.face;
     // 각성 중에는 손목 족쇄 사슬이 끊어져 있다
     for (const r of m.ropes) if (r.wrist) { const o = r.view.im; o.visible = f.root.visible && !m.chainsBroken; if (r.view.end) r.view.end.visible = o.visible; }
     if (m.awake > 0.45 && f.root.visible && !m.weaponOut && Math.random() < m.awake) {

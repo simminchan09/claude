@@ -264,14 +264,16 @@ const moves = {
       [0, (f, o, G) => { G.setTint(FIRE, 0.3); sfx('charge'); G.say(f, '"…하아…"'); f.gatherT = 0; }],
       [0.6, (f, o, G) => { G.say(f, '"차별의 사슬 따위…"'); sfx('charge'); }],
       [1.32, (f, o, G) => {
-        // 터뜨림: 피해는 없고 주변을 밀어낼 뿐 — 각성 15초
+        // 터뜨림 → 각성 15초
         f.awakenT = 15; f.heat = 100; f.igniteT = 0; sfx('boom'); sfx('parry'); sfx('big'); G.shake(0.55); G.flash(0xffb060, 0.55); G.stage.flashSky && G.stage.flashSky(0.5);
         G.say(f, '"…전부 물어뜯어 주마!"');
         const c = f.pos.clone(); flameBurst(G, c.clone().setY(c.y + 1), 2, true); G.fx.beam(c, { r: 1.1, h: 16, color: FIRE, life: 0.8 });
         G.fx.ring(c.clone().setY(c.y + 0.06), { normal: new V3(0, 1, 0), r0: 0.3, r1: 7, life: 0.7, color: EMBER }); G.fx.ring(c.clone().setY(c.y + 1.1), { normal: new V3(0, 1, 0), r0: 0.3, r1: 5, life: 0.5, color: 0xffffff });
         explosion(G, c.clone().setY(c.y + 1.1), 1.3); fireCrack(G, c, 4, 12);
         for (const h of [f.model.J.handL, f.model.J.handR]) { const p = h.getWorldPosition(new V3()); G.fx.burst(p, 18, [0x8a8a94, 0xc8c8d0], 7, { kind: 'dust', sk: 0.5 }); } // 끊어진 족쇄 조각
-        for (const t of f.foes()) { const d = new V3().subVectors(t.pos, f.pos).setY(0), L = d.length(); if (L < 4.5 && L > 0.01 && !t.held) { d.divideScalar(L); t.vel.x += d.x * 9 * (1 - L / 4.5); t.vel.z += d.z * 9 * (1 - L / 4.5); } }
+        // 폭발 피해: 반경 4.8m, 가까울수록 강하고 띄워 날린다
+        for (const t of f.foes()) { const d = new V3().subVectors(t.pos, f.pos).setY(0), L = d.length(); if (L > 4.8 + 0.4 * t.scale || t.pos.y - f.pos.y > 3) continue; if (L > 0.01) d.divideScalar(L); else f.fwd(d);
+          const k = 1 - Math.min(1, L / 5); t.takeHit(f, { dmg: Math.round(90 + 110 * k), kb: [7 + 6 * k, 7 + 4 * k], stun: 0.9, hs: 0.16, shake: 0.4, force: true, noScale: true, daze: 80, snd: 'big' }, d); }
       }],
     ],
     tick: (f, o, G, t, dt) => {
@@ -329,7 +331,7 @@ export default {
   resource: (f) => f.awakenT > 0 ? { v: f.awakenT / 15, label: '각성', color: 0xffa52a, full: true } : f.igniteT > 0 ? { v: f.igniteT / 8, label: '발화', color: 0xff4a1a, full: true } : { v: (f.heat || 0) / 100, label: '열기', color: 0xc8102a },
   moveList: [['좌클 ×4', '한 손 내리치기 → 앞차기 → 어깨 몸통박치기 → 두 손 홈런 스윙(멀리 날림)'], ['공중 좌클', '불붙은 철퇴로 낙하 강타 · 화염 폭발'],
     ['우클 · 사슬 낚아채기', '사슬을 던져 끌어온 뒤 박치기 70, 기절'], ['Shift · 양키 돌격', '철퇴를 바닥에 끌며 돌진(불타는 자국이 남음) → 골프 스윙으로 띄움 64'],
-    ['E · 마족의 숨결', '숨을 들이켰다가 입으로 부채꼴 화염 방사 (0.12초마다 12)'], ['Q · 마왕 각성 (변화기)', '기를 모았다가 터뜨려 15초 각성: 공격력 ×1.3 · 이동 속도 ×1.25 · 받는 피해 ×0.75 · 쿨타임 회복 ×1.6, 족쇄 사슬이 끊어지고 뿔·철퇴가 불타오름'],
+    ['E · 마족의 숨결', '숨을 들이켰다가 입으로 부채꼴 화염 방사 (0.12초마다 12)'], ['Q · 마왕 각성', '기를 모았다가 터뜨림(반경 4.8m 90~200, 띄움) → 15초 각성: 공격력 ×1.3 · 이동 속도 ×1.25 · 받는 피해 ×0.75 · 쿨타임 회복 ×1.6, 족쇄 사슬이 끊어지고 뿔·철퇴가 불타오름'],
     ['열기', '때릴수록 쌓이고 가득 차면 8초간 발화: 철퇴에 불이 붙고 공격력 ×1.15'], ['C (타이밍) · 극한 회피', '순간이동 드롭킥 + 폭발'], ['가만히', '양키 쪼그려 앉기']],
   createModel: createModelWithHeat, poses, moves, hitFx,
 };
