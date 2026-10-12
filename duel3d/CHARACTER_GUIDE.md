@@ -90,7 +90,7 @@ export default {
 
 - hits 의 `weapon: false` = 무기가 아닌 몸(발차기·박치기)으로 치는 공격: `at`·`r` 구로 판정.
 - 정의 객체 `resource(f) → { v: 0..1, label, color, full }` 를 주면 HP 아래에 고유 게이지가 표시된다 (예: 아자젤 열기).
-- 공격자의 `f.dmgMul` 은 모든 피해에 곱해진다 (각성·발화 버프).
+- 버프 배율: `f.dmgMul`(주는 피해) · `f.defMul`(받는 피해) · `f.spdMul`(이동 속도) · `f.cdMul`(쿨타임 회복 속도). 아자젤 각성 참고.
 
 **낙하 공격(공중 좌클릭)** 은 공통 시스템입니다. `src/plunge.js` 의 `makePlunge` 에 자세 3개만 넘겨 기술 목록에 펼치세요:
 ```js

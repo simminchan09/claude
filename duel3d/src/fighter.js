@@ -61,7 +61,7 @@ export class Fighter {
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
@@ -211,6 +211,7 @@ export class Fighter {
     // 기술 중 피격 훅 (예: 방어 태세 — 피해 감소 · 경직 없음 · 반격 예약)
     const mod = this.act && this.act.onHit && !h.force ? this.act.onHit(this, att, h, dir) : null;
     if (mod) dmg *= mod.dmgK ?? 1;
+    dmg *= this.defMul || 1; // defMul: 받는 피해 배율 (버프)
     // 슈퍼아머: 브레이크 전에는 경직·넉백 없이 버틴다
     const armored = (this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held) || !!(mod && mod.armor);
     this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
@@ -243,12 +244,12 @@ export class Fighter {
   update(dt, live) {
     const o = this.opp, G = this.G;
     this.inv -= dt; this.counterT -= dt; if (this.brokenT > 0) { this.brokenT -= dt; if (this.brokenT <= 0) this.daze = 0; }
-    for (const k in this.cd) this.cd[k] -= dt; this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
+    for (const k in this.cd) this.cd[k] -= dt * (this.cdMul || 1); // cdMul: 쿨타임 회복 배율 this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
     if (this.comboT <= 0) this.combo = 0;
     if (live) this.energy = Math.min(100, this.energy + dt * 1.6);
     const I = live ? this.I : { mx: 0, mz: 0, guard: false };
-    const mag = Math.hypot(I.mx, I.mz), S = this.def.stats;
+    const mag = Math.hypot(I.mx, I.mz), S0 = this.def.stats, S = this.spdMul && this.spdMul !== 1 ? { ...S0, speed: S0.speed * this.spdMul } : S0; // spdMul: 이동 속도 버프
     let target = null;
     switch (this.state) {
       case 'act': {
