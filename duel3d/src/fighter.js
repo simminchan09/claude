@@ -61,12 +61,37 @@ export class Fighter {
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.ki = 0; this.orbitT = 0; this.bladeK = 0; this.vanish = false; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.ki = 0; this.orbitT = 0; this.bladeK = 0; this.vanish = false; this.st = {}; this.stAcc = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
     this.pose.set(this.def._poses.base); this.root.visible = true; this.trail.clear(); this.ghostT = 0;
     this.root.rotation.y = this.yaw; this.applyRig(1 / 60); this.hasW = false; this.updateHurt();
+    this.def.onReset && this.def.onReset(this); // 캐릭터 고유 상태 초기화 (라운드마다)
+  }
+  /* ----- 상태 효과 (공용) -----
+     kind: 'bleed' · 'burn' (k = 초당 피해) · 'slow' (k = 이동 속도 배율, 예 0.6) · 'vuln' (k = 받는 피해 배율: >1 약화, <1 피해 감소)
+           'atk' (k = 주는 피해 배율) · 'haste' (k = 이동 속도 배율, >1) · 'regen' (k = 초당 회복)
+     같은 종류를 다시 걸면 시간은 긴 쪽, 세기는 센 쪽으로 갱신 */
+  addStatus(kind, dur, k, src) {
+    const o = this.st[kind]; if (o) { o.t = Math.max(o.t, dur); o.k = (kind === 'slow' || (kind === 'vuln' && k < 1)) ? Math.min(o.k, k) : Math.max(o.k, k); o.src = src || o.src; }
+    else this.st[kind] = { t: dur, k, src };
+  }
+  stK(kind, def = 1) { const o = this.st && this.st[kind]; return o && o.t > 0 ? o.k : def; }
+  // 지속 피해: 경직 없이 체력만 깎는다 (훈련 모드 · 연출 중에는 1 아래로 안 내려감)
+  dot(att, d, color) {
+    const G = this.G; if (this.hp <= 0 || this.gone) return;
+    d *= this.stK('vuln') * (this.defMul || 1); this.hp -= d; this.chipT = 0.5; if ((G.mode === 'training' || this.held) && this.hp < 1) this.hp = 1;
+    G.hud.damage(this.chest(new V3()).add(new V3(0, 0.3, 0)), Math.round(d), false, false, false);
+    G.fx.burst(this.chest(new V3()), 5, color ?? 0xd01030, 2, { grav: 6 });
+    if (this.hp <= 0) { this.hp = 0; if (this.act && this.act.end) this.act.end(this, this.opp, G); this.act = null; this.state = 'ko'; this.launched = true; this.vel.y = 4; this.onGround = false; G.onKO(this, att || this.opp); }
+  }
+  tickStatus(dt) {
+    const st = this.st; if (!st) return; this.stAcc += dt; const tick = this.stAcc >= 0.5; if (tick) this.stAcc -= 0.5;
+    for (const k in st) { const o = st[k]; o.t -= dt; if (o.t <= 0) { delete st[k]; continue; }
+      if (tick && (k === 'bleed' || k === 'burn') && this.state !== 'ko') this.dot(o.src, o.k * 0.5, k === 'burn' ? 0xff6a1a : 0xc01028);
+      if (tick && k === 'regen' && this.hp > 0) this.hp = Math.min(this.maxHp, this.hp + o.k * 0.5);
+      if (this.root.visible && Math.random() < dt * 6) { const c = { bleed: 0xd01030, burn: 0xff6a1a, slow: 0x6a8aff, vuln: o.k > 1 ? 0xb03aff : 0x9ad8ff, atk: 0xffc040, haste: 0x7affb0, regen: 0x7aff9a }[k]; if (c) this.G.fx.p(this.pos.clone().add(new V3(rand(-0.35, 0.35), rand(0.2, 1.7), rand(-0.35, 0.35))), { vel: [0, k === 'bleed' ? -1 : 1, 0], size: 0.07, size1: 0.02, life: 0.5, color: c, alpha: 0.85, drag: 0.5 }); } }
   }
   /* ----- 좌표 헬퍼 ----- */
   fwd(out = new V3()) { return out.set(Math.sin(this.yaw), 0, Math.cos(this.yaw)); }
@@ -203,7 +228,7 @@ export class Fighter {
     }
     const comboing = this.state === 'hit' || this.held;
     att.combo = comboing ? att.combo + 1 : 1; att.comboT = 1.6;
-    let dmg = h.dmg * (att.dmgMul || 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
+    let dmg = h.dmg * (att.dmgMul || 1) * (att.stK ? att.stK('atk') : 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
     let crit = false; if (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2)) { dmg *= 1.6; crit = true; }
     if (this.brokenT > 0) dmg *= 1.5;
     // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
@@ -211,7 +236,7 @@ export class Fighter {
     // 기술 중 피격 훅 (예: 방어 태세 — 피해 감소 · 경직 없음 · 반격 예약)
     const mod = this.act && this.act.onHit && !h.force ? this.act.onHit(this, att, h, dir) : null;
     if (mod) dmg *= mod.dmgK ?? 1;
-    dmg *= this.defMul || 1; // defMul: 받는 피해 배율 (버프)
+    dmg *= (this.defMul || 1) * this.stK('vuln'); // defMul: 받는 피해 배율 (버프) · vuln: 상태 효과
     // 슈퍼아머: 브레이크 전에는 경직·넉백 없이 버틴다
     const armored = (this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held) || !!(mod && mod.armor);
     this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
@@ -249,8 +274,9 @@ export class Fighter {
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
     if (this.comboT <= 0) this.combo = 0;
     if (live) this.energy = Math.min(100, this.energy + dt * 1.6);
+    if (live) this.tickStatus(dt);
     const I = live ? this.I : { mx: 0, mz: 0, guard: false };
-    const mag = Math.hypot(I.mx, I.mz), S0 = this.def.stats, S = this.spdMul && this.spdMul !== 1 ? { ...S0, speed: S0.speed * this.spdMul } : S0; // spdMul: 이동 속도 버프
+    const mag = Math.hypot(I.mx, I.mz), S0 = this.def.stats, sm = (this.spdMul || 1) * this.stK('slow') * this.stK('haste'), S = sm !== 1 ? { ...S0, speed: S0.speed * sm } : S0; // spdMul: 이동 속도 버프 · slow/haste: 상태 효과
     let target = null;
     switch (this.state) {
       case 'act': {
