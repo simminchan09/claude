@@ -13,6 +13,7 @@ const HURT_PARTS = [['hips', 'neck', 0.95], ['neck', 'headTop', 0.72], ['shoulde
   ['hipL', 'kneeL', 0.45], ['kneeL', 'footL', 0.4], ['hipR', 'kneeR', 0.45], ['kneeR', 'footR', 0.4]];
 const tA = new V3(), tB = new V3(), tC = new V3(), tD = new V3();
 let UID = 0;
+export const ULT_GAIN = 0.5; // 궁극기 게이지가 차는 속도 배율 (모든 캐릭터 · 모든 획득 경로)
 const PERFECT_DODGE = 0.2, PERFECT_PARRY = 0.22; // 회피·방어 입력 직후 이 시간 안에 맞으면 극한 회피 · 패리
 
 // 선분과 선분 사이 최단 거리
@@ -77,6 +78,7 @@ export class Fighter {
     const o = this.st[kind]; if (o) { o.t = Math.max(o.t, dur); o.k = (kind === 'slow' || (kind === 'vuln' && k < 1)) ? Math.min(o.k, k) : Math.max(o.k, k); o.src = src || o.src; }
     else this.st[kind] = { t: dur, k, src };
   }
+  gainEnergy(v) { this.energy = Math.min(100, this.energy + v * ULT_GAIN); }
   stK(kind, def = 1) { const o = this.st && this.st[kind]; return o && o.t > 0 ? o.k : def; }
   // 지속 피해: 경직 없이 체력만 깎는다 (훈련 모드 · 연출 중에는 1 아래로 안 내려감)
   dot(att, d, color) {
@@ -222,7 +224,7 @@ export class Fighter {
     if (this.state === 'guard' && !h.unblock && !h.force && facing > 0.2 && this.onGround) {
       this.hp = Math.max(1, this.hp - h.dmg * 0.12); this.chipT = 0.5; this.blockStun = 0.22;
       this.vel.addScaledVector(dir, Math.max(3, (h.kb ? h.kb[0] : 2) * 0.8));
-      this.energy = Math.min(100, this.energy + 3); att.energy = Math.min(100, att.energy + 1.5);
+      this.gainEnergy(3); att.gainEnergy(1.5);
       G.fx.burst(point, 14, [0xffffff, this.palette.accent], 7, { dir: dir.clone().negate(), spread: 0.9 }); this.shield.hit = 1;
       G.hitstop = Math.max(G.hitstop, 0.05); G.shake(0.06); sfx('block'); G.hud.damage(point, '방어', false, true); return 'block';
     }
@@ -240,7 +242,7 @@ export class Fighter {
     // 슈퍼아머: 브레이크 전에는 경직·넉백 없이 버틴다
     const armored = (this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held) || !!(mod && mod.armor);
     this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
-    this.energy = Math.min(100, this.energy + dmg * 0.1); att.energy = Math.min(100, att.energy + dmg * 0.14);
+    this.gainEnergy(dmg * 0.1); att.gainEnergy && att.gainEnergy(dmg * 0.14);
     att.hitConfirm = true;
     if (armored) {
       this.flashT = 0.1; this.vel.addScaledVector(dir, 0.8);
@@ -273,7 +275,7 @@ export class Fighter {
     this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
     if (this.comboT <= 0) this.combo = 0;
-    if (live) this.energy = Math.min(100, this.energy + dt * 1.6);
+    if (live) this.gainEnergy(dt * 1.6);
     if (live) this.tickStatus(dt);
     const I = live ? this.I : { mx: 0, mz: 0, guard: false };
     const mag = Math.hypot(I.mx, I.mz), S0 = this.def.stats, sm = (this.spdMul || 1) * this.stK('slow') * this.stK('haste'), S = sm !== 1 ? { ...S0, speed: S0.speed * sm } : S0; // spdMul: 이동 속도 버프 · slow/haste: 상태 효과

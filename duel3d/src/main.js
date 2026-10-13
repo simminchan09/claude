@@ -75,7 +75,7 @@ const G = (window.__G = {
   onParry(f, att, h, point) {
     G.stats.parry++; sfx('parry'); hud.pop('패리', 'gold'); G.hitstop = Math.max(G.hitstop, 0.14); G.slow(0.35, 0.35); G.flash(0xffe08a, 0.25);
     fx.burst(point, 34, [0xffe08a, 0xffffff], 10); fx.ring(point, { r0: 0.2, r1: 2.2, life: 0.35, color: 0xffd060, billboard: true }); fx.light(point, 0xffd060, 90, 0.3);
-    f.energy = Math.min(100, f.energy + 8); f.blockStun = 0.12; f.shield.hit = 1;
+    f.gainEnergy(8); f.blockStun = 0.12; f.shield.hit = 1;
     if (att.maxDaze && att.brokenT <= 0) { att.daze = Math.min(att.maxDaze, att.daze + 45); if (att.daze >= att.maxDaze) { att.breakStart(f); return; } }
     if (att.act && !att.act.ult) { att.act.end && att.act.end(att, att.opp, G); att.act = null; att.trail.clear(); }
     att.state = 'hit'; att.stun = att.def.stats.armor ? 0.6 : 1.0; const d = new V3().subVectors(att.pos, f.pos).setY(0).normalize(); att.vel.set(d.x * 4, 0, d.z * 4);
