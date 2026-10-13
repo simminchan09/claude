@@ -13,7 +13,6 @@ const HURT_PARTS = [['hips', 'neck', 0.95], ['neck', 'headTop', 0.72], ['shoulde
   ['hipL', 'kneeL', 0.45], ['kneeL', 'footL', 0.4], ['hipR', 'kneeR', 0.45], ['kneeR', 'footR', 0.4]];
 const tA = new V3(), tB = new V3(), tC = new V3(), tD = new V3();
 let UID = 0;
-export const ULT_DMG = 0.6; // 모든 캐릭터 궁극기 피해 배율 (궁극기 중에 들어간 피해에 곱한다)
 const PERFECT_DODGE = 0.2, PERFECT_PARRY = 0.22; // 회피·방어 입력 직후 이 시간 안에 맞으면 극한 회피 · 패리
 
 // 선분과 선분 사이 최단 거리
@@ -229,7 +228,7 @@ export class Fighter {
     }
     const comboing = this.state === 'hit' || this.held;
     att.combo = comboing ? att.combo + 1 : 1; att.comboT = 1.6;
-    let dmg = h.dmg * (att.dmgMul || 1) * (att.stK ? att.stK('atk') : 1) * (att.act && att.act.ult ? ULT_DMG : 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
+    let dmg = h.dmg * (att.dmgMul || 1) * (att.stK ? att.stK('atk') : 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
     let crit = false; if (h.crit || (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2))) { dmg *= 1.6; crit = true; } // h.crit: 확정 치명타
     if (this.brokenT > 0) dmg *= 1.5;
     // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
