@@ -258,7 +258,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'sui', name: '스이', short: '스이', title: 'JADE RONIN · 비취 검객', scale: 1.0,
   desc: '근거리 · 발도술 · 고속 이동. 비취 검을 쓰는 떠돌이 검객. 칼을 칼집에 대었다가 한순간에 꿰뚫고 지나가는 일섬, 지그재그로 파고드는 연참, 몸 주위를 도는 비취 칼날로 싸운다. 맞힐수록 검기가 차오르고, 가득 차면 일섬이 삼연격이 된다.',
-  stats: { hp: 920, speed: 8.2, jump: 11, crit: 0.3 },
+  stats: { hp: 950, speed: 8.2, jump: 11, crit: 0.3 },
   palettes: [{ accent: JADE, jade: JADE, band: '#0a2a14' }, { accent: 0xff5a9a, jade: 0xff5a9a, band: '#2a0a18' }],
   skills: { heavy: { name: '일섬', cd: 7 }, s1: { name: '녹풍 연참', cd: 9 }, s2: { name: '비취 회선', cd: 13 }, ult: { name: '천검 · 비취우', sub: 'JADE RONIN' } },
   aiPick,

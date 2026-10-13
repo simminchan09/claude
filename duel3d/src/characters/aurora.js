@@ -393,7 +393,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'aurora', name: '오로라', short: '오로라', title: '빛의 잔향', scale: 1.0,
   desc: '원거리 · 활 · 번개. 무너진 세계의 빛을 모으는 마지막 인도자. 은색 기계 활의 칼날 활대로 베고, 빛의 화살과 번개 화살을 쏘며, 하늘에서 화살비와 낙뢰를 부르고, 빛의 리본을 타고 옮겨 다닌다. 맞힐수록 잔광이 모이고, 우클 관통시가 모은 잔광을 모두 실어 쏜다.',
-  stats: { hp: 870, speed: 7.6, jump: 10.5, crit: 0.22 },
+  stats: { hp: 880, speed: 7.6, jump: 10.5, crit: 0.22 },
   palettes: [{ accent: ICE, glow: BOLT }, { accent: 0xffc46a, glow: 0xffc46a }],
   skills: { heavy: { name: '뇌광 관통시', cd: 7 }, s1: { name: '빛의 화살비', cd: 11 }, s2: { name: '오로라 스텝', cd: 9 }, ult: { name: '극광 · 빛의 잔향', sub: 'LIGHT REMAINS' } },
   aimRange: RANGE, aiRange: [6, 14], aiPick,

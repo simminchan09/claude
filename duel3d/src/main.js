@@ -49,7 +49,8 @@ const G = (window.__G = {
   camFwdOf(f) { const c = f && f.slot === 1 && G.splitOn() ? camera2 : camera; c.getWorldDirection(tmpV); tmpV.y = 0; tmpV.normalize(); return { x: tmpV.x, z: tmpV.z }; },
   flash(c, a) { hud.flash(c, a); },
   slow(s, h) { G.tsT = s; G.ts = Math.min(G.ts, s); G.tsHold = h; },
-  spawn(e) { G.ents.push(e); },
+  // 생성 시점의 기술 분류를 기억한다 (엔티티가 만든 엔티티는 부모 분류를 물려받음) → balance.js
+  spawn(e) { if (e._cat === undefined) { const f = e.owner || G.curF; e._cat = (G.curEnt && G.curEnt._cat) || (f && f.dmgSrc) || null; } G.ents.push(e); },
   // 대사 자막 (플레이어 캐릭터만)
   say(f, text) { if (f === G.player || (G.mode === 'pvp' && f.team === 1)) hud.say(f.def.short || f.def.name, text, f.palette.accent); },
   setTint(c, a, hold) { G.tint = { c, a }; G.tintT = hold || 0; if (a > 0) stage.setTint(c, G.tintA); },
@@ -392,7 +393,8 @@ function update(rdt) {
     const dx = q.pos.x - p.pos.x, dz = q.pos.z - p.pos.z, d = Math.hypot(dx, dz), ov = 0.45 * (p.scale + q.scale) - d;
     if (ov > 0) { const nx = d > 1e-4 ? dx / d : 1, nz = d > 1e-4 ? dz / d : 0, wp = q.scale / (p.scale + q.scale); p.pos.x -= nx * ov * wp; p.pos.z -= nz * ov * wp; q.pos.x += nx * ov * (1 - wp); q.pos.z += nz * ov * (1 - wp); }
   }
-  for (let i = G.ents.length - 1; i >= 0; i--) { const e = G.ents[i]; e.update(dt * (e.owner && e.owner.team === 1 ? G.foeScale : 1)); if (e.done) G.ents.splice(i, 1); }
+  for (let i = G.ents.length - 1; i >= 0; i--) { const e = G.ents[i]; G.curEnt = e; e.update(dt * (e.owner && e.owner.team === 1 ? G.foeScale : 1)); if (e.done) G.ents.splice(i, 1); }
+  G.curEnt = null;
   fx.update(dt, camera); camUpdate(rdt); hud.update(G, rdt);
 }
 function camUpdate(rdt) { fcam.update(rdt, G); if (G.mode === 'pvp') fcam2.update(rdt, G); mouse.dx = mouse.dy = 0; fadeOccluders(rdt); }

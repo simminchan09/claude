@@ -324,7 +324,7 @@ function createModelWithHeat(pal) {
 export default {
   id: 'azazel', name: '아자젤', short: '아자젤', title: 'OVERLORD · 양키 마족', scale: 1.0,
   desc: '근거리 · 난타 · 화염. "차별이라는 사슬을 끊어내고, 잃어버린 마족의 영광을 되찾겠어." 철퇴·발차기·박치기로 들이받는 양키 싸움꾼. 때릴수록 열기가 쌓이고, 가득 차면 철퇴에 불이 붙는다.',
-  stats: { hp: 980, speed: 7.6, jump: 10, crit: 0.22 },
+  stats: { hp: 1050, speed: 7.6, jump: 10, crit: 0.22 },
   palettes: [{ accent: FIRE, lining: 0xc8102a, hair: 0xd01c30, band: '#3a0a10' }, { accent: 0xb05aff, lining: 0x5a1a9a, hair: 0x8a2ad0, band: '#1a0a3a' }],
   skills: { heavy: { name: '사슬 낚아채기', cd: 7 }, s1: { name: '양키 돌격', cd: 9 }, s2: { name: '마족의 숨결', cd: 11 }, ult: { name: '마왕 각성', sub: 'OVERLORD' } },
   // HUD 고유 자원: 열기 게이지

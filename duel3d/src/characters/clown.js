@@ -371,7 +371,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'clown', name: '클라운', short: '클라운', title: 'CLOWN · 차원의 광대', scale: 1.0,
   desc: '근·중거리 · 넓은 낫 휘두르기 · 출혈 · 약화. 차원의 틈을 넘나드는 적 진영의 광대 소녀. 큰 장대 낫을 춤추듯 돌려 피를 흩뿌리고, 기분 나쁜 웃음으로 적을 조롱하며, 다이아몬드 차원문을 열어 적의 등 뒤에서 치명타를 꽂는다. 맞힐수록 광기가 차오르고, 가득 차면 피의 무도가 세 바퀴 광란이 된다.',
-  stats: { hp: 900, speed: 7.8, jump: 10.5, crit: 0.28 },
+  stats: { hp: 930, speed: 7.8, jump: 10.5, crit: 0.28 },
   palettes: [{ accent: CRIM, accent2: MAG, main: '#a8142c', dark: '#4a0612', id: 'r', band: '#2a0612' }, { accent: 0x3ae0ff, accent2: 0x6a8aff, main: '#1e6a7c', dark: '#0a2a34', id: 't', gem: 0xff5a9a, band: '#0a2028' }],
   skills: { heavy: { name: '피의 무도', cd: 8 }, s1: { name: '죽음의 문턱', cd: 10 }, s2: { name: '조롱의 환희', cd: 14 }, ult: { name: '커튼콜 · 차원 서커스', sub: 'CLOWN' } },
   aiPick,

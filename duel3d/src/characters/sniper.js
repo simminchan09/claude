@@ -393,7 +393,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'sniper', name: '제이', short: '제이', title: 'SNIPER · 표적 제거', scale: 0.98,
   desc: '원거리 · 저격 · 함정. 대물 저격총 "PROJECT-J" 를 쓰는 암살자. 허리 사격으로 견제하고, 레이저로 조준한 관통 광선으로 멀리 있는 적을 저격하며, 발밑에 대인 살상 마인을 깔아 다가오는 적을 묶는다. 마력을 개방하면 공격력과 사거리가 늘어난다.',
-  stats: { hp: 860, speed: 7.6, jump: 10.5, crit: 0.25 },
+  stats: { hp: 880, speed: 7.6, jump: 10.5, crit: 0.25 },
   palettes: [{ accent: CYAN, glow: CYAN }, { accent: 0xff4a6a, glow: 0xff4a6a }],
   skills: { heavy: { name: '초정밀 타겟 저격', cd: 7 }, s1: { name: '마력집중 – 개방', cd: 16 }, s2: { name: '대인 살상 마인', cd: 9 }, ult: { name: '표적 제거 · 레일 스나이프', sub: 'TARGET REMOVAL' } },
   aimRange: RANGE, aiRange: [7, 16], aiPick,

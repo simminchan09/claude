@@ -454,7 +454,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'ignethia', name: '이그네시아', short: '이그네시아', title: 'DRAGON KNIGHT · 진홍 업화의 여왕', scale: 1.0,
   desc: '근거리 · 업화 · 암룡 소환. 진홍 업화의 여왕이자 암룡을 거느린 용기사. 분홍 업화에 휩싸인 장검으로 베고, 흑염참으로 바닥에 불타는 궤적을 남기며, 그림자 불길의 암룡을 불러 하늘에서 불씨를 떨어뜨린다. 암룡의 낙인으로 잠시 모든 능력이 크게 오른다.',
-  stats: { hp: 960, speed: 8.0, jump: 11, crit: 0.25 },
+  stats: { hp: 1000, speed: 8.0, jump: 11, crit: 0.25 },
   palettes: [{ accent: PINK, glow: PINK, key: 'p', band: '#2a0a1e' }, { accent: 0x5a8aff, glow: 0x5a8aff, key: 'b', hair: ['#5a6070', '#c8ccd8', '#f4f6ff'], band: '#0a1430' }],
   skills: { heavy: { name: '흑염참', cd: 8 }, s1: { name: '종언 - 유성낙하', cd: 15 }, s2: { name: '암룡의 낙인', cd: 22 }, ult: { name: '종언 · 암룡강림', sub: 'DRAGON KNIGHT' } },
   aiPick,

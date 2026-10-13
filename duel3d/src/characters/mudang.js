@@ -449,7 +449,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'mudang', name: '단비', short: '단비', title: '경계의 무당', scale: 0.97,
   desc: '중거리 · 의식 술사 · 근접 견제. 기억과 경계의 의식을 치르는 현대 무당. 방울과 부적으로 치고, 붙인 부적을 터뜨려 약화시키며, 까치를 부려 급강하시키고 지전 결계로 상대를 홀린다. 맞힐수록 신기가 차오르고, 가득 차면 봉인 부적이 세 장이 된다.',
-  stats: { hp: 900, speed: 7.8, jump: 10.8, crit: 0.22 },
+  stats: { hp: 950, speed: 7.8, jump: 10.8, crit: 0.22 },
   palettes: [{ accent: GOLDB, coat: 0xf6f7f9, tie: REDM, band: '#2a1408' }, { accent: 0x6ae0ff, coat: 0x2a2c34, tie: 0x2a7aff, band: '#08182a' }],
   skills: { heavy: { name: '봉인 부적', cd: 7 }, s1: { name: '까치 부르기', cd: 12 }, s2: { name: '지전 결계', cd: 14 }, ult: { name: '굿 · 범 내려온다', sub: 'BOUNDARY SHAMAN' } },
   aimRange: RANGE, aiPick,

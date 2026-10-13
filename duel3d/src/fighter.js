@@ -4,6 +4,7 @@ import { clamp, lerp, damp, rand, angDelta, angLerp, ease, sfx } from './core.js
 import { POSE_LEN, JI, applyPose, lerpPose, addRunCycle, prepareDef } from './rig.js';
 import { ARENA_R } from './stage.js';
 import { PLUNGE_MIN_H } from './plunge.js';
+import { moveCat, balMul } from './balance.js';
 
 const V3 = THREE.Vector3;
 export const GRAV = 26;
@@ -62,7 +63,7 @@ export class Fighter {
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.ki = 0; this.orbitT = 0; this.bladeK = 0; this.vanish = false; this.st = {}; this.stAcc = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.dmgSrc = null; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.ki = 0; this.orbitT = 0; this.bladeK = 0; this.vanish = false; this.st = {}; this.stAcc = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
@@ -183,8 +184,10 @@ export class Fighter {
   }
   start(name) {
     const m = this.def.moves[name]; if (!m) return;
+    this.G.curF = this;
     if (m.cd) this.cd[m.cd] = this.def.skills[m.cd].cd;
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
+    { const c = moveCat(name, m); if (c) this.dmgSrc = c; } // 밸런스 분류 (이 기술이 만든 투사체 · 소환물도 따라감)
     if (name.startsWith('light')) this.basicT = this.G.time; // 기본공격 시작 시각 (날아가는 탄도 기본공격으로 친다)
     this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear(); this.teleDone = false;
     // 자동 조준: 가까운 대상이 있으면 그쪽을 본다
@@ -231,7 +234,8 @@ export class Fighter {
     }
     const comboing = this.state === 'hit' || this.held;
     att.combo = comboing ? att.combo + 1 : 1; att.comboT = 1.6;
-    let dmg = h.dmg * (att.dmgMul || 1) * (att.stK ? att.stK('atk') : 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
+    const cat = (G.curEnt && G.curEnt._cat) || att.dmgSrc;
+    let dmg = h.dmg * (att.dmgMul || 1) * (att.stK ? att.stK('atk') : 1) * (att.def ? balMul(att.def.id, cat) : 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
     let crit = false; if (h.crit || (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2))) { dmg *= 1.6; crit = true; } // h.crit: 확정 치명타
     if (this.brokenT > 0) dmg *= 1.5;
     // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
@@ -272,6 +276,7 @@ export class Fighter {
   }
   /* ----- 업데이트 ----- */
   update(dt, live) {
+    this.G.curF = this; // 이 파이터가 움직이는 동안 생성된 엔티티의 주인 (balance.js)
     const o = this.opp, G = this.G;
     this.inv -= dt; this.counterT -= dt; if (this.brokenT > 0) { this.brokenT -= dt; if (this.brokenT <= 0) this.daze = 0; }
     for (const k in this.cd) this.cd[k] -= dt * (this.cdMul || 1); // cdMul: 쿨타임 회복 배율

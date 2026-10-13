@@ -447,7 +447,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'aquarist', name: '아리엘', short: '아리엘', title: 'AQUARIST · 바다의 마법사', scale: 0.97,
   desc: '원거리 · 물 마법 · 견제. "잃어버린 마력, 꼭 되찾을 거야!" 바다 정령의 힘을 빌려 물방울 탄·물의 창을 쏘고, 거품에 가두고, 소용돌이로 끌어당긴다. 움직이면서 쏠 수 있고, 맞힐수록 조류가 차올라 만조가 된다.',
-  stats: { hp: 880, speed: 7.4, jump: 10.5, crit: 0.2 },
+  stats: { hp: 900, speed: 7.4, jump: 10.5, crit: 0.2 },
   palettes: [{ accent: AQUA, blue: 0x2f6fd0, hat: 0x9ad0f4 }, { accent: 0xff7ac8, blue: 0x9a3aa8, hat: 0xf4b8e0 }],
   skills: { heavy: { name: '아쿠아 랜스', cd: 6 }, s1: { name: '버블 프리즌', cd: 10 }, s2: { name: '해류 소용돌이', cd: 12 }, ult: { name: '바다 정령의 해일', sub: 'AQUARIST' } },
   aimRange: RANGE, aiRange: [5, 12], aiPick,

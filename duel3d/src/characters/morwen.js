@@ -439,7 +439,7 @@ function aiPick(f, o, dist) {
 export default {
   id: 'morwen', name: '모르웬', short: '모르웬', title: '피의 인형사', scale: 0.96,
   desc: '중거리 · 실 채찍 · 속박/출혈 · 인형 소환. 죽은 자의 기억을 인형에 묶어두는 인형사. 마리오네트 조종 십자의 실을 채찍처럼 휘둘러 거리를 지키고, 핏빛 실로 묶어 피를 흘리게 하고, 꿰맨 인형과 오각 촛불 진으로 몰아붙인다. 출혈이 흐를수록 혈사가 차오르고, 가득 차면 다음 혈사가 상대를 꼭두각시처럼 매달아 찢는다.',
-  stats: { hp: 880, speed: 7.6, jump: 10.5, crit: 0.2 },
+  stats: { hp: 920, speed: 7.6, jump: 10.5, crit: 0.2 },
   palettes: [{ accent: ROSE, cross: 0xb0122a, rose: 0xffffff, apron: 0xffffff }, { accent: 0x9a7aff, cross: 0x4a2a8a, rose: 0xff6a8a, apron: 0xd8d0ff }],
   skills: { heavy: { name: '혈사', cd: 7 }, s1: { name: '인형 소환', cd: 10 }, s2: { name: '오각 촛불 진', cd: 14 }, ult: { name: '인형극 · 마지막 막', sub: 'DOLLS REMEMBER EVERYTHING' } },
   aimRange: RANGE, aiRange: [2.2, 4.6], aiPick,
