@@ -60,6 +60,10 @@ const poses = {
     hipL: [-0.3, 0, 0.25], kneeL: [0.5, 0, 0], hipR: [0.25, 0, -0.25], kneeR: [0.45, 0, 0] },
   thrust: { hips: [0, 0.35, 0], spine: [0.45, 0.3, 0], chest: [0.1, 0.3, 0], head: [-0.4, -0.5, 0], shoulderR: [-1.6, 0, -0.05], elbowR: [-0.05, 0, 0], weapon: [0.0, -0.05, 1.57], shoulderL: [0.4, 0, 0.5], elbowL: [-0.6, 0, 0],
     hipL: [-1.15, 0, 0.12], kneeL: [1.1, 0, 0], hipR: [0.8, 0, -0.12], kneeR: [0.2, 0, 0] },
+  // 용의 발톱: 왼쪽 건틀릿을 뒤로 젖혔다가 앞으로 할퀴기
+  clawWind: { hips: [0, -0.45, 0], spine: [0.15, -0.4, 0], chest: [0.05, -0.45, 0], head: [0, 0.6, 0], shoulderL: [-0.6, 0, 1.2], elbowL: [-1.4, 0, 0], shoulderR: [0.2, 0, -0.4], elbowR: [-0.8, 0, 0], weapon: [-0.3, 2.6, 0.3] },
+  clawSwipe: { hips: [0, 0.5, 0], spine: [0.35, 0.4, 0], chest: [0.1, 0.45, 0], head: [-0.2, -0.5, 0], shoulderL: [-1.5, 0, -0.35], elbowL: [-0.15, 0, 0], shoulderR: [0.3, 0, -0.5], elbowR: [-0.6, 0, 0], weapon: [-0.3, 2.6, 0.3],
+    hipL: [-0.9, 0, 0.12], kneeL: [0.9, 0, 0], hipR: [0.5, 0, -0.12], kneeR: [0.35, 0, 0] },
   // 공중에서 칼을 머리 뒤로 젖힘 (궁극기 마무리)
   leap: { hips: [-0.2, 0, 0], spine: [-0.35, 0, 0], chest: [-0.2, 0, 0], head: [-0.2, 0, 0], shoulderR: [-3.0, 0, -0.2], elbowR: [-0.7, 0, 0], weapon: [2.6, 0, 1.57], shoulderL: [-1.8, 0, 0.6], elbowL: [-0.4, 0, 0],
     hipL: [-1.4, 0, 0.1], kneeL: [1.9, 0, 0], footL: [-0.4, 0, 0], hipR: [-0.5, 0, -0.1], kneeR: [1.6, 0, 0] },
@@ -131,6 +135,20 @@ class FlameWave {
     for (let i = 0; i < 6; i++) { const s = rand(-1.3, 1.3), p = this.pos.clone().addScaledVector(side, s).setY(this.pos.y + rand(0, 1.4) * (1 - Math.abs(s) * 0.5)); G.fx.p(p, { vel: [this.dir.x * 4, rand(1, 3), this.dir.z * 4], size: rand(0.35, 0.7), size1: 0.05, life: 0.3, color: i % 3 ? PINK : VIOLET, alpha: 0.8, drag: 2 }); }
     for (const t of f.foes()) { if (this.hit.has(t)) continue; const rel = new V3().subVectors(t.pos, this.pos); if (Math.abs(rel.dot(this.dir)) > 0.7 || Math.abs(rel.dot(side)) > 1.5 + 0.3 * t.scale || rel.y > 1.8) continue;
       this.hit.add(t); t.takeHit(f, { dmg: 44, kb: [5, 3], stun: 0.6, hs: 0.08, daze: 20, snd: 'big' }, this.dir); t.addStatus('burn', 4, 14, f); }
+  }
+  kill() { this.done = true; }
+}
+
+/* ---------- 흑염 초승달: 칼에서 날아가는 분홍 불꽃 초승달 (관통) ---------- */
+class Crescent {
+  constructor(G, f) { this.G = G; this.f = f; this.t = 0; this.done = false; this.dir = f.fwd(new V3()); this.pos = f.local([0, 1.05, 0.8]); this.hit = new Set(); this.side = new V3(this.dir.z, 0, -this.dir.x); }
+  update(dt) {
+    const G = this.G, f = this.f; this.t += dt; if (this.t > 0.42) return this.kill();
+    this.pos.addScaledVector(this.dir, 17 * dt);
+    if (Math.random() < 0.8) G.fx.slash(this.pos, { fwd: this.dir, normal: UP, r: 1.1, color: Math.random() < 0.5 ? PINK : VIOLET, life: 0.12 });
+    for (let i = 0; i < 3; i++) G.fx.p(this.pos.clone().addScaledVector(this.side, rand(-0.9, 0.9)), { vel: [0, rand(0.5, 1.5), 0], size: 0.18, size1: 0.03, life: 0.3, color: i ? PINK : HOTP, alpha: 0.85, drag: 1 });
+    for (const t of f.foes()) { if (this.hit.has(t) || !t.hurtHitSeg(this.pos.clone().addScaledVector(this.side, -0.9), this.pos.clone().addScaledVector(this.side, 0.9), 0.25)) continue; this.hit.add(t); t.takeHit(f, { dmg: 30, basic: true }, this.dir); }
+    const W = G.stage && G.stage.world; if (W && W.solidAt(this.pos, 0.2)) this.kill();
   }
   kill() { this.done = true; }
 }
@@ -259,27 +277,30 @@ const moves = {
     fx: (f, o, G, c) => { pinkBurst(G, c.clone().setY(c.y + 0.3), 1.2, true); const pts = []; for (let i = 0; i < 7; i++) { const a = (i / 7) * TAU; pts.push(c.clone().add(new V3(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6))); } G.spawn(new BurnTrail(G, f, pts, { life: 2.6, r: 0.6, k: 0.7 })); },
   }),
 
-  /* --- 기본 공격: 가로 베기 → 올려베기 → 회전 베기(2타) → 업화 내려찍기 --- */
-  light1: { dur: 0.4, cancel: 0.19, next: 'light2', trail: true, track: 0.08, ikOff: true,
-    keys: [[0, 'windR'], [0.1, 'slashL'], [0.22, {}], [0.4, 'base']], lunge: [[0.03, 0.13, 7]],
-    ev: [[0.06, () => sfx('swing')], [0.09, (f) => pinkSlash(f, { tilt: 0.1, r: 2.0 })]],
-    hits: [{ t0: 0.05, t1: 0.15, dmg: 32, kb: [2.2, 0], stun: 0.36, daze: 11 }] },
-  light2: { dur: 0.42, cancel: 0.21, next: 'light3', trail: true, track: 0.08, ikOff: true,
-    keys: [[0, 'windLow'], [0.1, 'slashUp'], [0.24, {}], [0.42, 'base']], lunge: [[0.03, 0.13, 6.5]],
-    ev: [[0.06, () => sfx('swing')], [0.09, (f) => pinkSlash(f, { tilt: -0.9, r: 2.1, flip: true, color: VIOLET })]],
-    hits: [{ t0: 0.05, t1: 0.16, dmg: 34, kb: [2, 1.5], stun: 0.42, daze: 12 }] },
-  light3: { dur: 0.54, cancel: 0.3, next: 'light4', trail: true, track: 0.06, ikOff: true,
-    keys: [[0, 'spin'], [0.4, 'spin'], [0.54, 'base']], lunge: [[0.04, 0.3, 4]],
-    start: (f) => flame(f, 0.6),
-    tick: (f, o, G, t, dt) => { if (t > 0.06 && t < 0.38) f.yaw += dt * TAU / 0.32; if (t >= 0.38 && t < 0.4) f.faceOpp(); },
-    ev: [[0.06, () => sfx('swing')], [0.2, () => sfx('swing')], [0.12, (f, o, G) => { G.fx.ring(f.local([0, 1.0, 0]), { normal: UP, r0: 0.5, r1: 2.1, life: 0.3, color: PINK }); embers(G, f.chest(new V3()), 12, 4); }], [0.45, (f) => flame(f, 0)]],
-    hits: [{ t0: 0.06, t1: 0.22, dmg: 24, kb: [1.6, 0], stun: 0.4, daze: 9 }, { t0: 0.22, t1: 0.38, dmg: 26, kb: [2.4, 0], stun: 0.45, daze: 9 }],
+  /* --- 기본 공격 (용기사 연격): 업화 찌르기 → 용의 발톱(건틀릿 세 줄 할퀴기) → 흑염 초승달 날리기 → 암룡의 이빨(용 머리가 덮쳐 물어뜯음) --- */
+  light1: { dur: 0.4, cancel: 0.2, next: 'light2', trail: true, track: 0.1, ikOff: true,
+    keys: [[0, { ...poses.thrust, shoulderR: [-0.5, 0, -0.3], elbowR: [-1.8, 0, 0], spine: [0.15, 0.2, 0] }], [0.09, 'thrust'], [0.24, {}], [0.4, 'base']], lunge: [[0.06, 0.16, 9]],
+    start: (f) => flame(f, 0.7),
+    ev: [[0.06, () => sfx('dash')], [0.1, (f, o, G) => { sfx('swing'); breath(G, f.local([0, 1.1, 0.6]), f.local([0, 1.1, 2.4]), 10, 14); }], [0.3, (f) => flame(f, 0)]],
+    hits: [{ t0: 0.07, t1: 0.17, dmg: 30 }], end: (f) => flame(f, 0) },
+  light2: { dur: 0.42, cancel: 0.22, next: 'light3', track: 0.1, ikOff: true,
+    keys: [[0, 'clawWind'], [0.1, 'clawSwipe'], [0.26, {}], [0.42, 'base']], lunge: [[0.04, 0.13, 6.5]],
+    ev: [[0.08, () => sfx('swing')], [0.11, (f, o, G) => { const fw = f.fwd(new V3()), side = new V3(fw.z, 0, -fw.x);
+      for (let i = -1; i <= 1; i++) { const c = f.local([0, 1.15 + i * 0.16, 0.9]); G.fx.slash(c, { fwd: fw, normal: side.clone().multiplyScalar(-1).add(new V3(0, 0.6, 0)).normalize(), r: 0.9, color: i ? PINK : HOTP, life: 0.22 }); }
+      embers(G, f.local([0, 1.1, 0.9]), 8, 3); }]],
+    hits: [{ t0: 0.08, t1: 0.17, weapon: false, at: [0.15, 1.12, 0.85], r: 0.62, dmg: 34 }] },
+  light3: { dur: 0.46, cancel: 0.26, next: 'light4', trail: true, track: 0.12, ikOff: true, move: 0.35,
+    keys: [[0, 'windR'], [0.1, 'slashL'], [0.26, {}], [0.46, 'base']],
+    start: (f) => flame(f, 0.8),
+    ev: [[0.06, () => sfx('swing')], [0.1, (f, o, G) => { sfx('zap'); G.spawn(new Crescent(G, f)); }], [0.36, (f) => flame(f, 0)]],
     end: (f) => flame(f, 0) },
-  light4: { dur: 0.66, trail: true, track: 0.16, ikOff: true,
-    keys: [[0, 'raise'], [0.16, 'raise'], [0.26, 'slam'], [0.46, {}], [0.66, 'base']], lunge: [[0.12, 0.28, 9]],
-    start: (f) => { sfx('charge'); flame(f, 1); },
-    ev: [[0.17, () => sfx('swing')], [0.26, (f, o, G) => { sfx('heavy'); const c = f.local([0, 0.05, 1.4]); c.y = f.pos.y + 0.05; pinkBurst(G, c, 0.9, true); G.fx.ring(c, { normal: UP, r0: 0.2, r1: 1.8, life: 0.35, color: PINK }); G.shake(0.15); G.spawn(new BurnTrail(G, f, [c], { life: 2, r: 0.8, k: 0.6 })); pinkSlash(f, { tilt: 1.45, r: 2.3, color: HOTP }); }], [0.5, (f) => flame(f, 0)]],
-    hits: [{ t0: 0.17, t1: 0.32, dmg: 56, kb: [6, 3], stun: 0.7, hs: 0.12, shake: 0.2, daze: 26, snd: 'big', br: 0.2 }],
+  light4: { dur: 0.72, track: 0.2, ikOff: true, noMove: true, shout: true,
+    keys: [[0, 'summon'], [0.3, 'summon'], [0.4, { ...poses.thrust, weapon: [0.3, -0.3, 1.57] }], [0.56, {}], [0.72, 'base']],
+    start: (f, o, G) => { sfx('charge'); flame(f, 1); const fw = f.fwd(new V3()), tgt = o && !o.gone && f.dist() < 4.5 ? o.pos.clone() : f.local([0, 0, 2.4]); tgt.y = f.pos.y; f.biteAt = tgt;
+      new AbyssDragon(G, f, { life: 0.85, scale: 1.0, script: (d, t) => { const k = Math.min(1, t / 0.36), from = f.pos.clone().addScaledVector(fw, -1.4).add(new V3(0, 1.0, 0)), to = tgt.clone().addScaledVector(fw, -1.0).add(new V3(0, 0.35, 0));
+        d.place(from.lerp(to, k * k * (3 - 2 * k)), Math.atan2(fw.x, fw.z), -0.15 * (1 - k)); d.jawK = t < 0.3 ? Math.min(1, t / 0.2) : Math.max(0, 1 - (t - 0.3) / 0.08); d.flapA = 0.7; d.flapS = 9; } }); },
+    ev: [[0.38, (f, o, G) => { sfx('big'); sfx('heavy'); G.shake(0.18); const c = f.biteAt.clone().setY(f.pos.y + 0.9); pinkBurst(G, c, 0.8); for (const s of [-1, 1]) G.fx.slash(c, { fwd: new V3(0, s, 0), normal: f.right(new V3()), r: 0.9, color: s > 0 ? PINK : VIOLET, life: 0.22 });
+        areaHit(f, f.biteAt, 1.1, { dmg: 50 }, 1.6); }], [0.6, (f) => flame(f, 0)]],
     end: (f) => flame(f, 0) },
 
   /* --- 우클: 흑염참 — 힘을 모은 뒤 장검을 크게 휘둘러 앞의 적을 베고, 바닥에 한동안 불타는 궤적을 남긴다. 업화가 가득 차면 불꽃 파도까지 --- */
@@ -439,7 +460,7 @@ export default {
   aiPick,
   onReset: (f) => { f.brandT = 0; f.inferno = 0; f.flameK = 0; f.empHeavy = false; f.breathAcc = 0; f.ultTgt = null; f.ultDragon = null; },
   resource: (f) => f.brandT > 0 ? { v: f.brandT / BRAND_T, label: '낙인', color: 0xb03aff, full: true } : inferno(f) >= 100 ? { v: 1, label: '업화', color: 0xffb0e0, full: true } : { v: inferno(f) / 100, label: '업화', color: 0xff3aa8 },
-  moveList: [['좌클 ×4', '가로 베기 → 올려베기 → 회전 베기(2타) → 업화 내려찍기 56 (바닥에 불길)'], ['공중 좌클', '칼을 거꾸로 쥐고 내리꽂아 업화 고리를 남김 72'],
+  moveList: [['좌클 ×4', '업화 찌르기 30 → 용의 발톱(건틀릿 세 줄 할퀴기) 34 → 흑염 초승달 날리기 30(관통) → 암룡의 이빨: 암룡 머리가 덮쳐 물어뜯음 50'], ['공중 좌클', '칼을 거꾸로 쥐고 내리꽂아 업화 고리를 남김 72'],
     ['우클 · 흑염참', '힘을 모은 뒤 크게 휘둘러 앞의 적 70 · 휘두른 궤적에 4.5초 동안 불타는 바닥 (밟으면 6 + 화상 초당 12). 업화가 가득 차면 불꽃 파도 44 추가'],
     ['Shift · 종언 - 유성낙하', '암룡이 하늘로 불꽃을 쏘아 올리고 주위 반경 6.5m 에 불씨 14 개가 떨어짐 (개당 22 · 범위 1.5m)'],
     ['E · 암룡의 낙인', '8초 동안 주는 피해 ×1.35 · 이동 ×1.25 · 받는 피해 ×0.7 · 쿨타임 회복 ×1.3 · 초당 회복 8'],
