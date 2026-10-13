@@ -116,6 +116,7 @@ const moves = {
 - 이펙트: `f.slashFx({ tilt, r, at, flip })`, `G.fx.burst / ring / slash / beam / light / impact / p`
 - 화면: `G.shake(a)`, `G.flash(color, a)`, `G.slow(배율, 초)`, `G.setTint(color, a)`, `G.stage.flashSky(a)`
 - 판정: `new Projectile(G, {...})` + `G.spawn()`, `areaHit(f, 중심, 반경, hit)`
+- 상태 효과: `t.addStatus(kind, 초, k, src)` — 'bleed'·'burn'(초당 피해) · 'slow'(이동 ×k) · 'vuln'(받는 피해 ×k, 1 미만이면 피해 감소) · 'atk'(주는 피해 ×k) · 'haste' · 'regen'. 읽기 `f.stK(kind)`. 라운드마다 초기화할 고유 상태는 `def.onReset(f)`. 확정 치명타는 hit 데이터에 `crit: true`.
 - 원거리 기술: `G.spawn()` 에는 `update(dt)` · `done` · `kill()` 을 가진 무엇이든 넣을 수 있다. 아리엘의 `WaterOrb`(유도 · 관통 · 폭발) · `WaterLance` · `BubblePrison`(lock/release 로 가둠) · `Whirlpool`(끌어당김 + 연속 피해) 참고. 기술의 `move`(0~1)로 시전 중 이동 속도를 정한다.
 - 궁극기 고정: `o.lock()` / `o.release()`
 - 대사: `G.say(f, '"대사"')` (화면 아래 자막)

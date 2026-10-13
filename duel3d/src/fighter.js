@@ -229,7 +229,7 @@ export class Fighter {
     const comboing = this.state === 'hit' || this.held;
     att.combo = comboing ? att.combo + 1 : 1; att.comboT = 1.6;
     let dmg = h.dmg * (att.dmgMul || 1) * (att.stK ? att.stK('atk') : 1); if (!h.noScale) dmg *= Math.max(0.45, 1 - 0.085 * (att.combo - 1));
-    let crit = false; if (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2)) { dmg *= 1.6; crit = true; }
+    let crit = false; if (h.crit || (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2))) { dmg *= 1.6; crit = true; } // h.crit: 확정 치명타
     if (this.brokenT > 0) dmg *= 1.5;
     // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
     if (this.maxDaze && this.brokenT <= 0) { this.daze = Math.min(this.maxDaze, this.daze + (h.daze ?? dmg * 0.55)); if (this.daze >= this.maxDaze) this.breakStart(att); }
