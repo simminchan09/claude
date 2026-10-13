@@ -185,6 +185,7 @@ export class Fighter {
     const m = this.def.moves[name]; if (!m) return;
     if (m.cd) this.cd[m.cd] = this.def.skills[m.cd].cd;
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
+    if (name.startsWith('light')) this.basicT = this.G.time; // 기본공격 시작 시각 (날아가는 탄도 기본공격으로 친다)
     this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear(); this.teleDone = false;
     // 자동 조준: 가까운 대상이 있으면 그쪽을 본다
     if (m.aim !== false && this.opp && (this.team === 1 || this.dist() < (this.def.aimRange || 10))) this.faceOpp();
@@ -234,13 +235,15 @@ export class Fighter {
     let crit = false; if (h.crit || (att.team === 0 && !h.noCrit && Math.random() < (att.def.stats.crit ?? 0.2))) { dmg *= 1.6; crit = true; } // h.crit: 확정 치명타
     if (this.brokenT > 0) dmg *= 1.5;
     // 그로기 게이지: 가득 차면 브레이크 (일정 시간 무력화 · 받는 피해 증가)
-    if (this.maxDaze && this.brokenT <= 0) { this.daze = Math.min(this.maxDaze, this.daze + (h.daze ?? dmg * 0.55)); if (this.daze >= this.maxDaze) this.breakStart(att); }
+    // 기본공격(좌클 연격 · 그 탄): 피해만 — 경직 · 넉백 · 띄우기 · 그로기 누적 없음
+    const basic = h.basic ?? (att.state === 'act' && att.actName ? att.actName.startsWith('light') : G.time - (att.basicT ?? -9) < 1.2);
+    if (this.maxDaze && this.brokenT <= 0 && !basic) { this.daze = Math.min(this.maxDaze, this.daze + (h.daze ?? dmg * 0.55)); if (this.daze >= this.maxDaze) this.breakStart(att); }
     // 기술 중 피격 훅 (예: 방어 태세 — 피해 감소 · 경직 없음 · 반격 예약)
     const mod = this.act && this.act.onHit && !h.force ? this.act.onHit(this, att, h, dir) : null;
     if (mod) dmg *= mod.dmgK ?? 1;
     dmg *= (this.defMul || 1) * this.stK('vuln'); // defMul: 받는 피해 배율 (버프) · vuln: 상태 효과
     // 슈퍼아머: 브레이크 전에는 경직·넉백 없이 버틴다
-    const armored = (this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held) || !!(mod && mod.armor);
+    const armored = (this.def.stats.armor && this.brokenT <= 0 && !h.force && !this.held) || !!(mod && mod.armor) || (basic && !h.force);
     this.hp -= dmg; if ((h.nokill || G.mode === 'training') && this.hp < 1) this.hp = 1; this.chipT = 0.7; this.lastHitT = 0;
     this.gainEnergy(dmg * 0.1); att.gainEnergy && att.gainEnergy(dmg * 0.14);
     att.hitConfirm = true;
