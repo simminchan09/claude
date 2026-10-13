@@ -9,8 +9,9 @@ import lancer from './lancer.js';
 import ignethia from './ignethia.js';
 import guardian from './guardian.js';
 import aurora from './aurora.js';
+import mudang from './mudang.js';
 import trainer from './trainer.js';
 
-export const ROSTER = [leo, azazel, aquarist, sui, clown, sniper, lancer, ignethia, guardian, aurora, trainer];
+export const ROSTER = [leo, azazel, aquarist, sui, clown, sniper, lancer, ignethia, guardian, aurora, mudang, trainer];
 // 선택 화면에 표시할 빈 슬롯 수 (구현 예정 캐릭터 자리)
 export const EMPTY_SLOTS = 0;
