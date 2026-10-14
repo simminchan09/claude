@@ -89,10 +89,10 @@ class ChainHook {
     this.G = G; this.f = f; this.t = 0; this.done = false; this.phase = 'out'; this.hooked = null; this.pullTo = 1.05;
     const hand = f.model.J.handL.getWorldPosition(new V3());
     this.from = hand.clone(); this.pos = hand.clone();
-    const aim = target && !target.gone && f.dist() < 10 ? target.chest(new V3()) : f.local([0, 1.1, 9]);
-    this.dir = aim.sub(hand).normalize(); this.max = 9.5;
+    const aim = target && !target.gone && f.dist() < 16 ? target.chest(new V3()) : f.local([0, 1.1, 15]);
+    this.dir = aim.sub(hand).normalize(); this.max = 16; // 사슬 사거리 (늘림)
     const link = new THREE.TorusGeometry(0.02, 0.0055, 6, 12).scale(1, 1.55, 1);
-    this.links = new THREE.InstancedMesh(link, new THREE.MeshStandardMaterial({ color: 0x8a8a94, metalness: 0.8, roughness: 0.35, emissive: 0x3a0a04, emissiveIntensity: 0.6 }), 40); this.links.frustumCulled = false; G.scene.add(this.links);
+    this.links = new THREE.InstancedMesh(link, new THREE.MeshStandardMaterial({ color: 0x8a8a94, metalness: 0.8, roughness: 0.35, emissive: 0x3a0a04, emissiveIntensity: 0.6 }), 160); this.links.frustumCulled = false; G.scene.add(this.links);
     const sh = new THREE.Shape(); sh.moveTo(0, 0.09); sh.lineTo(0.024, 0.03); sh.lineTo(0.012, 0); sh.lineTo(0.024, -0.03); sh.lineTo(0, -0.07); sh.lineTo(-0.024, -0.03); sh.lineTo(-0.012, 0); sh.lineTo(-0.024, 0.03); sh.closePath();
     this.head = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: 0.01, bevelEnabled: true, bevelThickness: 0.003, bevelSize: 0.003, bevelSegments: 2 }), new THREE.MeshStandardMaterial({ color: 0x9a9aa4, metalness: 0.9, roughness: 0.3, emissive: 0xff3a10, emissiveIntensity: 0.4 }));
     G.scene.add(this.head); f.chainHook = this;
@@ -100,7 +100,7 @@ class ChainHook {
   update(dt) {
     const G = this.G, f = this.f; this.t += dt; const hand = f.model.J.handL.getWorldPosition(new V3());
     if (this.phase === 'out') {
-      this.pos.addScaledVector(this.dir, 34 * dt);
+      this.pos.addScaledVector(this.dir, 46 * dt);
       for (const t of f.foes()) if (t.hurtHit(this.pos, 0.3)) { this.hooked = t; this.phase = 'pull'; this.t = 0; sfx('block'); sfx('hit'); t.takeHit(f, { dmg: 28, kb: [0, 0], stun: 1.1, hs: 0.06, daze: 20 }, this.dir.clone().negate()); G.fx.burst(this.pos, 16, FIRES, 5); f.hooked = t; break; }
       if (this.phase === 'out' && this.pos.distanceTo(this.from) > this.max) { this.phase = 'back'; this.t = 0; }
     } else if (this.phase === 'pull') {
@@ -109,9 +109,9 @@ class ChainHook {
       if (this.t > 0.26) { this.phase = 'back'; this.t = 0; }
     } else { this.pos.lerp(hand, Math.min(1, dt * 18)); if (this.pos.distanceTo(hand) < 0.15 || this.t > 0.5) this.kill(); }
     // 사슬 고리 배치 (손 → 갈고리)
-    const d = new V3().subVectors(this.pos, hand), L = d.length(), n = Math.min(40, Math.max(1, Math.round(L / 0.045))), m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new V3(0, 1, 0), dir = d.clone().normalize(), sag = this.phase === 'out' ? 0.1 : 0.02;
+    const d = new V3().subVectors(this.pos, hand), L = d.length(), n = Math.min(160, Math.max(1, Math.round(L / 0.045))), m = new THREE.Matrix4(), q = new THREE.Quaternion(), Y = new V3(0, 1, 0), dir = d.clone().normalize(), sag = this.phase === 'out' ? 0.1 : 0.02;
     q.setFromUnitVectors(Y, dir);
-    for (let i = 0; i < 40; i++) { if (i >= n) { m.makeScale(0, 0, 0); this.links.setMatrixAt(i, m); continue; } const u = (i + 0.5) / n, p = hand.clone().addScaledVector(d, u); p.y -= Math.sin(u * Math.PI) * sag * L * 0.1; const qq = q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(Y, (i % 2) * Math.PI / 2)); m.compose(p, qq, new V3(1, 1, 1)); this.links.setMatrixAt(i, m); }
+    for (let i = 0; i < 160; i++) { if (i >= n) { m.makeScale(0, 0, 0); this.links.setMatrixAt(i, m); continue; } const u = (i + 0.5) / n, p = hand.clone().addScaledVector(d, u); p.y -= Math.sin(u * Math.PI) * sag * L * 0.1; const qq = q.clone().multiply(new THREE.Quaternion().setFromAxisAngle(Y, (i % 2) * Math.PI / 2)); m.compose(p, qq, new V3(1, Math.max(1, L / n / 0.045), 1)); this.links.setMatrixAt(i, m); }
     this.links.instanceMatrix.needsUpdate = true; this.head.position.copy(this.pos); this.head.quaternion.setFromUnitVectors(Y, dir);
     if (Math.random() < 0.5) G.fx.p(this.pos, { size: 0.3, size1: 0.05, life: 0.15, color: FIRE, alpha: 0.6 });
   }
@@ -194,7 +194,9 @@ const moves = {
     keys: [[0, { spine: [0.1, 0.35, 0], chest: [0.05, 0.4, 0], shoulderL: [-0.6, 0, 0.9], elbowL: [-1.6, 0, 0] }],
       [0.12, { shoulderL: [-1.65, 0, 0.2], elbowL: [-0.1, 0, 0], ...LEGS_LUNGE }], [0.34, { spine: [-0.2, 0.1, 0], chest: [-0.15, 0.1, 0], head: [-0.4, 0, 0], shoulderL: [-0.4, 0, 0.5], elbowL: [-1.7, 0, 0] }],
       [0.45, { spine: [0.6, 0, 0], chest: [0.25, 0, 0], head: [0.5, 0, 0], hipL: [-0.9, 0, 0.1], kneeL: [0.9, 0, 0], hipR: [0.6, 0, -0.1], kneeR: [0.3, 0, 0] }], [0.6, {}], [0.98, 'base']],
-    start: (f, o, G) => { f.hooked = null; G.say(f, '"어딜 도망가!"'); },
+    start: (f, o, G) => { f.hooked = null; f.chainWait = 0; G.say(f, '"어딜 도망가!"'); },
+    // 사슬이 멀리 날아가 있는 동안(최대 0.6초)은 박치기 직전 자세로 기다렸다가, 끌어오면 바로 박치기
+    tick: (f, o, G, t, dt) => { const c = f.chainHook; if (c && (c.phase === 'out' || c.phase === 'pull') && t > 0.33 && (f.chainWait += dt) < 0.6) f.at -= dt; },
     ev: [[0.12, (f, o, G) => { sfx('shot'); sfx('dash'); G.spawn(new ChainHook(G, f, o)); }],
       [0.45, (f, o, G) => { const p = f.model.J.head.getWorldPosition(new V3()).addScaledVector(f.fwd(new V3()), 0.3); sfx('big'); sfx('block'); G.shake(0.2);
         G.fx.ring(p, { r0: 0.1, r1: 1.1, life: 0.25, color: 0xffffff, billboard: true }); for (let i = 0; i < 6; i++) { const a = (i / 6) * TAU; G.fx.p(p.clone().add(new V3(Math.cos(a) * 0.4, 0.35 + Math.sin(a) * 0.12, Math.sin(a) * 0.4)), { size: 0.22, size1: 0.05, life: 0.6, color: 0xffe060, alpha: 1 }); } }]],

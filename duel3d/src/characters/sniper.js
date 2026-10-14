@@ -289,13 +289,14 @@ const moves = {
     end: (f) => charge(f, 0) },
 
   /* --- 우클: 초정밀 타겟 저격 — 레이저로 조준한 뒤 관통하는 마력 광선 (멀수록 강함 · 집중 가득 차면 헤드샷) --- */
-  heavy: { dur: 1.1, cd: 'heavy', track: 0.6, noMove: true, shout: true,
+  // 차징: 우클을 누르고 있으면 0.6초 지점에서 조준을 유지하며 힘을 모은다 (최대 1.4초 · 짧게 쏘면 ×0.7, 완충 ×1.6)
+  heavy: { dur: 1.1, cd: 'heavy', track: 0.6, noMove: true, shout: true, hold: { key: 'heavy', at: 0.6, max: 1.4 },
     keys: [[0, 'aim'], [0.62, 'aim'], [0.65, { ...poses.aimKick, weapon: [0.45, 0, 0], spine: [-0.18, -0.32, 0] }], [0.85, 'aim'], [1.1, 'base']],
     start: (f, o, G) => { charge(f, 0.2); sfx('charge'); G.spawn(new LaserSight(G, f, f.act)); f.headshot = !!f.manaFull; if (f.headshot) G.say(f, '"…머리."'); },
     tick: (f, o, G, t) => { if (t < 0.62) { charge(f, 0.2 + t * 1.3); const p = f.model.muzzle(new V3()); for (let i = 0; i < 2; i++) { const a = rand(0, TAU), q = p.clone().add(new V3(Math.cos(a) * 0.5, rand(-0.4, 0.4), Math.sin(a) * 0.5)), v = p.clone().sub(q).multiplyScalar(5); G.fx.p(q, { vel: [v.x, v.y, v.z], size: 0.08, size1: 0.02, life: 0.2, color: i ? CYAN : CYAN2, alpha: 0.9 }); } } },
     ev: [[0.63, (f, o, G) => {
       const from = f.model.muzzle(new V3()), dir = aimDir(f, from), foc = focusOn(f), hs = f.headshot; if (hs) { f.mana = 0; f.manaFull = false; }
-      G.spawn(new RailBeam(G, f, from, dir, { w: foc ? 0.36 : 0.26, life: 0.6, hit: (t, d) => ({ dmg: Math.round((72 + 68 * clamp((d - 5) / 15, 0, 1)) * (hs ? 1.5 : 1) * (foc ? 1.15 : 1)), kb: [8, 2.5], stun: 0.75, hs: 0.14, shake: 0.25, daze: 40, snd: 'big', noScale: true }) }));
+      G.spawn(new RailBeam(G, f, from, dir, { w: (foc ? 0.36 : 0.26) * (1 + 0.6 * (f.holdK || 0)), life: 0.6, hit: (t, d) => ({ dmg: Math.round((72 + 68 * clamp((d - 5) / 15, 0, 1)) * (hs ? 1.5 : 1) * (foc ? 1.15 : 1) * (0.7 + 0.9 * (f.holdK || 0))), kb: [8, 2.5], stun: 0.75, hs: 0.14, shake: 0.25, daze: 40, snd: 'big', noScale: true }) }));
       muzzleFlash(f, G, dir, 2.2); sfx('shot'); sfx('boom'); G.shake(0.22); G.flash(CYAN2, 0.15); f.vel.addScaledVector(dir.clone().setY(0).normalize(), -7); charge(f, 1); f.headshot = false;
     }], [0.9, (f) => charge(f, 0)]],
     end: (f) => { charge(f, 0); f.headshot = false; } },

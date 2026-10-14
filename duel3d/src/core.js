@@ -65,7 +65,7 @@ export class KeyCtrl {
     const f = G.camFwdOf ? G.camFwdOf(fighter) : G.camFwd;
     let mx = f.x * iy - f.z * ix, mz = f.z * iy + f.x * ix;
     const l = Math.hypot(mx, mz); if (l > 1) { mx /= l; mz /= l; }
-    return { mx, mz, guard: h('guard'), crouch: this.m.crouch ? h('crouch') : false, jumpP: p('jump'), lockP: this.m.lock ? p('lock') : false, press: ACTIONS.find(p) || null };
+    return { mx, mz, guard: h('guard'), crouch: this.m.crouch ? h('crouch') : false, jumpP: p('jump'), lockP: this.m.lock ? p('lock') : false, press: ACTIONS.find(p) || null, hold: Object.fromEntries(ACTIONS.map((a) => [a, h(a)])) }; // hold: 누르고 있는 중 (차징 기술)
   }
 }
 

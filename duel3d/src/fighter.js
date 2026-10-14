@@ -191,6 +191,7 @@ export class Fighter {
     if (this.act && this.act.end) this.act.end(this, this.opp, this.G);
     { const c = moveCat(name, m); if (c) this.dmgSrc = c; } // 밸런스 분류 (이 기술이 만든 투사체 · 소환물도 따라감)
     if (name.startsWith('light')) this.basicT = this.G.time; // 기본공격 시작 시각 (날아가는 탄도 기본공격으로 친다)
+    this.holdT = 0; this.holdK = 0; this.aiHold = m.hold ? m.hold.max * (0.45 + Math.random() * 0.55) : 0;
     this.act = m; this.actName = name; this.at = 0; this.state = 'act'; this.wJump = true; this.evDone = 0; this.hitDone = new Set(); this.hitConfirm = false; this.trail.clear(); this.teleDone = false;
     // 자동 조준: 가까운 대상이 있으면 그쪽을 본다
     if (m.aim !== false && this.opp && (this.team === 1 || this.dist() < (this.def.aimRange || 10))) this.faceOpp();
@@ -294,7 +295,13 @@ export class Fighter {
     let target = null;
     switch (this.state) {
       case 'act': {
-        const m = this.act; this.at += dt;
+        const m = this.act, hd = m.hold;
+        // 차징: hold = { key, at, max } — at 시점에서 버튼을 누르고 있는 동안 기술 시간이 멈추고 힘이 모인다 (최대 max 초). holdK = 0~1
+        if (hd && this.at >= hd.at && this.holdT < hd.max && (this.ctrl && this.ctrl.human ? !!(this.I && this.I.hold && this.I.hold[hd.key]) : this.holdT < this.aiHold)) {
+          this.holdT += dt; const k = Math.min(1, this.holdT / hd.max);
+          if (k >= 1 && this.holdK < 1) { sfx('charge'); G.fx.ring(this.chest(tA), { r0: 0.2, r1: 1.6, life: 0.35, color: this.palette.accent, billboard: true }); G.flash(this.palette.accent, 0.1); }
+          this.holdK = k; if (Math.random() < 0.6) G.fx.p(this.chest(tA).add(tB.set(rand(-0.5, 0.5), rand(-0.4, 0.6), rand(-0.5, 0.5))), { vel: [0, 0.6, 0], size: 0.07 + 0.08 * k, size1: 0.01, life: 0.3, color: this.palette.accent, alpha: 0.9 });
+        } else this.at += dt;
         const ev = m.ev || [];
         while (this.evDone < ev.length && this.at >= ev[this.evDone][0]) { const e = ev[this.evDone++]; e[1](this, o, G); if (this.act !== m) return this.post(dt); }
         if (m.tele && !this.teleDone && this.at >= m.tele[0]) { this.teleDone = true; G.telegraph && G.telegraph(this, m.tele[1]); }
