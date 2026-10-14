@@ -50,6 +50,8 @@ const G = (window.__G = {
   flash(c, a) { hud.flash(c, a); },
   slow(s, h) { G.tsT = s; G.ts = Math.min(G.ts, s); G.tsHold = h; },
   // 생성 시점의 기술 분류를 기억한다 (엔티티가 만든 엔티티는 부모 분류를 물려받음) → balance.js
+  // 다른 파이터의 궁극기(컷인 또는 시전)가 진행 중인가 → 그동안 새 궁극기는 예약만 된다
+  ultBusy(f) { return (!!G.cine && G.cine.f !== f) || G.fighters.some((o) => o !== f && o.state === 'act' && o.act && o.act.ult); },
   spawn(e) { if (e._cat === undefined) { const f = e.owner || G.curF; e._cat = (G.curEnt && G.curEnt._cat) || (f && f.dmgSrc) || null; } G.ents.push(e); },
   // 대사 자막 (플레이어 캐릭터만)
   say(f, text) { if (f === G.player || (G.mode === 'pvp' && f.team === 1)) hud.say(f.def.short || f.def.name, text, f.palette.accent); },

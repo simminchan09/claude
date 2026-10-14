@@ -213,7 +213,8 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 
 /* 영웅 선택 바 (오버워치식) */
 #pickBar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(0deg,rgba(6,5,10,.92) 30%,rgba(6,5,10,0));pointer-events:none}
-.pickRow{display:flex;justify-content:center;align-items:flex-end;gap:8px;overflow-x:auto;padding:22px 4px 4px;pointer-events:auto;scrollbar-width:thin}
+.pickRow{display:flex;justify-content:flex-start;align-items:flex-end;gap:8px;overflow-x:auto;padding:22px 4px 4px;pointer-events:auto;scrollbar-width:thin}
+.pickRow>:first-child{margin-left:auto}.pickRow>:last-child{margin-right:auto}
 .pick{flex:none;position:relative;width:72px;height:72px;padding:0;border:2px solid rgba(255,255,255,.22);background:#15131f center/cover no-repeat;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);transition:transform .15s,border-color .15s,filter .15s;filter:saturate(.75) brightness(.85)}
 .pick:hover{transform:translateY(-6px);filter:none;border-color:rgba(255,255,255,.6)}
 .pick .ini{position:absolute;inset:0;display:grid;place-items:center;font:26px var(--f-display);color:rgba(255,255,255,.35)}

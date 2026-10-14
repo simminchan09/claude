@@ -63,7 +63,7 @@ export class Fighter {
   reset(p) {
     this.pos.copy(p); this.vel.set(0, 0, 0); this.yaw = Math.atan2(-p.x, -p.z);
     this.hp = this.dispHp = this.maxHp; this.chipT = 0; this.state = 'idle'; this.act = null; this.at = 0; this.stun = 0; this.inv = 0;
-    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.dmgSrc = null; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.ki = 0; this.orbitT = 0; this.bladeK = 0; this.vanish = false; this.st = {}; this.stAcc = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false;
+    this.buf = null; this.jumpBuf = 0; this.cd = { heavy: 0, s1: 0, s2: 0 }; this.awakenT = 0; this.dmgMul = 1; this.dmgSrc = null; this.spdMul = 1; this.defMul = 1; this.cdMul = 1; this.heat = 0; this.igniteT = 0; this.fireK = 0; this.tide = 0; this.tideT = 0; this.gemK = 0; this.ki = 0; this.orbitT = 0; this.bladeK = 0; this.vanish = false; this.st = {}; this.stAcc = 0; this.combo = 0; this.comboT = 0; this.held = false; this.float = false; this.ultQ = 0;
     this.launched = false; this.downT = 0; this.dashT = 0; this.dashCd = 0; this.blockStun = 0; this.flashT = 0; this.hitConfirm = false;
     this.onGround = true; this.runP = 0; this.groundOff = 0; this.lastHitT = 9; this.I = { mx: 0, mz: 0, guard: false };
     this.daze = 0; this.brokenT = 0; this.counterT = 0; this.dodgeT = -9; this.guardT0 = -9; this.gone = false; this.goneT = 0;
@@ -157,13 +157,15 @@ export class Fighter {
     if (!this.ctrl) return;
     const inp = this.ctrl.read(this.G, this); this.I = inp;
     if (inp.press) this.buf = { a: inp.press, t: 0.25 };
+    // 궁극기 예약: 상대 궁극기 연출 중이거나 붙잡혀 있어 지금 못 써도, 끝나는 즉시 발동한다
+    if (inp.press === 'ult' && this.energy >= 100) this.ultQ = 8;
     if (inp.jumpP) this.jumpBuf = 0.15;
     if (inp.lockP && this.G.toggleLock) this.G.toggleLock(this);
   }
   canAct(a) {
     // 무기를 던져 손이 비었으면 공격 불가 (회피·점프는 가능)
     if (this.model.weaponOut && a !== 'dash') return false;
-    if (a === 'ult') return this.energy >= 100 && !!this.opp;
+    if (a === 'ult') return this.energy >= 100 && !!this.opp && !(this.G.ultBusy && this.G.ultBusy(this)); // 다른 궁극기가 진행 중이면 대기
     if (this.def.skills[a] && this.def.skills[a].cd) return (this.cd[a] || 0) <= 0;
     if (a === 'dash') return this.dashCd <= 0 && this.onGround;
     return true;
@@ -193,7 +195,7 @@ export class Fighter {
     // 자동 조준: 가까운 대상이 있으면 그쪽을 본다
     if (m.aim !== false && this.opp && (this.team === 1 || this.dist() < (this.def.aimRange || 10))) this.faceOpp();
     m.start && m.start(this, this.opp, this.G);
-    if (m.ult) { this.energy = 0; this.inv = 99; this.G.startCine(this); }
+    if (m.ult) { this.energy = 0; this.inv = 99; this.ultQ = 0; this.G.startCine(this); }
   }
   endAct() {
     const m = this.act; this.act = null; this.trail.clear(); this.state = this.onGround ? 'idle' : 'jump';
@@ -282,6 +284,7 @@ export class Fighter {
     for (const k in this.cd) this.cd[k] -= dt * (this.cdMul || 1); // cdMul: 쿨타임 회복 배율
     this.flashT -= dt; this.comboT -= dt; this.blockStun -= dt; this.dashCd -= dt; this.jumpBuf -= dt; this.lastHitT += dt;
     if (this.buf) { this.buf.t -= dt; if (this.buf.t <= 0) this.buf = null; }
+    if (this.ultQ > 0) { this.ultQ -= dt; if (live && !this.held && ['idle', 'run', 'guard', 'jump'].includes(this.state) && this.canAct('ult') && this.tryAction('ult')) this.ultQ = 0; }
     if (this.comboT <= 0) this.combo = 0;
     if (live) this.gainEnergy(dt * 1.6);
     if (live) this.tickStatus(dt);
