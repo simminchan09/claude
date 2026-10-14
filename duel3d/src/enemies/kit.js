@@ -7,6 +7,7 @@ import { buildHumanoid } from '../rig.js';
 import { Projectile, areaHit } from '../entities.js';
 import { rand, sfx } from '../core.js';
 import trainer from '../characters/trainer.js';
+import { buildQuad, quadPoses, quadRun, buildGolem, buildFloater, floatPoses, buildDrone } from './bodies.js';
 
 export const V3 = THREE.Vector3, TAU = Math.PI * 2;
 const UP = new V3(0, 1, 0);
@@ -21,7 +22,7 @@ export const poses = trainer.poses;
 const G0 = new Map(); const geo = (k, f) => { if (!G0.has(k)) G0.set(k, f()); return G0.get(k); };
 export function construct(pal, o = {}) {
   if (typeof o === 'string') o = { weapon: o };
-  const m = buildHumanoid(DIMS), J = m.J, bulk = o.bulk || 1;
+  const m = buildHumanoid(DIMS), J = m.J, bulk = (o.bulk || 1) * (o.thin ? 0.55 : 1);
   const body = new THREE.MeshStandardMaterial({ color: pal.body ?? 0x15121c, metalness: o.metal ?? 0.35, roughness: o.rough ?? 0.5 });
   const shell = new THREE.MeshStandardMaterial({ color: pal.armor, metalness: o.metal ?? 0.5, roughness: o.rough ?? 0.3, flatShading: o.flat ?? true });
   const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: pal.accent, emissiveIntensity: 2.6 });
@@ -32,12 +33,17 @@ export function construct(pal, o = {}) {
   // 몸통
   add(J.hips, new THREE.BoxGeometry(0.3 * bulk, 0.16, 0.2 * bulk), shell, 0, -0.02, 0);
   add(J.spine, new THREE.CapsuleGeometry(0.12 * bulk, 0.1, 4, 8), body, 0, 0.1, 0);
-  const tor = add(J.chest, new THREE.IcosahedronGeometry(0.22, o.smooth ? 2 : 0), shell, 0, 0.15, 0); tor.scale.set(1.1 * bulk, 1, 0.8 * bulk);
+  if (o.thin) { // 해골 · 미라: 갈비뼈 고리와 등뼈
+    const bone = o.wrap ? cloth : new THREE.MeshStandardMaterial({ color: 0xe8e0c8, roughness: 0.7 });
+    for (let i = 0; i < 4; i++) { const r = add(J.chest, new THREE.TorusGeometry(0.13 - i * 0.012, 0.014, 5, 14), bone, 0, 0.05 + i * 0.075, 0.01, Math.PI / 2); r.scale.set(1.1, 0.85, 1); }
+    add(J.chest, new THREE.CylinderGeometry(0.02, 0.02, 0.32, 6), bone, 0, 0.16, -0.08); add(J.spine, new THREE.CylinderGeometry(0.02, 0.02, 0.26, 6), bone, 0, 0.1, -0.04);
+    if (o.wrap) for (let i = 0; i < 6; i++) add(J.chest, new THREE.TorusGeometry(0.14, 0.02, 4, 12), cloth, 0, i * 0.06, 0, Math.PI / 2 + Math.sin(i) * 0.2, 0, Math.cos(i) * 0.2);
+  } else { const tor = add(J.chest, new THREE.IcosahedronGeometry(0.22, o.smooth ? 2 : 0), shell, 0, 0.15, 0); tor.scale.set(1.1 * bulk, 1, 0.8 * bulk); }
   add(J.chest, new THREE.OctahedronGeometry(0.07), glow, 0, 0.16, 0.15 * bulk);
   if (o.spikes !== false) for (const s of [-1, 1]) add(J.chest, new THREE.ConeGeometry(0.06, 0.32, 5), shell, s * 0.2 * bulk, 0.32, -0.04, 0, 0, -s * 0.5);
   add(J.neck, new THREE.CylinderGeometry(0.045, 0.055, 0.12, 8), body, 0, 0.03, 0);
   // 머리
-  const H = J.head, hd = o.head || 'crystal';
+  const H = J.head, hd = o.head || 'crystal'; if (o.bigHead) H.scale.setScalar(o.bigHead); // 큰 머리 (고블린 · 임프)
   if (hd === 'crystal') { const h = add(H, new THREE.OctahedronGeometry(0.13), shell, 0, 0.12, 0); h.scale.set(0.9, 1.25, 1); add(H, new THREE.BoxGeometry(0.16, 0.025, 0.04), glow, 0, 0.13, 0.1); for (const s of [-1, 1]) add(H, new THREE.ConeGeometry(0.03, 0.22, 4), shell, s * 0.08, 0.27, -0.02, -0.4, 0, -s * 0.35); }
   else if (hd === 'skull') { const h = add(H, new THREE.SphereGeometry(0.115, 14, 10), shell, 0, 0.13, 0); h.scale.set(0.92, 1.05, 1.05); add(H, new THREE.BoxGeometry(0.13, 0.05, 0.1), shell, 0, 0.04, 0.04); for (const s of [-1, 1]) add(H, new THREE.SphereGeometry(0.028, 8, 6), glow, s * 0.045, 0.13, 0.095); add(H, new THREE.ConeGeometry(0.015, 0.03, 3), body, 0, 0.09, 0.11, -Math.PI / 2); }
   else if (hd === 'beast') { const h = add(H, new THREE.SphereGeometry(0.12, 12, 10), shell, 0, 0.12, 0); h.scale.set(0.95, 0.9, 1.05); add(H, new THREE.ConeGeometry(0.06, 0.2, 6), shell, 0, 0.09, 0.15, Math.PI / 2); add(H, new THREE.SphereGeometry(0.02, 6, 5), body, 0, 0.1, 0.25); for (const s of [-1, 1]) { add(H, new THREE.ConeGeometry(0.035, 0.12, 4), shell, s * 0.07, 0.24, -0.01, 0, 0, -s * 0.25); add(H, new THREE.SphereGeometry(0.018, 6, 5), glow, s * 0.045, 0.15, 0.1); } }
@@ -144,6 +150,62 @@ export function pillar(G, f, x, z, delay, { color, color2 = 0xffffff, dmg = 85, 
 }
 
 /* =====================================================================
+   몸 형태 선택: r.plan = 'biped'(기본) · 'quad'(네발 · 전갈 · 켄타우로스) · 'golem'(거구) · 'float'(떠다님) · 'drone'
+   ===================================================================== */
+const golemPoses = (() => { const o = {}; for (const k in poses) o[k] = { ...poses[k] }; o.base = { ...poses.base, spine: [0.32, 0.12, 0], chest: [0.12, 0.1, 0], head: [-0.3, 0, 0], shoulderL: [0.05, 0, 0.32], shoulderR: [0.1, 0, -0.32], elbowL: [-0.3, 0, 0], elbowR: [-0.4, 0, 0] }; return o; })();
+const floaterPoses = floatPoses(poses);
+function bodyOf(r) {
+  const o = { ...(r.model || {}), kind: r.kind };
+  if (r.plan === 'quad') return { createModel: (p) => buildQuad(p, o), poses: quadPoses(r.kind), runCycle: quadRun };
+  if (r.plan === 'golem') return { createModel: (p) => buildGolem(p, o), poses: golemPoses };
+  if (r.plan === 'float') return { createModel: (p) => buildFloater(p, o), poses: floaterPoses };
+  if (r.plan === 'drone') return { createModel: (p) => buildDrone(p, o), poses: floaterPoses };
+  return { createModel: (p) => construct(p, r.model), poses };
+}
+// 네발 짐승 기술: 물기 · 앞발 할퀴기 · 덮치기 · 돌진 · 꼬리 회전 · 포효(기둥 소환) / 켄타우로스: 창 찌르기 · 앞발 들어 짓밟기 · 돌격
+function quadKit(kind, k = 1, st) {
+  const P = kind === 'centaur' ? 1.5 : 1.45, N = kind === 'centaur' ? -1.5 : kind === 'scorpion' ? -1.2 : -1.15, S = st ? { st } : {}, cen = kind === 'centaur';
+  const H = (o) => ({ noCrit: true, ...S, ...o, dmg: o.dmg * k });
+  const crouchK = { hipY: -0.12, chest: [0.22, 0, 0], hipL: [-P - 0.7, 0, 0], hipR: [-P - 0.7, 0, 0], kneeL: [1.2, 0, 0], kneeR: [1.2, 0, 0], shoulderL: [-P - 0.3, 0, 0], shoulderR: [-P - 0.3, 0, 0], elbowL: [0.5, 0, 0], elbowR: [0.5, 0, 0] };
+  const fire = (f, G) => G.fx.burst(f.chest(), 22, [f.palette.accent, 0xffffff], 6);
+  const M = {
+    // 물기 (켄타우로스: 창 찌르기)
+    bite: cen ? { dur: 0.95, trail: true, aim: true, track: 0.4, tele: [0.12, 'yellow'], cancel: 0.72, keys: [[0, 'base'], [0.4, { neck: [N + 0.15, 0.6, 0], chest: [-0.1, 0, 0] }], [0.56, { neck: [N - 0.15, -0.45, 0], chest: [0.1, 0, 0] }], [0.95, 'base']], lunge: [[0.42, 0.56, 6]], ev: [[0.42, swish]], hits: [H({ t0: 0.42, t1: 0.6, dmg: 30, kb: [3, 1], stun: 0.4, hs: 0.06 })] }
+      : { dur: 0.95, aim: true, track: 0.4, tele: [0.12, 'yellow'], cancel: 0.7, keys: [[0, 'base'], [0.42, { chest: [-0.25, 0, 0], neck: [N - 0.45, 0, 0] }], [0.56, { chest: [0.22, 0, 0], neck: [N + 0.4, 0, 0] }], [0.95, 'base']], lunge: [[0.44, 0.58, 8]], ev: [[0.46, () => sfx('swing')]], hits: [H({ t0: 0.48, t1: 0.62, at: [0, 0.55, 0.95], r: 0.6, dmg: 28, kb: [3, 1], stun: 0.4, hs: 0.06 })] },
+    // 앞발 할퀴기 (켄타우로스: 창 휘두르기)
+    claw: cen ? { dur: 0.85, trail: true, aim: true, track: 0.2, keys: [[0, 'base'], [0.3, { neck: [N + 0.1, -0.7, 0.1] }], [0.48, { neck: [N, 0.8, -0.1] }], [0.85, 'base']], ev: [[0.32, chop]], hits: [H({ t0: 0.32, t1: 0.5, dmg: 30, kb: [4, 1], stun: 0.4, hs: 0.06 })] }
+      : { dur: 0.8, aim: true, track: 0.2, keys: [[0, 'base'], [0.3, { shoulderR: [-P - 1.1, 0, -0.3], chest: [-0.2, 0.25, 0] }], [0.45, { shoulderR: [-P + 0.3, 0, 0.25], chest: [0.15, -0.2, 0] }], [0.8, 'base']], ev: [[0.36, (f) => { sfx('swing'); f.slashFx({ tilt: 1.2, r: 0.9 * f.scale, at: [-0.15, 0.5 * f.scale, 0.7] }); }]], hits: [H({ t0: 0.38, t1: 0.5, at: [-0.2, 0.45, 0.85], r: 0.65, dmg: 26, kb: [3, 1], stun: 0.4, hs: 0.06 })] },
+    // 덮치기 / 켄타우로스: 앞발 들어 짓밟기
+    pounce: { dur: 1.4, aim: true, track: 0.5, tele: [0.15, 'yellow'], keys: cen ? [[0, 'base'], [0.55, { chest: [-0.75, 0, 0], shoulderL: [-P - 1.0, 0, 0], shoulderR: [-P - 1.2, 0, 0], elbowL: [1.2, 0, 0], elbowR: [1.2, 0, 0], neck: [N + 0.6, 0, 0] }], [0.8, { chest: [0.15, 0, 0] }], [1.4, 'base']] : [[0, 'base'], [0.5, crouchK], [0.75, { chest: [-0.3, 0, 0], shoulderL: [-P - 0.9, 0, 0], shoulderR: [-P - 0.9, 0, 0], hipL: [-P + 0.5, 0, 0], hipR: [-P + 0.5, 0, 0] }], [1.0, { chest: [0.25, 0, 0] }], [1.4, 'base']],
+      ev: cen ? [[0.8, (f, o, G) => slam(f, G, 2.6, 54 * k, f.palette.accent, st)]] : [[0.55, (f) => { f.vel.y = 6; f.onGround = false; sfx('jump'); }]], lunge: cen ? [] : [[0.55, 0.95, 9]], hits: cen ? [] : [H({ t0: 0.85, t1: 1.05, at: [0, 0.4, 0.7], r: 1.0, dmg: 46, kb: [6, 4], stun: 0.55, hs: 0.08 })] },
+    // 돌진 (빨강: 회피)
+    rush: { dur: 1.35, aim: true, track: 0.65, tele: [0.2, 'red'], keys: [[0, 'base'], [0.65, cen ? { chest: [0.15, 0, 0], neck: [N + 0.3, 0, 0] } : crouchK], [0.75, cen ? { neck: [N + 0.5, 0, 0] } : { chest: [0.1, 0, 0], neck: [N + 0.3, 0, 0], shoulderL: [-P - 0.7, 0, 0], shoulderR: [-P - 0.7, 0, 0], hipL: [-P + 0.6, 0, 0], hipR: [-P + 0.6, 0, 0] }], [1.0, {}], [1.35, 'base']],
+      lunge: [[0.72, 1.0, 20]], ev: [[0.72, (f, o, G) => { sfx('dash'); fire(f, G); }]], hits: [H({ t0: 0.74, t1: 1.0, at: [0, 0.6, 0.9], r: 0.95, dmg: 58, kb: [8, 3], stun: 0.55, hs: 0.08, unblock: true })] },
+    // 꼬리 회전 (빨강): 몸을 한 바퀴 돌려 주변을 쓴다
+    whirl: { dur: 1.55, aim: true, track: 0.55, tele: [0.2, 'red'], keys: [[0, 'base'], [0.6, { hipY: -0.08, chest: [0.15, 0, 0] }], [0.8, { hips: [P, Math.PI, 0] }], [1.0, { hips: [P, TAU, 0] }], [1.01, { hips: [P, 0, 0] }], [1.55, 'base']],
+      ev: [[0.62, () => sfx('swing')], [0.9, (f, o, G) => { G.fx.ring(f.pos.clone().setY(0.4), { normal: UP, r0: 0.5, r1: 3 * f.scale, life: 0.4, color: f.palette.accent }); G.fx.burst(f.chest(), 30, [f.palette.accent, 0xffffff], 9); }]],
+      hits: [H({ t0: 0.66, t1: 1.0, at: [0, 0.6, 0], r: 2.3, dmg: 52, kb: [9, 4], stun: 0.6, hs: 0.08, unblock: true })] },
+    // 포효 자세 (기둥 · 난사의 자세)
+    howl: [[0, 'base'], [0.3, cen ? { neck: [N - 0.35, 0, 0], chest: [-0.4, 0, 0] } : { neck: [N - 0.6, 0, 0], chest: [-0.28, 0, 0], head: [-(P + N) - 0.4, 0, 0] }], [1.1, {}], [1.6, 'base']],
+    // 독침 사격 자세 (전갈)
+    sting: [[0, 'base'], [0.35, { chest: [-0.18, 0, 0], neck: [N - 0.15, 0, 0] }], [0.6, { chest: [0.1, 0, 0] }], [1.0, 'base']],
+  };
+  return M;
+}
+
+// 네발 보스: 기본 보스 기술(기둥 · 난사 · 강타 효과)을 네발 동작으로 바꾼다
+function quadBoss(B, bm) {
+  const Q = quadKit(B.kind, 1.7, B.st), cen = B.kind === 'centaur', P = cen ? 1.5 : 1.45, N = cen ? -1.5 : -1.15;
+  const rear = [[0, 'base'], [0.8, { chest: [-0.8, 0, 0], shoulderL: [-P - 1.1, 0, 0], shoulderR: [-P - 1.3, 0, 0], elbowL: [1.3, 0, 0], elbowR: [1.3, 0, 0], neck: [N + 0.6, 0, 0] }], [1.3, { chest: [-0.4, 0, 0] }], [1.45, { chest: [0.2, 0, 0], shoulderL: [-P + 0.2, 0, 0], shoulderR: [-P + 0.2, 0, 0] }], [bm.s2.dur, 'base']];
+  return { ...bm,
+    light1: { ...Q.bite, next: 'light2' }, light2: { ...Q.claw, next: 'light3', cancel: 0.62 }, light3: Q.pounce,
+    heavy: cen ? Q.pounce : Q.whirl,
+    s1: { ...Q.rush, cd: 's1' },
+    s2: cen ? { ...bm.s2, keys: rear, lunge: [] } : { ...Q.whirl, cd: 's2', ev: [...Q.whirl.ev, [1.0, (f, o, G) => bm.s2.ev[1][1](f, o, G)]] },
+    rain: { ...bm.rain, keys: Q.howl }, volley: { ...bm.volley, keys: Q.howl } };
+}
+
+/* =====================================================================
    맵별 몬스터 세트: 잡몹(grunt) · 원거리(archer) · 정예(brute) · 보스(boss)
    s = { id, grunt, archer, brute, boss } — 각 항목에 이름 · 색 · 모델 · 상태 효과 · 투사체 · 2페이즈 기술 설정
    ===================================================================== */
@@ -154,8 +216,8 @@ export function makeSet(s) {
     id: `${s.id}_grunt`, name: g.name, short: g.short, title: g.title, enemy: true, scale: g.scale || 1,
     stats: { hp: g.hp ?? 280, speed: g.speed ?? 4.6, jump: 8, daze: 70, breakTime: 3 }, palettes: [pal(g.col)],
     skills: { s1: { name: '-', cd: 1 }, s2: { name: '-', cd: 1 }, ult: { name: '-', sub: '' } },
-    createModel: (p) => construct(p, g.model), poses,
-    moves: {
+    ...bodyOf(g),
+    moves: g.plan === 'quad' ? (() => { const Q = quadKit(g.kind, 0.9, g.st); return { light1: { ...Q.bite, next: 'light2' }, light2: Q.claw, heavy: Q.pounce }; })() : {
       light1: slow(T.light1, { k: 1.3, windup: 0.45, next: 'light2', dmg: 0.7, st: g.st }),
       light2: slow(T.light2, { k: 1.3, windup: 0.15, tele: null, dmg: 0.7, st: g.st }),
       heavy: slow(T.light3, { k: 1.2, windup: 0.6, dmg: 0.8, st: g.st, ev: [[0.6 + 0.15 * 1.2, () => sfx('zap')]] }),
@@ -167,8 +229,8 @@ export function makeSet(s) {
     id: `${s.id}_archer`, name: a.name, short: a.short, title: a.title, enemy: true, scale: a.scale || 1,
     stats: { hp: a.hp ?? 210, speed: 4.2, jump: 8, daze: 55, breakTime: 3 }, palettes: [pal(a.col)],
     skills: { s1: { name: a.skill || '사격', cd: sh.cd ?? 2.2 }, s2: { name: '-', cd: 1 }, ult: { name: '-', sub: '' } },
-    createModel: (p) => construct(p, a.model), poses,
-    moves: {
+    ...bodyOf(a),
+    moves: a.plan === 'quad' ? (() => { const Q = quadKit(a.kind, 0.8); return { light1: Q.claw, s1: { dur: 1.0, cd: 's1', aim: true, track: 0.35, tele: [0.12, 'yellow'], keys: Q.sting, ev: [[0.42, (f, o, G) => o && shot(f, o, G, { dmg: (sh.dmg ?? 45) / (sh.n || 1) ** 0.5, ...sh })]] } }; })() : {
       light1: slow(T.light1, { k: 1.3, windup: 0.4, dmg: 0.6 }),
       s1: { ...slow(T.s1, { k: 1.4, windup: 0.5, ev: [[0.5 + 0.24 * 1.4, (f, o, G) => o && shot(f, o, G, { dmg: (sh.dmg ?? 45) / (sh.n || 1) ** 0.5, ...sh })]] }), cd: 's1', tick: undefined },
     },
@@ -178,8 +240,8 @@ export function makeSet(s) {
     id: `${s.id}_brute`, name: b.name, short: b.short, title: b.title, enemy: true, scale: b.scale || 1.4,
     stats: { hp: b.hp ?? 900, speed: 3.4, jump: 7, daze: 150, armor: true, breakTime: 4 }, palettes: [pal(b.col)],
     skills: { s1: { name: '-', cd: 1 }, s2: { name: b.skill || '지면 강타', cd: 6 }, ult: { name: '-', sub: '' } },
-    createModel: (p) => construct(p, b.model), poses,
-    moves: {
+    ...bodyOf(b),
+    moves: b.plan === 'quad' ? (() => { const Q = quadKit(b.kind, 1.6, b.st); return { light1: Q.bite, s2: { ...Q.pounce, cd: 's2', tele: [0.15, 'red'], hits: [], ev: [[0.55, (f) => { f.vel.y = 6.5; f.onGround = false; sfx('jump'); }], [0.98, (f, o, G) => slam(f, G, 4.5, 110, f.palette.accent, b.st)]] } }; })() : {
       light1: slow(T.light2, { k: 1.5, windup: 0.6, dmg: 1.5, st: b.st, ev: [[0.6 + 0.09 * 1.5, chop]] }),
       s2: { ...slow(T.s2, { k: 1.2, windup: 0.7, tele: 'red', ev: [[0.7 + 0.1 * 1.2, (f) => { f.vel.y = 5; f.onGround = false; }], [0.7 + 0.55 * 1.2, (f, o, G) => slam(f, G, 4.5, 110, f.palette.accent, b.st)]] }), cd: 's2' },
     },
@@ -190,8 +252,8 @@ export function makeSet(s) {
     id: `${s.id}_boss`, name: B.name, short: B.short, title: B.title, enemy: true, boss: true, scale: B.scale || 1.6,
     stats: { hp: B.hp ?? 4200, speed: B.speed ?? 4.6, jump: 9, daze: 340, armor: true, breakTime: 5 }, palettes: [pal(B.col)],
     skills: { s1: { name: B.s1 || '돌진', cd: 6 }, s2: { name: B.s2 || '파멸의 강타', cd: 8 }, ult: { name: '-', sub: '' } },
-    createModel: (p) => construct(p, B.model), poses,
-    moves: {
+    ...bodyOf(B),
+    moves: (B.plan === 'quad' ? (bm) => quadBoss(B, bm) : (bm) => bm)({
       light1: slow(T.light1, { k: 1.25, windup: 0.5, next: 'light2', dmg: 1.6, st: B.st, ev: [[0.5 + 0.08 * 1.25, swish]] }),
       light2: slow(T.light2, { k: 1.25, windup: 0.2, tele: null, next: 'light3', dmg: 1.6, st: B.st, ev: [[0.2 + 0.09 * 1.25, chop]] }),
       light3: slow(T.light3, { k: 1.2, windup: 0.35, tele: 'yellow', dmg: 1.5, st: B.st }),
@@ -208,7 +270,8 @@ export function makeSet(s) {
       // 2페이즈 전용: 사방으로 테마 투사체 난사
       volley: { dur: 1.3, aim: true, track: 0.6, tele: [0.15, 'yellow'], keys: [[0, 'base'], [0.25, { spine: [0.2, 0.3, 0], shoulderL: [-1.5, 0, 0.3], shoulderR: [-1.5, 0, -0.3] }], [0.9, {}], [1.3, 'base']],
         ev: [[0.5, (f, o, G) => o && shot(f, o, G, { dmg: 34, n: B.volley?.n ?? 5, speed: B.volley?.speed ?? 15, homing: 0.25, r: 0.32, color: B.volley?.color, st: B.volley?.st ?? B.st })], [0.8, (f, o, G) => o && shot(f, o, G, { dmg: 34, n: (B.volley?.n ?? 5) - 1, speed: B.volley?.speed ?? 15, homing: 0.25, r: 0.32, color: B.volley?.color, st: B.volley?.st ?? B.st })]] },
-    },
+
+    }),
     ai: { range: 8, keep: 2.2, cdMin: 0.9, cdMax: 2.0, chain: 0.85,
       pick: (f, o, d) => {
         if (f.enraged && Math.random() < 0.22) return 'rain';

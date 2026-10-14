@@ -416,7 +416,7 @@ export class Fighter {
     if (!target) {
       const s = this.state, t = this.tgt, br = Math.sin(G.time * 2.6 + this.slot);
       this.idleT = s === 'idle' ? (this.idleT || 0) + dt : 0; // 오래 가만히 있으면 대기 자세 2 (idle2 를 정의한 캐릭터)
-      if (s === 'run') { t.set(P.run); addRunCycle(t, this.runP, 1); }
+      if (s === 'run') { t.set(P.run); if (this.def.runCycle) this.def.runCycle(t, this.runP); else addRunCycle(t, this.runP, 1); } // runCycle: 네발 짐승 등 고유 보행
       else if (s === 'jump') t.set(P.jump);
       else if (s === 'guard') t.set(P.guard);
       else if (s === 'crouch') { t.set(P.crouch); if (Math.hypot(this.vel.x, this.vel.z) > 0.5) { const w = Math.sin(this.runP); t[JI.hipL] += 0.25 * w; t[JI.hipR] -= 0.25 * w; } }
