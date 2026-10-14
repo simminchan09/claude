@@ -435,6 +435,9 @@ export function createModel(pal) {
 
   /* ---------- 매 프레임 ---------- */
   const tmp = new V3(), tmp2 = new V3(), anc = new V3(), axis = new V3(), DOWN = new V3(0, -1, 0), mtx = new THREE.Matrix4(), q = new THREE.Quaternion(), qr = new THREE.Quaternion(), Y = new V3(0, 1, 0), ONE = new V3(1, 1, 1), lag = { L: 0, R: 0, vL: 0, vR: 0 }, cum = new Float32Array(16);
+  // 무기 방향 기록 (채찍 지연 파동용)
+  const hist = [], LAG = 0.04, prevP = Array.from({ length: 16 }, () => new V3());
+  const lagDir = (delay, out) => { const now = hist.length ? hist[hist.length - 1].t : 0, tt = now - delay; let i = hist.length - 1; while (i > 0 && hist[i - 1].t > tt) i--; const a = hist[Math.max(0, i - 1)], b = hist[i] || a; if (!a) return out.copy(axis); const k = b.t > a.t ? Math.min(1, Math.max(0, (tt - a.t) / (b.t - a.t))) : 1; return out.copy(a.d).lerp(b.d, k).normalize(); };
   m.update = (dt, f) => {
     const vis = f.root.visible, sc = f.scale;
     J.chest.updateMatrixWorld(true);
@@ -450,8 +453,9 @@ export function createModel(pal) {
       sf.len = 0.52 * sc; sf.mesh.visible = vis; sf.step(dt, [{ a: h0.a, b: h0.b, r: h0.r * 0.62 }], f.pos.y + 0.02, wind);
     }
     // 사슬: 늘어뜨림 (물리) · 채찍 (무기 방향으로 곧게) · 던짐 (손 → 갈고리 위치)
-    const wkT = m.chainOn ? (f.whipK || 0) : 0; cs.wk += (wkT - cs.wk) * Math.min(1, dt * (wkT > cs.wk ? 40 : 7)); cs.wl += ((f.whipL || CH.whip) - cs.wl) * Math.min(1, dt * 16);
+    const wkT = m.chainOn ? (f.whipK || 0) : 0; cs.wk += (wkT - cs.wk) * Math.min(1, dt * (wkT > cs.wk ? 30 : 9)); cs.wl += ((f.whipL || CH.whip) - cs.wl) * Math.min(1, dt * 16);
     J.weapon.updateMatrixWorld(true); J.weapon.getWorldPosition(anc); axis.set(0, 0, 1).transformDirection(J.weapon.matrixWorld);
+    hist.push({ t: f.G.time, d: axis.clone() }); while (hist.length > 30) hist.shift();
     const P = chain.p, n = P.length;
     if (m.hookTarget) {
       const tg = m.hookTarget, d = anc.distanceTo(tg), sag = Math.min(0.35, d * 0.035);
@@ -459,8 +463,16 @@ export function createModel(pal) {
       chain.ok = true; chain.seg = d / (n - 1);
     } else {
       const idl = f.wrapK ? CH.idle * 0.3 : CH.idle, len = (idl + (cs.wl - idl) * cs.wk) * sc; chain.seg = len / (n - 1);
+      for (let i = 0; i < n; i++) prevP[i].copy(P[i]);
       chain.step(dt, anc, [], f.pos.y + 0.03, DOWN, null);
-      if (cs.wk > 0.01) { const k = 1 - Math.exp(-dt * 50 * cs.wk); for (let i = 1; i < n; i++) { const w = k * (1 - 0.3 * (i / (n - 1)) * (1 - cs.wk)); tmp.copy(anc).addScaledVector(axis, i * chain.seg); P[i].lerp(tmp, w); chain.o[i].lerp(P[i], w); } }
+      if (cs.wk > 0.01) {
+        // 마디 i 는 i/(n-1) 만큼 지난 시점의 무기 방향을 따른다 (끝이 손을 늦게 따라오다 휙 따라잡음) + 끝으로 갈수록 처짐
+        const k = 1 - Math.exp(-dt * 45 * cs.wk), droop = 0.1 + 0.25 * (1 - cs.wk);
+        tmp.copy(anc);
+        for (let i = 1; i < n; i++) { const u = i / (n - 1); lagDir(u * LAG, tmp2); tmp2.y -= droop * u * u; tmp2.normalize(); tmp.addScaledVector(tmp2, chain.seg); if (tmp.y < f.pos.y + 0.03) tmp.y = f.pos.y + 0.03; P[i].lerp(tmp, k); }
+        // 다음 프레임 물리가 이 움직임의 속도를 이어받도록 (풀리는 순간 사슬이 계속 날아가며 휘감긴다)
+        const r = (1 / 90) / Math.max(dt, 1e-3); for (let i = 1; i < n; i++) { tmp2.subVectors(P[i], prevP[i]).multiplyScalar(r); if (tmp2.length() > 0.25) tmp2.setLength(0.25); chain.o[i].copy(P[i]).sub(tmp2); }
+      }
     }
     // 사슬 고리 배치 (일정한 간격)
     cum[0] = 0; for (let i = 1; i < n; i++) cum[i] = cum[i - 1] + P[i].distanceTo(P[i - 1]);
@@ -478,7 +490,7 @@ export function createModel(pal) {
     J.elbowR.localToWorld(tmp.set(-0.05, -0.22, -0.02)); loose.rope.seg = 0.03 * sc; loose.rope.step(dt, tmp, [], f.pos.y + 0.02, DOWN, null); loose.view.update(); loose.view.im.visible = vis;
     // 아가리 건틀릿: f.jawK (0 다묾 · 1 벌림)
     const jw = Math.max(0.18, f.jawK || 0); m.jaw += (jw - m.jaw) * Math.min(1, dt * (jw > m.jaw ? 30 : 22));
-    m.jawParts.up.rotation.x = -m.jaw * 0.62; m.jawParts.lo.rotation.x = m.jaw * 0.32;
+    m.jawParts.up.rotation.x = -m.jaw * 0.62; m.jawParts.lo.rotation.x = m.jaw * 0.32; m.jawBig = (m.jawBig || 1) + ((f.jawBig ? 1.32 : 1) - (m.jawBig || 1)) * Math.min(1, dt * 10); jaw.scale.setScalar(m.jawBig);
     // 얼굴: 무표정 · 기합 때만 입을 살짝 벌림 (마스크 아래)
     m.headMesh.material = f.state === 'act' && f.act && f.act.shout ? M.faceO : M.face;
     // 독병 · 갈고리 날 빛 (사냥 게이지가 가득 차면 더 밝게)
@@ -498,8 +510,8 @@ export function createModel(pal) {
   };
   // 판정: 손 → 채찍 길이 끝 (무기 방향 축)
   const wlen = () => Math.max(1.0, CH.idle + (cs.wl - CH.idle) * Math.max(cs.wk, 0.6));
-  m.weaponPts = (b, t) => { J.weapon.localToWorld(b.set(0, 0, 0.08)); J.weapon.localToWorld(t.set(0, 0, wlen())); };
-  m.trailPts = (b, t) => { const L = wlen(); J.weapon.localToWorld(b.set(0, 0, L * 0.45)); J.weapon.localToWorld(t.set(0, 0, L + 0.15)); };
+  m.weaponPts = (b, t) => { if (chain.ok && cs.wk > 0.2) { b.copy(chain.p[2]); t.copy(chain.p[15]); } else { J.weapon.localToWorld(b.set(0, 0, 0.08)); J.weapon.localToWorld(t.set(0, 0, wlen())); } };
+  m.trailPts = (b, t) => { if (chain.ok && cs.wk > 0.2) { b.copy(chain.p[9]); t.copy(chain.p[15]); } else { const L = wlen(); J.weapon.localToWorld(b.set(0, 0, L * 0.45)); J.weapon.localToWorld(t.set(0, 0, L + 0.15)); } };
   m.handPos = (out = new V3()) => { J.weapon.updateMatrixWorld(true); return J.weapon.getWorldPosition(out); };
   m.jawPos = (out = new V3()) => { J.handL.updateMatrixWorld(true); return J.handL.localToWorld(out.set(0, -0.14, 0)); };
   m.extras = extras;
