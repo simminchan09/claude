@@ -20,7 +20,7 @@ const V3 = THREE.Vector3, TAU = Math.PI * 2;
 // 큰 체격: 넓은 어깨 · 굵은 팔다리
 export const DIMS = { hipH: 0.97, spineL: 0.2, chestL: 0.29, neckL: 0.075, shW: 0.215, uArm: 0.29, lArm: 0.27, hipW: 0.1, thigh: 0.46, shin: 0.45, headTop: 0.25 };
 // 사슬 길이 (m, 몸 크기 배율 전): 늘어뜨림 · 채찍 기본
-export const CH = { idle: 0.46, whip: 2.2, links: 200, pitch: 0.05 };
+export const CH = { idle: 0.46, whip: 3.8, links: 400, pitch: 0.05 };
 export const MAG = 0xff2ad8, MAG2 = 0xff9af0, PURP = 0x6a2a8a, RUST = 0xc0642a, POIS = 0xb02ae0;
 const C = (k, fn) => cached('reaper:' + k, fn);
 
@@ -458,7 +458,7 @@ export function createModel(pal) {
       for (let i = 0; i < n; i++) { const u = i / (n - 1); P[i].lerpVectors(anc, tg, u); P[i].y -= sag * Math.sin(u * Math.PI); chain.o[i].copy(P[i]); }
       chain.ok = true; chain.seg = d / (n - 1);
     } else {
-      const len = (CH.idle + (cs.wl - CH.idle) * cs.wk) * sc; chain.seg = len / (n - 1);
+      const idl = f.wrapK ? CH.idle * 0.3 : CH.idle, len = (idl + (cs.wl - idl) * cs.wk) * sc; chain.seg = len / (n - 1);
       chain.step(dt, anc, [], f.pos.y + 0.03, DOWN, null);
       if (cs.wk > 0.01) { const k = 1 - Math.exp(-dt * 50 * cs.wk); for (let i = 1; i < n; i++) { const w = k * (1 - 0.3 * (i / (n - 1)) * (1 - cs.wk)); tmp.copy(anc).addScaledVector(axis, i * chain.seg); P[i].lerp(tmp, w); chain.o[i].lerp(P[i], w); } }
     }

@@ -61,6 +61,19 @@ const poses = {
   throw: { hips: [0, 0.35, 0], spine: [0.35, 0.3, 0], chest: [0.1, 0.3, 0], head: [-0.3, -0.45, 0], shoulderR: [-1.6, 0, -0.08], elbowR: [-0.05, 0, 0], weapon: [-0.02, -0.05, 0], shoulderL: [0.35, 0, 0.45], elbowL: [-0.7, 0, 0], ...LUNGE_L },
   yank: { hips: [0, -0.2, 0], spine: [-0.2, -0.15, 0], chest: [-0.15, -0.2, 0], head: [0.1, 0.2, 0], shoulderR: [-0.5, 0, -0.38], elbowR: [-1.7, 0, 0], weapon: [0.35, 0.15, 0], shoulderL: [-0.6, 0, 0.4], elbowL: [-1.3, 0, 0],
     hipL: [-0.2, 0, 0.15], kneeL: [0.6, 0, 0], hipR: [0.45, 0, -0.15], kneeR: [0.5, 0, 0] },
+  // 아가리 올려치기: 낮게 웅크렸다가 위로 쳐올리며 문다
+  upPrep: { hipY: -0.08, hips: [0, 0.35, 0], spine: [0.35, 0.25, 0], chest: [0.1, 0.3, 0], head: [-0.2, -0.4, 0], shoulderL: [0.45, 0, 0.35], elbowL: [-1.5, 0, 0], shoulderR: [-0.2, 0, -0.35], elbowR: [-0.8, 0, 0],
+    hipL: [-0.7, 0, 0.18], kneeL: [1.1, 0, 0], hipR: [0.3, 0, -0.18], kneeR: [0.8, 0, 0] },
+  upper: { hips: [0, -0.35, 0], spine: [-0.15, -0.3, 0], chest: [-0.12, -0.35, 0], head: [-0.35, 0.4, 0], shoulderL: [-2.5, 0, 0.12], elbowL: [-0.35, 0, 0], shoulderR: [0.3, 0, -0.45], elbowR: [-0.8, 0, 0],
+    hipL: [-0.5, 0, 0.12], kneeL: [0.4, 0, 0], hipR: [0.45, 0, -0.12], kneeR: [0.2, 0, 0] },
+  // 사슬 감은 오른 주먹 잽
+  jabBack: { hips: [0, 0.3, 0], spine: [0.15, 0.25, 0], chest: [0.05, 0.3, 0], head: [-0.1, -0.4, 0], shoulderR: [-0.9, 0, -0.25], elbowR: [-1.9, 0, 0], weapon: [-1.2, 0, 0], shoulderL: [-1.1, 0, 0.1], elbowL: [-1.5, 0, 0],
+    hipL: [-0.5, 0, 0.15], kneeL: [0.6, 0, 0], hipR: [0.35, 0, -0.15], kneeR: [0.45, 0, 0] },
+  jab: { hips: [0, -0.3, 0], spine: [0.25, -0.3, 0], chest: [0.08, -0.35, 0], head: [-0.2, 0.35, 0], shoulderR: [-1.6, 0, 0.05], elbowR: [-0.06, 0, 0], weapon: [-1.0, 0, 0], shoulderL: [-0.9, 0, 0.2], elbowL: [-1.7, 0, 0], ...LUNGE_L },
+  // 갈고리를 앞 땅에 내리꽂은 자세 → 뜯어내며 당김
+  plant: { hipY: -0.04, hips: [0, -0.1, 0], spine: [0.55, -0.05, 0], chest: [0.15, -0.05, 0], head: [-0.4, 0.05, 0], shoulderR: [-1.25, 0, -0.1], elbowR: [-0.1, 0, 0], weapon: [-0.34, 0, 0], shoulderL: [0.1, 0, 0.55], elbowL: [-0.9, 0, 0], ...LUNGE_L },
+  rip: { hips: [0, -0.3, 0], spine: [-0.25, -0.2, 0], chest: [-0.15, -0.25, 0], head: [0.1, 0.25, 0], shoulderR: [-0.7, 0, -0.4], elbowR: [-1.8, 0, 0], weapon: [0.15, 0.1, 0], shoulderL: [-0.6, 0, 0.4], elbowL: [-1.3, 0, 0],
+    hipL: [-0.15, 0, 0.15], kneeL: [0.55, 0, 0], hipR: [0.55, 0, -0.15], kneeR: [0.55, 0, 0] },
   // 아가리 물기: 크게 치켜들어 벌림 → 내리꽂으며 다묾
   biteOpen: { hips: [0, 0.4, 0], spine: [-0.05, 0.3, 0], chest: [-0.05, 0.35, 0], head: [-0.1, -0.4, 0], shoulderL: [-2.3, 0, 0.45], elbowL: [-1.2, 0, 0], shoulderR: [0.3, 0, -0.35], elbowR: [-1.4, 0, 0], weapon: [0.0, 0.1, 0],
     hipL: [-0.4, 0, 0.15], kneeL: [0.5, 0, 0], hipR: [0.35, 0, -0.15], kneeR: [0.4, 0, 0] },
@@ -111,15 +124,15 @@ class HookShot {
   constructor(G, f, target) {
     this.G = G; this.f = f; this.t = 0; this.done = false; this.phase = 'out'; this.hooked = null; this.mode = null;
     const hand = f.model.handPos(new V3()); this.from = hand.clone(); this.pos = hand.clone();
-    const aim = target && !target.gone && target.state !== 'ko' && f.dist() < 11 ? target.chest(new V3()) : f.local([0, 1.2, 10]);
-    this.dir = aim.sub(hand).normalize(); this.max = 10.5 * f.scale;
+    const aim = target && !target.gone && target.state !== 'ko' && f.dist() < 18 ? target.chest(new V3()) : f.local([0, 1.2, 17]);
+    this.dir = aim.sub(hand).normalize(); this.max = 17.5 * f.scale;
     f.hookShot = this; f.model.hookTarget = this.pos;
   }
   update(dt) {
     const G = this.G, f = this.f; this.t += dt;
     if (f.state === 'ko' || f.gone) return this.kill();
     if (this.phase === 'out') {
-      const step = 36 * dt; this.pos.addScaledVector(this.dir, step);
+      const step = 50 * dt; this.pos.addScaledVector(this.dir, step);
       G.fx.p(this.pos, { size: 0.3, size1: 0.05, life: 0.14, color: MAG, alpha: 0.6 });
       for (const t of f.foes()) if (t.hurtHit(this.pos, 0.34)) {
         const r = t.takeHit(f, { dmg: 28, kb: [0, 0], stun: 1.3, hs: 0.06, daze: 20, snd: 'hit' }, this.dir.clone().negate());
@@ -127,25 +140,25 @@ class HookShot {
         if (r === 'hit' && f.act === moves.heavy) {
           this.hooked = t; this.phase = 'pull'; this.t = 0; addHunt(f, 20);
           const heavyFoe = t.scale > 1.2 || t.def.boss || (t.def.stats && t.def.stats.armor);
-          this.mode = heavyFoe || f.dist() > 5.5 ? 'me' : 'them'; G.say(f, this.mode === 'me' ? '"도망칠 곳은 없다."' : '"이리 와."');
+          this.mode = heavyFoe || f.dist() > 9 ? 'me' : 'them'; G.say(f, this.mode === 'me' ? '"도망칠 곳은 없다."' : '"이리 와."');
         } else { this.phase = 'back'; this.t = 0; }
         break;
       }
       const W = G.stage && G.stage.world;
       if (this.phase === 'out' && (this.pos.distanceTo(this.from) > this.max || this.pos.y < 0.05 || (W && W.solidAt(this.pos, 0.15)))) { this.phase = 'back'; this.t = 0; }
     } else if (this.phase === 'pull') {
-      const t = this.hooked, k = Math.min(1, this.t / 0.24);
+      const t = this.hooked, k = Math.min(1, this.t / 0.3);
       if (!t || t.gone || t.state === 'ko' || f.act !== moves.heavy) { this.phase = 'back'; this.t = 0; }
       else {
         const gap = (1.15 + 0.3 * t.scale) * f.scale, a = Math.min(1, k * 0.5 + dt * 13);
         if (this.mode === 'them') { const dest = f.local([0, 0, gap]); t.pos.x += (dest.x - t.pos.x) * a; t.pos.z += (dest.z - t.pos.z) * a; t.vel.set(0, Math.min(t.vel.y, 0), 0); }
         else { const d = new V3().subVectors(f.pos, t.pos).setY(0).normalize(), dest = t.pos.clone().addScaledVector(d, gap); f.pos.x += (dest.x - f.pos.x) * a; f.pos.z += (dest.z - f.pos.z) * a; f.vel.set(0, 0, 0); f.faceOpp(); f.model.resetCloth(); G.fx.p(f.chest(new V3()), { size: 1.0, size1: 0.3, life: 0.18, color: PURP, alpha: 0.4 }); }
         this.pos.copy(t.chest(new V3()));
-        if (this.t > 0.26) { this.phase = 'back'; this.t = 0; f.faceOpp(); if (f.act === moves.heavy) f.start(hunt(f) >= 100 ? 'heavyBite3' : 'heavyBite'); }
+        if (this.t > 0.32) { this.phase = 'back'; this.t = 0; f.faceOpp(); if (f.act === moves.heavy) f.start(hunt(f) >= 100 ? 'heavyBite3' : 'heavyBite'); }
       }
     } else {
       const hand = f.model.handPos(new V3()); this.pos.lerp(hand, Math.min(1, dt * 16));
-      if (this.pos.distanceTo(hand) < 0.25 || this.t > 0.5) return this.kill();
+      if (this.pos.distanceTo(hand) < 0.25 || this.t > 0.7) return this.kill();
     }
   }
   kill() { if (this.done) return; this.done = true; const f = this.f; if (f.model.hookTarget === this.pos) f.model.hookTarget = null; if (f.hookShot === this) f.hookShot = null; }
@@ -163,7 +176,7 @@ function cloudTex() {
 class PoisonVial {
   constructor(G, f, from, to) {
     this.G = G; this.f = f; this.t = 0; this.done = false; this.pos = from.clone();
-    const dist = Math.hypot(to.x - from.x, to.z - from.z), T = 0.42 + 0.035 * dist; this.g = 16;
+    const dist = Math.hypot(to.x - from.x, to.z - from.z), T = 0.42 + 0.04 * dist; this.g = 16;
     this.vel = new V3((to.x - from.x) / T, (to.y - from.y) / T + 0.5 * this.g * T, (to.z - from.z) / T);
     if (!_vialGeo) _vialGeo = new THREE.LatheGeometry([[0, -0.07], [0.026, -0.066], [0.03, -0.04], [0.03, 0], [0.016, 0.018], [0.012, 0.032], [0, 0.04]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
     this.mat = new THREE.MeshBasicMaterial({ color: f.palette.glow ?? MAG });
@@ -222,29 +235,32 @@ const moves = {
     fx: (f, o, G, c) => { poisonBurst(G, c.clone().setY(c.y + 0.2), 1.1); toxic(G, c.clone().setY(c.y + 0.3), 20, 6); },
   }),
 
-  /* --- 기본 공격: 갈고리 채찍 → 아가리 주먹(물기) → 낮은 사슬 회전 → 갈고리 투척 · 낚아채기 --- */
-  light1: { dur: 0.5, cancel: 0.28, next: 'light2', trail: true, track: 0.08, whip: [[0.02, 0.34, 2.3]],
-    keys: [[0, { ...poses.windR, chest: [0.05, -0.3, 0] }], [0.1, 'windR'], [0.22, 'whipL'], [0.36, {}], [0.5, 'base']], lunge: [[0.04, 0.14, 5]],
-    ev: [[0.1, () => sfx('swing')], [0.16, (f) => f.slashFx({ r: 2.3, color: MAG, life: 0.22, tilt: 0.05, at: [0, 1.25, 0.4] })]],
-    hits: [{ t0: 0.1, t1: 0.24, dmg: 38, br: 0.2 }] },
-  light2: { dur: 0.56, cancel: 0.32, next: 'light3', track: 0.12, jaw: [[0, 0.22]],
-    keys: [[0, 'punchPrep'], [0.1, 'punchPrep'], [0.2, 'punch'], [0.4, {}], [0.56, 'base']], lunge: [[0.08, 0.18, 7]],
-    ev: [[0.12, () => sfx('swing')], [0.22, (f, o, G) => { sfx('block'); sfx('hit'); biteFx(G, f.model.jawPos(new V3()), f.fwd(new V3()), 0.9); }]],
-    hits: [{ t0: 0.14, t1: 0.21, weapon: false, at: BITE_AT, r: 0.52, dmg: 20 }, { t0: 0.22, t1: 0.29, weapon: false, at: BITE_AT, r: 0.55, dmg: 20 }] },
-  light3: { dur: 0.62, cancel: 0.4, next: 'light4', trail: true, track: 0.06, whip: [[0.04, 0.44, 2.4]],
-    keys: [[0, 'spinWind'], [0.1, 'spinWind'], [0.2, 'spinMid'], [0.3, 'spinEnd'], [0.38, 'spinOver'], [0.5, {}], [0.62, 'base']],
-    ev: [[0.12, () => sfx('swing')], [0.26, () => sfx('swing')], [0.2, (f, o, G) => G.fx.ring(f.local([0, 0.45, 0]), { normal: UP, r0: 0.4, r1: 2.6 * f.scale, life: 0.3, color: MAG })]],
-    hits: [{ t0: 0.12, t1: 0.4, dmg: 46, br: 0.22 }] },
-  light4: { dur: 0.8, track: 0.14, trail: true, noMove: true, whip: [[0.14, 0.46, 3.4], [0.46, 0.6, 2.0]],
-    keys: [[0, 'throwPrep'], [0.12, 'throwPrep'], [0.18, 'throw'], [0.4, 'throw'], [0.5, 'yank'], [0.66, {}], [0.8, 'base']],
+  /* --- 기본 공격: 원거리 갈고리 채찍(한 걸음 끌어옴) → 아가리 올려치기 물기 → 사슬 감은 주먹 3연타 → 내리꽂은 갈고리를 뜯어내며 되감기 --- */
+  light1: { dur: 0.56, cancel: 0.32, next: 'light2', trail: true, track: 0.1, noMove: true, whip: [[0.08, 0.36, 4.2]],
+    keys: [[0, 'throwPrep'], [0.12, 'throwPrep'], [0.2, 'throw'], [0.34, 'yank'], [0.42, {}], [0.56, 'base']],
+    ev: [[0.13, () => { sfx('swing'); sfx('shot'); }], [0.2, (f, o, G) => chainLine(G, f.model.handPos(new V3()), tipOf(f), 0.7)],
+      [0.3, (f, o, G) => { if (!f.hitConfirm) return; sfx('block'); for (const t of f.foes()) { if (t.held || t.state === 'ko' || t.scale > 1.2 || t.def.boss) continue; const d = new V3().subVectors(f.pos, t.pos).setY(0), L = d.length(); if (L < 2.2 * f.scale || L > 5 * f.scale) continue; t.pos.addScaledVector(d.normalize(), Math.min(0.9, L - 2.0 * f.scale)); G.fx.burst(t.chest(new V3()), 8, TOX, 3); } }]],
+    hits: [{ t0: 0.12, t1: 0.26, dmg: 40, br: 0.24 }] },
+  light2: { dur: 0.58, cancel: 0.34, next: 'light3', track: 0.12, noMove: true, jaw: [[0, 0.24]],
+    keys: [[0, 'upPrep'], [0.12, 'upPrep'], [0.22, 'upper'], [0.4, {}], [0.58, 'base']], lunge: [[0.08, 0.2, 7]],
+    ev: [[0.14, () => sfx('swing')], [0.24, (f, o, G) => { sfx('block'); sfx('hit'); biteFx(G, f.model.jawPos(new V3()), UP, 1.0);
+      for (const t of f.foes()) if (t.onGround && !t.held && t.state !== 'ko' && t.scale <= 1.2 && !t.def.boss && Math.hypot(t.pos.x - f.pos.x, t.pos.z - f.pos.z) < 1.9 * f.scale) { t.vel.y = Math.max(t.vel.y, 4.2); t.onGround = false; } }]],
+    hits: [{ t0: 0.15, t1: 0.23, weapon: false, at: [-0.05, 1.3, 0.9], r: 0.55, dmg: 20 }, { t0: 0.24, t1: 0.31, weapon: false, at: [-0.05, 1.7, 0.85], r: 0.6, dmg: 22 }] },
+  light3: { dur: 0.6, cancel: 0.42, next: 'light4', track: 0.4, start: (f) => { f.wrapK = 1; }, end: (f) => { f.wrapK = 0; },
+    keys: [[0, 'jabBack'], [0.06, 'jab'], [0.13, 'jabBack'], [0.2, 'jab'], [0.27, 'jabBack'], [0.34, 'jab'], [0.46, {}], [0.6, 'base']],
+    lunge: [[0.04, 0.07, 6], [0.18, 0.21, 6], [0.32, 0.35, 7]],
+    ev: [0.06, 0.2, 0.34].map((t) => [t, (f, o, G) => { sfx('hit'); const p = f.model.handPos(new V3()); G.fx.burst(p, 8, [0xc8b8c8, MAG], 4, { dir: f.fwd(new V3()), spread: 0.6 }); G.fx.ring(p, { r0: 0.05, r1: 0.45, life: 0.15, color: MAG, billboard: true }); }]),
+    hits: [0.05, 0.19, 0.33].map((t) => ({ t0: t, t1: t + 0.06, weapon: false, at: [0.12, 1.35, 0.95], r: 0.5, dmg: 14 })) },
+  light4: { dur: 0.86, track: 0.14, trail: true, noMove: true, whip: [[0.12, 0.5, 4.2], [0.5, 0.66, 1.6]],
+    keys: [[0, 'liftOver'], [0.14, 'liftOver'], [0.24, 'plant'], [0.48, 'plant'], [0.6, 'rip'], [0.72, {}], [0.86, 'base']],
     start: () => sfx('charge'),
-    ev: [[0.15, () => { sfx('shot'); sfx('swing'); }], [0.24, (f, o, G) => chainLine(G, f.model.handPos(new V3()), tipOf(f), 0.8)],
-      [0.47, (f, o, G) => { sfx('block'); sfx('heavy'); G.fx.burst(tipOf(f), 14, TOX, 5); }]],
-    hits: [{ t0: 0.14, t1: 0.28, dmg: 30, br: 0.24 }, { t0: 0.46, t1: 0.56, dmg: 22, br: 0.26 }] },
+    ev: [[0.16, () => sfx('swing')], [0.25, (f, o, G) => { const p = tipOf(f); p.y = f.pos.y + 0.05; sfx('heavy'); sfx('boom'); G.shake(0.15); G.fx.burst(p, 18, 0x6a5a60, 5, { kind: 'dust', sk: 1.2 }); G.fx.ring(p, { normal: UP, r0: 0.2, r1: 1.6, life: 0.35, color: MAG }); toxic(G, p, 10, 4); }],
+      [0.5, (f, o, G) => { sfx('block'); sfx('swing'); chainLine(G, tipOf(f), f.model.handPos(new V3()), 0.9); }]],
+    hits: [{ t0: 0.16, t1: 0.3, dmg: 26, br: 0.24 }, { t0: 0.5, t1: 0.62, dmg: 30, br: 0.28 }] },
 
   /* --- 우클: 사냥 갈고리 — 갈고리를 던져 낚아채고 끌어온 뒤 아가리로 문다 --- */
-  heavy: { dur: 1.0, cd: 'heavy', aim: true, track: 0.16, noMove: true, shout: true,
-    keys: [[0, 'throwPrep'], [0.14, 'throwPrep'], [0.2, 'throw'], [0.75, 'throw'], [1.0, 'base']],
+  heavy: { dur: 1.15, cd: 'heavy', aim: true, track: 0.16, noMove: true, shout: true,
+    keys: [[0, 'throwPrep'], [0.14, 'throwPrep'], [0.2, 'throw'], [0.85, 'throw'], [1.15, 'base']],
     start: (f) => { sfx('charge'); },
     ev: [[0.18, (f, o, G) => { sfx('shot'); sfx('dash'); G.spawn(new HookShot(G, f, o)); }]],
     end: (f) => { if (f.hookShot && f.hookShot.phase !== 'pull') f.hookShot.phase = 'back'; } },
@@ -267,27 +283,27 @@ const moves = {
     start: (f, o, G) => { G.say(f, '"숨 쉬어 봐라."'); },
     ev: [[0.08, (f) => { const v = f.model.vials[2]; if (v) v.visible = false; }],
       [0.24, (f, o, G) => { sfx('swing'); const from = f.model.jawPos(new V3()); let to;
-        if (o && !o.gone && o.state !== 'ko' && f.dist() < 10) to = o.pos.clone(); else to = f.local([0, 0, 6]);
-        const d = new V3().subVectors(to, f.pos).setY(0), L = d.length(); if (L < 1.6) to = f.pos.clone().addScaledVector(L > 0.01 ? d.normalize() : f.fwd(new V3()), 1.6);
+        if (o && !o.gone && o.state !== 'ko' && f.dist() < 30) to = o.pos.clone(); else to = f.local([0, 0, 10]);
+        const d = new V3().subVectors(to, f.pos).setY(0), L = d.length(), MAXR = 12 * f.scale; if (L < 1.6) to = f.pos.clone().addScaledVector(L > 0.01 ? d.normalize() : f.fwd(new V3()), 1.6); else if (L > MAXR) { to = f.pos.clone().addScaledVector(d.normalize(), MAXR); to.y = f.pos.y; }
         to.y = Math.max(0, to.y); G.spawn(new PoisonVial(G, f, from, to)); }]],
     end: (f) => { const v = f.model.vials[2]; if (v) v.visible = true; } },
 
-  /* --- E: 사슬 선풍 — 사슬을 뻗은 채 몸째 돌며 주위 적을 끌어당기고 갈아낸다 --- */
-  s2: { dur: 1.5, cd: 's2', aim: false, trail: true, move: 0.45, shout: true, whip: [[0.08, 1.34, 2.6]],
+  /* --- E: 사슬 선풍 — 사슬을 4.4m 뻗은 채 몸째 돌며 반경 8.8m 안의 적을 끌어당기고 갈아낸다 --- */
+  s2: { dur: 1.5, cd: 's2', aim: false, trail: true, move: 0.45, shout: true, whip: [[0.08, 1.34, 4.4]],
     keys: [[0, 'spinWind'], [0.14, 'spin'], [1.3, 'spin'], [1.5, 'base']],
     start: (f, o, G) => { G.say(f, '"하나도 놓치지 않는다."'); sfx('charge'); f.spinTick = 0.1; },
     tick: (f, o, G, t, dt) => {
       if (t < 0.14 || t > 1.3) return;
-      f.yaw += dt * 13; f.spinTick -= dt; const R = 2.9 * f.scale;
+      f.yaw += dt * 11; f.spinTick -= dt; const R = 4.7 * f.scale;
       if (Math.random() < 0.6) { const p = tipOf(f); G.fx.p(p, { vel: [0, 0.5, 0], size: 0.25, size1: 0.04, life: 0.25, color: MAG, alpha: 0.7 }); }
-      for (const tg of f.foes()) { if (tg.held || tg.state === 'ko') continue; const d = new V3().subVectors(f.pos, tg.pos).setY(0), L = d.length(); if (L > 5.2 * f.scale || L < 1.5 * f.scale || tg.pos.y - f.pos.y > 2) continue; tg.pos.addScaledVector(d.normalize(), Math.min(L - 1.5 * f.scale, 4.5 * dt * (tg.scale > 1.2 ? 0.4 : 1))); }
+      for (const tg of f.foes()) { if (tg.held || tg.state === 'ko') continue; const d = new V3().subVectors(f.pos, tg.pos).setY(0), L = d.length(); if (L > 8.8 * f.scale || L < 2.4 * f.scale || tg.pos.y - f.pos.y > 2) continue; tg.pos.addScaledVector(d.normalize(), Math.min(L - 2.4 * f.scale, 7.5 * dt * (tg.scale > 1.2 ? 0.4 : 1))); }
       if (f.spinTick <= 0) { f.spinTick = 0.2; sfx('swing');
         for (const tg of f.foes()) { const L = Math.hypot(tg.pos.x - f.pos.x, tg.pos.z - f.pos.z); if (L > R + 0.4 * tg.scale || tg.pos.y - f.pos.y > 1.8) continue; tg.takeHit(f, { dmg: 12, kb: [0, 0], stun: 0.34, hs: 0.02, daze: 6, noCrit: true }, new V3().subVectors(tg.pos, f.pos).setY(0).normalize()); } }
     },
-    ev: [[0.14, (f, o, G) => { sfx('dash'); G.fx.ring(f.local([0, 0.9, 0]), { normal: UP, r0: 0.4, r1: 3 * f.scale, life: 0.4, color: MAG }); }],
+    ev: [[0.14, (f, o, G) => { sfx('dash'); G.fx.ring(f.local([0, 0.9, 0]), { normal: UP, r0: 0.4, r1: 4.8 * f.scale, life: 0.4, color: MAG }); }],
       [1.3, (f, o, G) => { f.faceOpp(); sfx('heavy'); sfx('big'); G.shake(0.25); const c = f.local([0, 1.0, 0]);
-        for (let i = 0; i < 2; i++) G.fx.ring(c.clone().setY(c.y - 0.4 + i * 0.5), { normal: UP, r0: 0.6, r1: 3.6 * f.scale, life: 0.4, color: i ? 0xffffff : MAG });
-        for (const tg of f.foes()) { const L = Math.hypot(tg.pos.x - f.pos.x, tg.pos.z - f.pos.z); if (L > 3.3 * f.scale || tg.pos.y - f.pos.y > 2) continue; tg.takeHit(f, { dmg: 46, kb: [7, 3.5], stun: 0.6, hs: 0.1, daze: 26, snd: 'big' }, new V3().subVectors(tg.pos, f.pos).setY(0).normalize()); } }]] },
+        for (let i = 0; i < 2; i++) G.fx.ring(c.clone().setY(c.y - 0.4 + i * 0.5), { normal: UP, r0: 0.6, r1: 5.6 * f.scale, life: 0.4, color: i ? 0xffffff : MAG });
+        for (const tg of f.foes()) { const L = Math.hypot(tg.pos.x - f.pos.x, tg.pos.z - f.pos.z); if (L > 5.3 * f.scale || tg.pos.y - f.pos.y > 2) continue; tg.takeHit(f, { dmg: 46, kb: [7, 3.5], stun: 0.6, hs: 0.1, daze: 26, snd: 'big' }, new V3().subVectors(tg.pos, f.pos).setY(0).normalize()); } }]] },
 
   /* --- 극한 회피 뒤 좌클: 사냥개의 아가리 — 사슬로 순식간에 몸을 당겨 붙어 문다 --- */
   counter: { dur: 0.62, aim: true, noMove: true, jaw: [[0, 0.11]],
@@ -342,7 +358,7 @@ const moves = {
     end: (f, o, G) => { G.setTint(0, 0); f.model.hookTarget = null; f.ultHook = null; const tg = f.ultTgt; if (tg && tg.held) tg.release(); f.ultTgt = null; } },
 };
 // 채찍(사슬 뻗기) · 아가리 구간 처리를 모든 기술에 붙인다
-moves.plunge.whip = [[0.1, 4, 1.5]]; moves.plungeLand.whip = [[0, 0.3, 1.5]];
+moves.plunge.whip = [[0.1, 4, 2.4]]; moves.plungeLand.whip = [[0, 0.3, 2.4]];
 for (const k in moves) {
   const mv = moves[k], tk = mv.tick, en = mv.end;
   if (!mv.whip && !mv.jaw) continue;
@@ -365,14 +381,14 @@ function hitFx(G, p, dir, h, att) {
 }
 
 function aiPick(f, o, dist) {
-  if (dist > 3.5 && dist < 9 && f.cd.heavy <= 0 && Math.random() < 0.35) return 'heavy';
-  if (dist > 2.5 && dist < 9 && f.cd.s1 <= 0 && Math.random() < 0.3) return 's1';
-  if (dist < 3.2 && f.cd.s2 <= 0 && Math.random() < 0.25) return 's2';
+  if (dist > 4.5 && dist < 16 && f.cd.heavy <= 0 && Math.random() < 0.35) return 'heavy';
+  if (dist > 3.5 && dist < 12 && f.cd.s1 <= 0 && Math.random() < 0.3) return 's1';
+  if (dist < 5 && f.cd.s2 <= 0 && Math.random() < 0.25) return 's2';
   return null;
 }
 
 function onReset(f) {
-  f.hunt = 0; f.whipK = 0; f.whipL = CH.whip; f.jawK = 0; f.ultTgt = null; f.ultHook = null; f.ultHookP = null; f.hookShot = null; f.spinTick = 0;
+  f.hunt = 0; f.whipK = 0; f.whipL = CH.whip; f.jawK = 0; f.wrapK = 0; f.ultTgt = null; f.ultHook = null; f.ultHookP = null; f.hookShot = null; f.spinTick = 0;
   const m = f.model; if (m) { m.hookTarget = null; m.chainOn = true; m.weaponOut = false; if (m.vials) m.vials.forEach((v) => (v.visible = true)); }
 }
 
@@ -382,12 +398,12 @@ export default {
   stats: { hp: 1050, speed: 7.4, jump: 10, crit: 0.2 },
   palettes: [{ accent: MAG, glow: MAG, cloth: ['#6a2c86', '#3a1648'], tag: 'a' }, { accent: 0x5aff6a, glow: 0x5aff6a, cloth: ['#2a5a46', '#10302a'], tag: 'b' }],
   skills: { heavy: { name: '사냥 갈고리', cd: 8 }, s1: { name: '독병 투척', cd: 9 }, s2: { name: '사슬 선풍', cd: 12 }, ult: { name: '처형의 아가리', sub: 'CHAIN HUNTER' } },
-  aiPick, aimRange: 9, aiRange: [1.6, 2.8], onReset,
+  aiPick, aimRange: 15, aiRange: [2.4, 4.4], onReset,
   resource: (f) => hunt(f) >= 100 ? { v: 1, label: '사냥', color: MAG2, full: true } : { v: hunt(f) / 100, label: '사냥', color: MAG },
-  moveList: [['좌클 ×4', '갈고리 채찍 38 → 아가리 주먹 20 + 물기 20 → 낮은 사슬 회전 46 → 갈고리 투척 30 · 낚아채기 22 (사슬이 닿는 중거리)'], ['공중 좌클', '사슬을 휘돌렸다가 갈고리째 내리꽂아 독을 튀김'],
-    ['우클 · 사냥 갈고리', '갈고리를 던져 꽂히면 끌어온다 28 (가까우면 상대를, 멀거나 무거운 상대면 내 몸을) → 아가리로 물기 62. 사냥 게이지가 가득 차면 세 번 물어뜯는 처형 물기 36 · 36 · 54 + 출혈'],
-    ['Shift · 독병 투척', '아가리에 문 독병을 던져 깨뜨림 32 + 출혈 → 4.5초 동안 자홍 독구름 (안에 있으면 출혈 초당 12 · 둔화)'],
-    ['E · 사슬 선풍', '사슬을 뻗은 채 몸째 돌며 주위 적을 끌어당기고 0.2초마다 12 → 마지막에 크게 휘둘러 날려 보냄 46 (돌면서 이동 가능)'],
+  moveList: [['좌클 ×4', '원거리 갈고리 채찍 40 (맞으면 한 걸음 끌어옴) → 아가리 올려치기 20 + 물기 22 (살짝 띄움) → 사슬 감은 주먹 3연타 14 ×3 → 갈고리를 앞 땅에 내리꽂음 26 → 뜯어내며 되감기 30 (사슬 사거리 약 4.4m)'], ['공중 좌클', '사슬을 휘돌렸다가 갈고리째 내리꽂아 독을 튀김'],
+    ['우클 · 사냥 갈고리', '갈고리를 최대 17m 던져 꽂히면 끌어온다 28 (9m 안이면 상대를, 멀거나 무거운 상대면 내 몸을) → 아가리로 물기 62. 사냥 게이지가 가득 차면 세 번 물어뜯는 처형 물기 36 · 36 · 54 + 출혈'],
+    ['Shift · 독병 투척', '아가리에 문 독병을 최대 12m 포물선으로 던져 깨뜨림 32 + 출혈 → 4.5초 동안 자홍 독구름 (안에 있으면 출혈 초당 12 · 둔화)'],
+    ['E · 사슬 선풍', '사슬을 4.4m 뻗은 채 몸째 돌며 반경 8.8m 안의 적을 끌어당기고 0.2초마다 12 → 마지막에 크게 휘둘러 날려 보냄 46 (돌면서 이동 가능)'],
     ['Q · 처형의 아가리', '갈고리로 꿰어 끌어옴 26 → 아가리로 네 번 물어뜯기 16 ×4 → 사슬째 머리 위로 들어 땅에 메다꽂고 독 폭발 185 + 출혈 · 둔화'],
     ['사냥', '맞히고 · 낚아채고 · 독을 먹일수록 쌓이고, 가득 차면 다음 사냥 갈고리가 처형 물기'], ['C (타이밍) · 극한 회피', '사냥개의 아가리: 사슬로 순식간에 몸을 당겨 붙어 물기 90 + 출혈'], ['가만히', '고개를 숙이고 사슬을 쥔 채 기다림']],
   createModel, poses, moves, hitFx,
