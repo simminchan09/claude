@@ -161,13 +161,18 @@ document.addEventListener('pointerlockchange', () => {
 /* ---------- 타이틀 / 선택 ---------- */
 function buildSelect() {
   const pve = isPvE();
+  const ps = pve ? 'p1' : (G.pickSlot || 'p1'), lab2 = G.mode === 'pvp' ? '2P' : G.mode === 'training' ? '더미' : 'CPU';
   for (const [id, slot] of [['#r1', 'p1'], ['#r2', 'p2']]) {
-    const el = $(id), col = slot === 'p1' ? 'var(--p1)' : 'var(--p2)';
-    el.innerHTML = ROSTER.map((d, i) => `<button class="card" data-slot="${slot}" data-i="${i}" style="--sel:${col}" aria-pressed="${G.sel[slot] === i}"><span class="tag">${slot === 'p1' ? '1P' : G.mode === 'pvp' ? '2P' : G.mode === 'training' ? '더미' : 'CPU'}</span><b>${d.short || d.name}</b><span>${d.title}</span></button>`).join('')
-      + Array.from({ length: EMPTY_SLOTS }, () => '<div class="card empty"><b>?</b><span>추가 예정</span></div>').join('');
+    const el = $(id), col = slot === 'p1' ? 'var(--p1)' : 'var(--p2)', other = slot === 'p1' ? 'p2' : 'p1';
+    el.hidden = slot !== ps;
+    el.innerHTML = ROSTER.map((d, i) => { const img = iconURL.get(d.id);
+      return `<button class="pick" data-slot="${slot}" data-i="${i}" title="${d.name} · ${d.title}" style="--sel:${col}${img ? `;background-image:url(${img})` : ''}" aria-pressed="${G.sel[slot] === i}">${img ? '' : `<span class="ini">${(d.short || d.name)[0]}</span>`}${G.sel[slot] === i ? `<span class="tag">${slot === 'p1' ? '1P' : lab2}</span>` : ''}${!pve && G.sel[other] === i ? `<span class="oth">${other === 'p1' ? '1P' : lab2}</span>` : ''}<span class="nm">${d.short || d.name}</span></button>`; }).join('');
   }
   $('#r2wrap').hidden = pve;
-  $('#r2lbl').textContent = G.mode === 'pvp' ? '2P 캐릭터' : G.mode === 'training' ? '훈련 상대' : 'CPU 캐릭터';
+  $('#r2lbl').textContent = lab2;
+  for (const b of document.querySelectorAll('.pickTabs button')) b.classList.toggle('on', b.dataset.pick === ps);
+  $('#pk1').textContent = ROSTER[G.sel.p1].short || ROSTER[G.sel.p1].name; $('#pk2').textContent = ROSTER[G.sel.p2].short || ROSTER[G.sel.p2].name;
+  $('#pickBar').hidden = G.titleStep !== 'char'; document.body.classList.toggle('picking', G.titleStep === 'char');
   $('#modeInfo').textContent = {
     boss: `공허의 기사 니힐과 1:1. 노란 예고는 패리(F), 빨간 예고는 회피(C). 체력이 절반 아래로 떨어지면 격노합니다.`,
     waves: `적 무리를 ${WAVES.length - 1}웨이브 처치하면 보스가 나타납니다. 파편병 · 사수 · 파쇄자(슈퍼아머)`,
@@ -175,8 +180,9 @@ function buildSelect() {
   }[G.mode];
   // 1단계: 모드 → 2단계: 그 모드에서 캐릭터
   $('#stepMode').hidden = G.titleStep === 'char'; $('#stepChar').hidden = G.titleStep !== 'char'; $('#modeName').textContent = MODE_NAME[G.mode] || G.mode;
-  const d = ROSTER[G.sel.p1];
-  $('#charInfo').innerHTML = `<h3>${d.name}</h3><p>${d.desc}</p><dl class="mv">${d.moveList.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
+  const d = ROSTER[G.sel[ps]];
+  $('#heroName').innerHTML = `<b>${d.short || d.name}</b><span style="color:${ps === 'p1' ? 'var(--p1)' : 'var(--p2)'}">${d.title}</span>`;
+  $('#charInfo').innerHTML = `<p>${d.desc}</p><dl class="mv">${d.moveList.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>`;
   const k = (c) => `<kbd>${c}</kbd>`;
   $('#keyHelp').innerHTML = G.mode === 'pvp'
     ? `1P ${k('W')}${k('A')}${k('S')}${k('D')} 이동 · ${k('좌클')} 공격 · ${k('우클')} ${k('Shift')} ${k('E')} 스킬 · ${k('Q')} 궁극기 · ${k('Space')} 점프 · ${k('C')}/${k('옆버튼 앞')} 회피 · ${k('F')}/${k('옆버튼 뒤')} 방어 · ${k('좌Ctrl')} 앉기<br>2P 방향키 이동 · ${k('Num1')} 공격 · ${k('Num2')} ${k('Num4')} ${k('Num5')} 스킬 · ${k('Num6')} 궁극기 · ${k('Num0')} 점프 · ${k('Num.')} 회피 · ${k('Num3')} 방어 · ${k('Num7')} 앉기`
@@ -195,6 +201,7 @@ document.addEventListener('click', (e) => {
   if (t.dataset.mode) { G.mode = t.dataset.mode; G.titleStep = 'char'; sfx('ui'); buildSelect(); }
   else if (t.id === 'backMode') { G.titleStep = 'mode'; sfx('ui'); buildSelect(); }
   else if (t.dataset.slot) { G.sel[t.dataset.slot] = +t.dataset.i; sfx('ui'); buildSelect(); }
+  else if (t.dataset.pick) { G.pickSlot = t.dataset.pick; sfx('ui'); buildSelect(); }
   else if (t.id === 'start') startMatch();
   else if (t.dataset.act === 'resume') { setPause(false); lockPointer(); }
   else if (t.dataset.act === 'title') toTitle();
@@ -203,7 +210,7 @@ document.addEventListener('click', (e) => {
 function showScreen(id) { for (const s of ['#title', '#pause', '#result']) $(s).hidden = s !== id; }
 function toTitle() {
   G.paused = false; clearMatch(); G.state = 'title'; fcam.mode = 'orbit'; fcam.focus = null; fcam.cine = null; fcam.follow = fcam2.follow = null; hud.show(false); hud.hideCutin(); hud.setTraining('');
-  if (document.pointerLockElement) document.exitPointerLock(); G.titleStep = 'mode'; showScreen('#title'); buildSelect();
+  if (document.pointerLockElement) document.exitPointerLock(); G.titleStep = 'mode'; G.pickSlot = 'p1'; showScreen('#title'); buildSelect();
 }
 function setPause(p) {
   G.paused = p; $('#pause').hidden = !p;
@@ -217,6 +224,7 @@ function clearMatch() {
   for (const e of G.ents) e.kill && e.kill(); G.ents = []; fx.clear(); G.cine = null; G.setTint(0, 0);
 }
 function startMatch() {
+  $('#pickBar').hidden = true; document.body.classList.remove('picking');
   sfx('ult'); for (const f of G.preview) f.dispose(); G.preview = []; clearMatch();
   // 게임을 시작할 때마다 맵을 무작위로 정한다 (직전 맵은 제외)
   const pool = STAGES.filter((m) => m.id !== G.mapId); setMap(pool[(Math.random() * pool.length) | 0].id);
@@ -436,6 +444,7 @@ function render() {
   renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
   document.body.classList.toggle('split', split);
   if (G.cine) renderPortrait(G.cine);
+  renderIcons();
 }
 function renderPortrait(C) {
   const r = hud.cutRect(); if (r.height < 4) return;
@@ -453,6 +462,33 @@ function renderPortrait(C) {
   renderer.render(scene, pCam);
   renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
   scene.background = null; scene.fog = fog; hidden.forEach((o, i) => (o.visible = vis[i])); fx.setVisible(true); pKey.intensity = 0; pHemi.intensity = 0;
+}
+
+/* ---------- 선택 바 초상화 아이콘: 캐릭터 얼굴을 한 번씩 렌더해 이미지로 보관 ---------- */
+const iconURL = new Map(); const ICON = 128; let iconJob = null;
+const iconCv = document.createElement('canvas'); iconCv.width = iconCv.height = ICON;
+function renderIcons() {
+  if (G.state !== 'title' || G.titleStep !== 'char') return;
+  if (!iconJob) { const d = ROSTER.find((r) => !iconURL.has(r.id)); if (!d) return;
+    const f = new Fighter(d, 0, null, G, d.palettes[0]); f.reset(new V3(60, 0, 60)); f.yaw = 0; f.state = 'idle'; iconJob = { d, f, n: 0 }; return; }
+  const { d, f } = iconJob;
+  if (iconJob.n++ < 12) { f.update(1 / 60, false); return; } // 머리카락 · 옷이 자리 잡을 때까지
+  f.pose.set(f.def._poses.base); f.applyRig(1); // 팔을 내린 기본 자세 (무기 · 방패가 얼굴을 가리지 않게)
+  const pr = renderer.getPixelRatio(), w = ICON / pr;
+  const head = f.model.J.head.getWorldPosition(new V3()).add(new V3(0, 0.12 * f.scale, 0)), fw = f.fwd(new V3());
+  pCam.aspect = 1; pCam.updateProjectionMatrix(); pCam.position.copy(head).addScaledVector(fw, 1.0).add(new V3(0, 0.02, 0)); pCam.lookAt(head.clone().add(new V3(0, -0.04, 0)));
+  pKey.position.copy(head).addScaledVector(fw, 1.4).add(new V3(-0.9, 0.9, 0)); pKey.target.position.copy(head); pKey.intensity = 10; pHemi.intensity = 0.5;
+  const hidden = [stage.group, ...G.preview.flatMap((o) => [o.root, ...(o.model.extras || [])])], vis = hidden.map((o) => o.visible);
+  hidden.forEach((o) => (o.visible = false)); fx.setVisible(false); f.shield.m.visible = false;
+  const fog = scene.fog; scene.fog = null; scene.background = bandColor.set(f.palette.band || '#1a1626');
+  renderer.setScissorTest(true); renderer.setScissor(0, 0, w, w); renderer.setViewport(0, 0, w, w); renderer.render(scene, pCam);
+  const g = iconCv.getContext('2d'); g.clearRect(0, 0, ICON, ICON); g.drawImage(renderer.domElement, 0, renderer.domElement.height - ICON, ICON, ICON, 0, 0, ICON, ICON);
+  scene.background = null; scene.fog = fog; hidden.forEach((o, i) => (o.visible = vis[i])); fx.setVisible(true); pKey.intensity = 0; pHemi.intensity = 0;
+  renderer.setViewport(0, 0, w, w); renderer.render(scene, camera); // 그 자리를 원래 화면으로 다시 덮는다
+  renderer.setScissorTest(false); renderer.setViewport(0, 0, innerWidth, innerHeight);
+  try { iconURL.set(d.id, iconCv.toDataURL('image/webp', 0.9)); } catch (_) { iconURL.set(d.id, ''); }
+  f.dispose(); iconJob = null;
+  for (const b of document.querySelectorAll(`.pick[data-i="${ROSTER.indexOf(d)}"]`)) { b.style.backgroundImage = `url(${iconURL.get(d.id)})`; const ini = b.querySelector('.ini'); if (ini) ini.remove(); }
 }
 
 let last = performance.now();

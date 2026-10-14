@@ -68,7 +68,10 @@ function path(pts, close) { const p = new Path2D(); pts.forEach(([x, y], i) => (
 const ell = (M, cx, cy, rx, ry, n = 36) => { const pts = []; for (let i = 0; i < n; i++) { const a = (i / n) * TAU; pts.push(M(cx + Math.cos(a) * rx, cy + Math.sin(a) * ry)); } return path(pts, true); };
 
 // o: { eyeY, browY, noseY, mouthY, ipd, eyeW, eyeH, iris, irisD, pupil, lash, brow, browW, lip, male, tilt, noMouth, noBrow, open, glow, lidDrop }
+// 얼굴 이목구비(눈 · 눈썹 · 코 · 입)를 그릴지 여부. false = 모든 캐릭터 얼굴을 무표정 민얼굴로 (피부 · 볼 · 문양만 남음)
+export const FACE_FEATURES = false;
 export function paintFace(g, M, o) {
+  if (!FACE_FEATURES) return;
   const male = !!o.male, ipd = o.ipd ?? (male ? 0.064 : 0.06), ew = o.eyeW ?? (male ? 0.029 : 0.028), eh = o.eyeH ?? (male ? 0.0095 : 0.0115), irD = o.irisD ?? 0.0116, tilt = o.tilt ?? 0, drop = o.lidDrop ?? 0;
   const [c0, c1, c2, rim] = o.iris || ['#e8b060', '#a8682a', '#4a2a10', '#2a160a'], ink = o.lash || '#2a1a14';
   const px = (m) => Math.abs(M(m, o.eyeY)[0] - M(0, o.eyeY)[0]); // 미터 → 픽셀 (가로)

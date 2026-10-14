@@ -210,6 +210,30 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
 .dpad .u{grid-column:2;grid-row:1}.dpad .l{grid-column:1;grid-row:2}.dpad .d{grid-column:2;grid-row:2}.dpad .r{grid-column:3;grid-row:2}
 @media (max-width:720px){ .who .tt{display:none} .sk{width:54px;height:50px} .ult{width:76px;height:76px} .hpnum b{font-size:30px} .combo b{font-size:44px} }
 @media (prefers-reduced-motion:reduce){ #cutin .lines{animation:none} }
+
+/* 영웅 선택 바 (오버워치식) */
+#pickBar{position:fixed;left:0;right:0;bottom:0;z-index:6;padding:14px 16px calc(14px + env(safe-area-inset-bottom,0px));background:linear-gradient(0deg,rgba(6,5,10,.92) 30%,rgba(6,5,10,0));pointer-events:none}
+.pickRow{display:flex;justify-content:center;align-items:flex-end;gap:8px;overflow-x:auto;padding:22px 4px 4px;pointer-events:auto;scrollbar-width:thin}
+.pick{flex:none;position:relative;width:72px;height:72px;padding:0;border:2px solid rgba(255,255,255,.22);background:#15131f center/cover no-repeat;clip-path:polygon(12px 0,100% 0,calc(100% - 12px) 100%,0 100%);transition:transform .15s,border-color .15s,filter .15s;filter:saturate(.75) brightness(.85)}
+.pick:hover{transform:translateY(-6px);filter:none;border-color:rgba(255,255,255,.6)}
+.pick .ini{position:absolute;inset:0;display:grid;place-items:center;font:26px var(--f-display);color:rgba(255,255,255,.35)}
+.pick .nm{position:absolute;left:0;right:0;bottom:0;padding:10px 2px 3px;font:12px var(--f-display);text-align:center;color:#fff;background:linear-gradient(0deg,rgba(0,0,0,.85),transparent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick[aria-pressed="true"]{width:88px;height:88px;border-color:var(--sel);filter:none;box-shadow:0 0 0 2px var(--sel),0 0 22px var(--sel);transform:translateY(-10px)}
+.pick .tag{position:absolute;top:3px;right:14px;font:700 11px var(--f-num);color:var(--sel);text-shadow:0 1px 2px #000}
+.pick .oth{position:absolute;top:3px;left:14px;font:700 11px var(--f-num);color:var(--p2);text-shadow:0 1px 2px #000}
+.pickTabs{display:flex;gap:6px}
+.pickTabs button{background:var(--panel);border:1px solid var(--line);color:var(--dim);padding:6px 14px;font:15px var(--f-display);clip-path:polygon(8px 0,100% 0,calc(100% - 8px) 100%,0 100%)}
+.pickTabs button i{font-style:normal}
+.pickTabs button span{margin-left:8px;color:var(--ink)}
+.pickTabs button.on{color:#0a0812;background:var(--p1);border-color:var(--p1)} .pickTabs button[data-pick="p2"].on{background:var(--p2);border-color:var(--p2)}
+.pickTabs button.on span{color:#0a0812}
+.hero{display:grid;gap:2px}
+.hero b{font:clamp(44px,6vw,78px)/1 var(--f-display);color:#fff;text-shadow:0 4px 0 rgba(0,0,0,.45);letter-spacing:.02em}
+.hero span{font:18px var(--f-display);color:var(--p1)}
+body.picking .wrapT{padding-bottom:140px}
+body.picking #charInfo{max-height:max(140px,calc(100vh - 640px));overflow:auto}
+body.picking #start{position:fixed;right:clamp(16px,4vw,56px);bottom:150px;z-index:7;font-size:26px;padding:14px 44px}
+@media (max-width:700px){body.picking #start{bottom:128px;font-size:20px;padding:10px 26px}.pick{width:60px;height:60px}.pick[aria-pressed="true"]{width:70px;height:70px}}
 </style>
 </head>
 <body>
@@ -259,14 +283,16 @@ body.split::after{content:"";position:fixed;top:0;bottom:0;left:50%;width:2px;ma
     <div id="stepChar" hidden>
       <div class="stepHead"><button class="back" id="backMode">← 모드 선택</button><div class="lbl" id="modeName"></div></div>
       <p class="mapInfo" id="modeInfo"></p>
-      <div><div class="lbl">1P 캐릭터</div><div class="roster" id="r1"></div></div>
-      <div id="r2wrap"><div class="lbl" id="r2lbl">상대 캐릭터</div><div class="roster" id="r2"></div></div>
-      <button class="go" id="start">결투 시작 <span style="font-size:.7em;opacity:.6">Enter</span></button>
+      <div class="pickTabs" id="r2wrap"><button data-pick="p1" class="on">1P<span id="pk1"></span></button><button data-pick="p2"><i id="r2lbl">상대</i><span id="pk2"></span></button></div>
+      <div class="hero" id="heroName"></div>
       <div class="info" id="charInfo"></div>
+      <button class="go" id="start">결투 시작 <span style="font-size:.7em;opacity:.6">Enter</span></button>
     </div>
     <div class="keys" id="keyHelp"></div>
   </div>
 </section>
+<!-- 오버워치식 영웅 선택 바: 화면 아래 초상화 아이콘 줄 -->
+<div id="pickBar" hidden><div class="pickRow" id="r1"></div><div class="pickRow" id="r2" hidden></div></div>
 <section id="pause" class="screen center" hidden>
   <h2>일시정지</h2>
   <div class="keys" id="pauseKeys"></div>
