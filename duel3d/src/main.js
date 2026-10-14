@@ -8,7 +8,7 @@ import { FightCam } from './camera.js';
 import { HUD } from './hud.js';
 import { AICtrl, DummyCtrl, DUMMY_LABEL, EnemyAI } from './ai.js';
 import { ROSTER, EMPTY_SLOTS } from './characters/index.js';
-import { ENEMIES, WAVES } from './enemies/index.js';
+import { enemiesFor, WAVES } from './enemies/index.js';
 
 const V3 = THREE.Vector3, UP = new V3(0, 1, 0);
 const $ = (s) => document.querySelector(s);
@@ -175,9 +175,12 @@ function buildSelect() {
   for (const b of document.querySelectorAll('.pickTabs button')) b.classList.toggle('on', b.dataset.pick === ps);
   $('#pk1').textContent = ROSTER[G.sel.p1].short || ROSTER[G.sel.p1].name; $('#pk2').textContent = ROSTER[G.sel.p2].short || ROSTER[G.sel.p2].name;
   $('#pickBar').hidden = G.titleStep !== 'char'; document.body.classList.toggle('picking', G.titleStep === 'char');
+  // 다음 경기 맵을 미리 정한다 (보스전 · 토벌전은 맵마다 나오는 몬스터가 다르다)
+  if (G.titleStep === 'char' && !G.nextMap) { const pool = STAGES.filter((m) => m.id !== G.mapId); G.nextMap = pool[(Math.random() * pool.length) | 0].id; }
+  const ES = enemiesFor(G.nextMap), mapName = (STAGES.find((m) => m.id === G.nextMap) || {}).name || '';
   $('#modeInfo').textContent = {
-    boss: `공허의 기사 니힐과 1:1. 노란 예고는 패리(F), 빨간 예고는 회피(C). 체력이 절반 아래로 떨어지면 격노합니다.`,
-    waves: `적 무리를 ${WAVES.length - 1}웨이브 처치하면 보스가 나타납니다. 파편병 · 사수 · 파쇄자(슈퍼아머)`,
+    boss: `맵 · ${mapName} — ${ES.boss.name}(${ES.boss.title})와 1:1. 노란 예고는 패리, 빨간 예고는 회피. 체력이 절반 아래로 떨어지면 격노합니다.`,
+    waves: `맵 · ${mapName} — 적 무리를 ${WAVES.length - 1}웨이브 처치하면 보스 ${ES.boss.short}이(가) 나타납니다. ${ES.grunt.short} · ${ES.archer.short} · ${ES.brute.short}(슈퍼아머)`,
     duel: 'CPU 캐릭터와 3판 2선승 결투', pvp: '한 키보드로 두 사람이 3판 2선승 (화면 분할)', training: '시간 제한 없이 기술과 판정을 확인',
   }[G.mode];
   // 1단계: 모드 → 2단계: 그 모드에서 캐릭터
@@ -194,7 +197,7 @@ function buildSelect() {
 function rebuildPreview() {
   for (const f of G.preview) f.dispose(); G.preview = [];
   const d1 = ROSTER[G.sel.p1], pve = isPvE();
-  const d2 = pve ? (G.mode === 'boss' ? ENEMIES.boss : ENEMIES.grunt) : ROSTER[G.sel.p2];
+  const ES = enemiesFor(G.nextMap), d2 = pve ? (G.mode === 'boss' ? ES.boss : ES.grunt) : ROSTER[G.sel.p2];
   const a = new Fighter(d1, 0, null, G, d1.palettes[0]), b = new Fighter(d2, 1, null, G, d1 === d2 ? d2.palettes[1] : d2.palettes[0]);
   a.reset(new V3(-1.3, 0, 0.6)); b.reset(new V3(pve ? 2 : 1.3, 0, pve ? -1.2 : -0.6)); a.opp = b; b.opp = a; a.state = 'win'; G.preview = [a, b];
 }
@@ -212,7 +215,7 @@ document.addEventListener('click', (e) => {
 function showScreen(id) { for (const s of ['#title', '#pause', '#result']) $(s).hidden = s !== id; }
 function toTitle() {
   G.paused = false; clearMatch(); G.state = 'title'; fcam.mode = 'orbit'; fcam.focus = null; fcam.cine = null; fcam.follow = fcam2.follow = null; hud.show(false); hud.hideCutin(); hud.setTraining('');
-  if (document.pointerLockElement) document.exitPointerLock(); G.titleStep = 'mode'; G.pickSlot = 'p1'; showScreen('#title'); buildSelect();
+  if (document.pointerLockElement) document.exitPointerLock(); G.titleStep = 'mode'; G.pickSlot = 'p1'; G.nextMap = null; showScreen('#title'); buildSelect();
 }
 function setPause(p) {
   G.paused = p; $('#pause').hidden = !p;
@@ -229,7 +232,7 @@ function startMatch() {
   $('#pickBar').hidden = true; document.body.classList.remove('picking');
   sfx('ult'); for (const f of G.preview) f.dispose(); G.preview = []; clearMatch();
   // 게임을 시작할 때마다 맵을 무작위로 정한다 (직전 맵은 제외)
-  const pool = STAGES.filter((m) => m.id !== G.mapId); setMap(pool[(Math.random() * pool.length) | 0].id);
+  const pool = STAGES.filter((m) => m.id !== G.mapId); setMap(G.nextMap || pool[(Math.random() * pool.length) | 0].id); G.nextMap = null;
   const d1 = ROSTER[G.sel.p1], d2 = ROSTER[G.sel.p2];
   const a = new Fighter(d1, 0, new KeyCtrl(G.mode === 'pvp' ? MAPS.p1 : MAPS.p1solo), G, d1.palettes[0]);
   G.fighters = [a]; G.player = a; G.round = 1;
@@ -262,7 +265,7 @@ function startRound() {
 function spawnWave() {
   const list = G.mode === 'boss' ? ['boss'] : WAVES[G.wave], W = stage.world, p = G.player;
   list.forEach((id, i) => {
-    const def = ENEMIES[id], a = (i - (list.length - 1) / 2) * 0.55, R = def.boss ? 9 : 10 + rand(-1.5, 2);
+    const def = enemiesFor(G.mapId)[id], a = (i - (list.length - 1) / 2) * 0.55, R = def.boss ? 9 : 10 + rand(-1.5, 2);
     const pos = new V3(Math.sin(a) * R, 0, Math.cos(a) * R * (p.pos.z < 0 ? 1 : -1)); for (let k = 0; k < 3; k++) W.push(pos, 0.6 * (def.scale || 1));
     const f = new Fighter(def, 1, new EnemyAI(), G, def.palettes[0]); f.reset(pos); f.opp = p; f.faceOpp(); f.inv = 0.8; f.ai = f.ctrl;
     G.fighters.push(f); if (def.boss) G.boss = f;

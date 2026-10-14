@@ -269,6 +269,7 @@ export class Fighter {
     (att.def.hitFx || defaultHitFx)(G, point, dir, h, att);
     G.hitstop = Math.max(G.hitstop, h.hs ?? 0.075); G.shake(h.shake ?? 0.08); sfx(h.snd || (dmg >= 60 ? 'big' : 'hit'));
     G.hud.damage(point, Math.round(dmg), dmg >= 100, false, crit); if (crit) sfx('crit');
+    if (h.st && this.hp > 0 && this.addStatus) this.addStatus(h.st[0], h.st[1], h.st[2], att); // 피격 상태 효과 [종류, 시간, 세기]
     if (this.hp <= 0) {
       this.hp = 0; this.state = 'ko'; this.held = false; this.launched = true;
       if (this.onGround || this.vel.y < 4) { this.vel.y = 6; this.onGround = false; }

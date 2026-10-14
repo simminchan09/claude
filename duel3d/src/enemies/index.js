@@ -1,159 +1,94 @@
-// 몬스터 · 보스 정의 (토벌전 · 보스전)
-// 캐릭터 정의와 같은 형식에 ai(행동)와 stats.daze(그로기) · stats.armor(슈퍼아머)가 추가된다.
-// 기술의 tele: [시간, 'yellow' | 'red'] — 공격 예고 빛. 노랑은 패리 가능, 빨강(unblock)은 회피해야 한다.
-import * as THREE from 'three';
-import { buildHumanoid } from '../rig.js';
-import { Projectile, areaHit } from '../entities.js';
-import { rand, sfx } from '../core.js';
-import trainer from '../characters/trainer.js';
+// 몬스터 · 보스 정의 (토벌전 · 보스전) — 맵마다 그 맵 특색에 맞는 세트가 나온다
+// 세트 = 잡몹(grunt) · 원거리(archer) · 정예(brute, 슈퍼아머) · 보스(boss). 만드는 도구는 kit.js 의 makeSet.
+// 상태 효과 st: [종류, 시간, 세기] — slow(이동 ×k) · burn/bleed(초당 피해) · vuln(받는 피해 ×k)
+import { makeSet } from './kit.js';
 
-const V3 = THREE.Vector3, TAU = Math.PI * 2;
-const DIMS = { hipH: 0.98, spineL: 0.22, chestL: 0.3, neckL: 0.1, shW: 0.21, uArm: 0.29, lArm: 0.27, hipW: 0.1, thigh: 0.44, shin: 0.44, headTop: 0.24 };
-const T = trainer.moves;
+const C = (accent, armor, body, extra = {}) => ({ accent, armor, body, band: extra.band, trim: extra.trim, cloth: extra.cloth });
 
-/* ---------- 모델: 공허 결정체 ---------- */
-function construct(pal, weapon) {
-  const m = buildHumanoid(DIMS), J = m.J;
-  const body = new THREE.MeshStandardMaterial({ color: pal.body ?? 0x15121c, metalness: 0.35, roughness: 0.5 });
-  const shell = new THREE.MeshStandardMaterial({ color: pal.armor, metalness: 0.5, roughness: 0.3, flatShading: true });
-  const glow = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: pal.accent, emissiveIntensity: 2.6 });
-  const add = (parent, geo, mat, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0) => { const me = new THREE.Mesh(geo, mat); me.position.set(x, y, z); me.rotation.set(rx, ry, rz); parent.add(me); return me; };
-  const limb = (parent, len, r, mat) => add(parent, new THREE.CapsuleGeometry(r, Math.max(0.01, len - r * 2), 4, 8), mat, 0, -len / 2, 0);
-  add(J.hips, new THREE.BoxGeometry(0.3, 0.16, 0.2), shell, 0, -0.02, 0);
-  add(J.spine, new THREE.CapsuleGeometry(0.12, 0.1, 4, 8), body, 0, 0.1, 0);
-  const tor = add(J.chest, new THREE.IcosahedronGeometry(0.22, 0), shell, 0, 0.15, 0); tor.scale.set(1.1, 1, 0.8);
-  add(J.chest, new THREE.OctahedronGeometry(0.07), glow, 0, 0.16, 0.15);
-  for (const s of [-1, 1]) add(J.chest, new THREE.ConeGeometry(0.06, 0.32, 5), shell, s * 0.2, 0.32, -0.04, 0, 0, -s * 0.5);
-  add(J.neck, new THREE.CylinderGeometry(0.045, 0.055, 0.12, 8), body, 0, 0.03, 0);
-  const head = add(J.head, new THREE.OctahedronGeometry(0.13), shell, 0, 0.12, 0); head.scale.set(0.9, 1.25, 1);
-  add(J.head, new THREE.BoxGeometry(0.16, 0.025, 0.04), glow, 0, 0.13, 0.1);
-  for (const s of [-1, 1]) add(J.head, new THREE.ConeGeometry(0.03, 0.22, 4), shell, s * 0.08, 0.27, -0.02, -0.4, 0, -s * 0.35);
-  for (const [sh, el, ha] of [[J.shoulderL, J.elbowL, J.handL], [J.shoulderR, J.elbowR, J.handR]]) {
-    add(sh, new THREE.DodecahedronGeometry(0.09, 0), shell); limb(sh, DIMS.uArm, 0.05, body); add(el, new THREE.SphereGeometry(0.035, 8, 6), glow); limb(el, DIMS.lArm, 0.048, shell);
-    add(ha, new THREE.BoxGeometry(0.075, 0.1, 0.07), body, 0, -0.04, 0);
-  }
-  for (const [hp, kn, ft] of [[J.hipL, J.kneeL, J.footL], [J.hipR, J.kneeR, J.footR]]) {
-    limb(hp, DIMS.thigh, 0.072, body); add(kn, new THREE.SphereGeometry(0.045, 8, 6), glow); limb(kn, DIMS.shin, 0.06, shell);
-    add(ft, new THREE.ConeGeometry(0.07, 0.26, 4), shell, 0, -0.04, 0.06, Math.PI / 2, 0, 0);
-  }
-  let len = 1.1;
-  if (weapon === 'claw') { len = 0.75; for (const x of [-0.035, 0, 0.035]) add(J.weapon, new THREE.BoxGeometry(0.012, 0.03, 0.7), glow, x, 0, 0.42); }
-  else if (weapon === 'hammer') { len = 1.3; add(J.weapon, new THREE.CylinderGeometry(0.03, 0.03, 1.2, 8), body, 0, 0, 0.5, Math.PI / 2); add(J.weapon, new THREE.BoxGeometry(0.34, 0.34, 0.5), shell, 0, 0, 1.15); add(J.weapon, new THREE.BoxGeometry(0.36, 0.06, 0.52), glow, 0, 0, 1.15); }
-  else if (weapon === 'greatsword') { len = 1.7; add(J.weapon, new THREE.CylinderGeometry(0.03, 0.03, 0.3, 8), body, 0, 0, 0, Math.PI / 2); add(J.weapon, new THREE.BoxGeometry(0.3, 0.05, 0.06), shell, 0, 0, 0.16); add(J.weapon, new THREE.BoxGeometry(0.04, 0.2, 1.5), shell, 0, 0, 0.95); add(J.weapon, new THREE.BoxGeometry(0.045, 0.03, 1.5), glow, 0, 0.1, 0.95); }
-  else { len = 0.5; add(J.weapon, new THREE.BoxGeometry(0.02, 0.05, 0.45), glow, 0, 0, 0.28); }
-  return { ...m, sole: 0.07, weaponPts(b, t) { J.weapon.localToWorld(b.set(0, 0, 0.2)); J.weapon.localToWorld(t.set(0, 0, len)); } };
-}
-
-/* ---------- 기술 변형 도우미 ----------
-   원본 기술 앞에 '자세 잡기(windup)' 시간을 넣고 전체를 k배 느리게 만든다. 적의 공격이 읽히도록. */
-function slow(src, { k = 1.2, windup = 0.4, tele = 'yellow', dmg = 1, unblock = false, ev, hits, lunge, next, cancel } = {}) {
-  const sh = (t) => windup + t * k;
-  const keys = [src.keys[0], [windup, {}], ...src.keys.slice(1).map(([t, p]) => [sh(t), p])];
-  return {
-    dur: sh(src.dur), trail: src.trail, track: windup * 0.85, aim: true, keys, tele: tele ? [windup * 0.3, tele] : null, next, cancel: cancel ?? (next ? sh(src.cancel ?? src.dur * 0.6) : undefined),
-    lunge: lunge ?? (src.lunge || []).map(([a, b, s]) => [sh(a), sh(b), s / k]),
-    ev: ev ?? (src.ev || []).filter(([t]) => t > 0.001).map(([t, fn]) => [sh(t), fn]),
-    hits: hits ?? (src.hits || []).map((h) => ({ ...h, t0: sh(h.t0), t1: sh(h.t1), dmg: h.dmg * dmg, unblock: unblock || h.unblock, noCrit: true })),
-  };
-}
-const swish = (f) => { sfx('swing'); f.slashFx({ tilt: 0.15, r: 1.35 * f.scale, at: [0, 1.15 * f.scale, 0.35] }); };
-const chop = (f) => { sfx('heavy'); f.slashFx({ tilt: Math.PI / 2, r: 1.4 * f.scale, at: [0.05, 1.1 * f.scale, 0.3], flip: true }); };
-function slam(f, G, r, dmg, color) {
-  const c = f.local([0, 0, 1.2 * f.scale]).setY(0.06); sfx('boom'); G.shake(0.35);
-  G.fx.ring(c, { normal: new V3(0, 1, 0), r0: 0.4, r1: r * 1.2, life: 0.55, color }); G.fx.ring(c, { normal: new V3(0, 1, 0), r0: 0.2, r1: r * 0.8, life: 0.4, color: 0xffffff });
-  G.fx.burst(c, 40, [color, 0xffffff], 12, { dir: new V3(0, 1, 0), spread: 1.3 }); G.fx.burst(c, 22, 0x6a5a70, 6, { kind: 'dust', sk: 1.5 }); G.fx.light(c.clone().setY(1), color, 90, 0.35);
-  areaHit(f, c, r, { dmg, kb: [7, 7], stun: 0.6, hs: 0.1, shake: 0.15, unblock: true, noCrit: true });
-}
-function shot(f, o, G, { dmg = 40, speed = 13, homing = 0.6, r = 0.3, spread = 0 } = {}) {
-  const h = f.model.J.handL.getWorldPosition(new V3()), d = o.chest(new V3()).sub(h).normalize();
-  if (spread) d.applyAxisAngle(new V3(0, 1, 0), spread);
-  G.spawn(new Projectile(G, { owner: f, pos: h.addScaledVector(d, 0.3), vel: d.multiplyScalar(speed), r, color: f.palette.accent, homing, hit: { dmg, kb: [4, 3], stun: 0.45, hs: 0.06, noCrit: true } })); sfx('shot');
-}
-// 바닥 경고 → 기둥 폭발 (보스 2페이즈)
-function voidPillar(G, f, x, z, delay) {
-  let t = -delay; const ring = { x, z };
-  return { done: false, owner: f, update(dt) {
-    t += dt; if (t < 0) return;
-    if (t < 0.9) { if (Math.random() < 0.5) G.fx.p(new V3(x + rand(-1.4, 1.4), 0.1, z + rand(-1.4, 1.4)), { vel: [0, rand(1, 3), 0], life: 0.4, size: 0.14, color: 0xff2a3a }); if (!ring.r) { ring.r = 1; G.fx.ring(new V3(x, 0.05, z), { normal: new V3(0, 1, 0), r0: 1.7, r1: 1.6, life: 0.9, color: 0xff2a3a, op: 0.9 }); } }
-    else if (!ring.boom) {
-      ring.boom = true; G.fx.beam(new V3(x, 0, z), { r: 1.2, h: 14, color: f.palette.accent, life: 0.6 }); G.fx.burst(new V3(x, 0.5, z), 30, [f.palette.accent, 0xffffff], 10, { dir: new V3(0, 1, 0), spread: 0.6 });
-      sfx('boom'); G.shake(0.2); areaHit(f, new V3(x, 0, z), 1.6, { dmg: 85, kb: [3, 9], stun: 0.6, hs: 0.08, unblock: true, noCrit: true }, 3);
-    }
-    if (t > 1.5) this.done = true;
-  } };
-}
-
-const poses = trainer.poses;
-const pal = (accent, armor, band) => ({ accent, armor, band });
-
-/* ---------- 잡몹 ---------- */
-export const GRUNT = {
-  id: 'grunt', name: '공허 파편병', short: '파편병', title: '공허 잡병', enemy: true,
-  stats: { hp: 280, speed: 4.6, jump: 8, daze: 70, breakTime: 3 }, palettes: [pal(0xff3a5a, 0x2a2233, '#2a0612')],
-  skills: { s1: { name: '-', cd: 1 }, s2: { name: '-', cd: 1 }, ult: { name: '-', sub: '' } },
-  createModel: (p) => construct(p, 'claw'), poses,
-  moves: {
-    light1: slow(T.light1, { k: 1.3, windup: 0.45, next: 'light2', dmg: 0.7 }),
-    light2: slow(T.light2, { k: 1.3, windup: 0.15, tele: null, dmg: 0.7 }),
-    heavy: slow(T.light3, { k: 1.2, windup: 0.6, dmg: 0.8, ev: [[0.6 + 0.15 * 1.2, (f) => { sfx('zap'); }]] }),
-  },
-  ai: { range: 2.1, keep: 1.4, cdMin: 1.2, cdMax: 2.6, chain: 0.6, pick: (f, o, d) => (d < 2.6 ? (Math.random() < 0.65 ? 'light' : 'heavy') : null) },
+export const ENEMY_SETS = {
+  // 1. 일식의 신전 — 공허 결정체
+  eclipse: makeSet({ id: 'eclipse',
+    grunt: { name: '공허 파편병', short: '파편병', title: '공허 잡병', col: C(0xff3a5a, 0x2a2233, 0x15121c, { band: '#2a0612' }), model: { weapon: 'claw' } },
+    archer: { name: '공허 사수', short: '사수', title: '원거리 잡병', skill: '공허탄', col: C(0xb06aff, 0x231f33, 0x15121c, { band: '#1a0a2a' }), model: { weapon: 'dagger' }, shot: { dmg: 45 } },
+    brute: { name: '공허 파쇄자', short: '파쇄자', title: '중장갑 정예', col: C(0xff6a2a, 0x332622, 0x15121c, { band: '#2a1006' }), model: { weapon: 'hammer' } },
+    boss: { name: '공허의 기사 니힐', short: '니힐', title: '공허의 기사', s1: '공허 돌진', s2: '파멸의 강타', col: C(0xb04aff, 0x241c30, 0x15121c, { band: '#1a0628' }), model: { weapon: 'greatsword' },
+      rain: { color: 0xb04aff }, volley: { color: 0xd08aff } },
+  }),
+  // 2. 붉은 모래 협곡 — 사막 유적의 미라 · 전갈 · 사암 골렘 · 모래 파라오
+  desert: makeSet({ id: 'desert',
+    grunt: { name: '모래 미라병', short: '미라병', title: '유적의 망자', col: C(0xffc04a, 0xd8c8a0, 0x6a5a48, { cloth: 0xe8dcc0, band: '#3a2408' }), model: { weapon: 'scimitar', head: 'skull', spikes: false, flat: false }, st: ['bleed', 3, 5] },
+    archer: { name: '전갈 독궁수', short: '독궁수', title: '사막 사냥꾼', skill: '독화살', col: C(0x8aff4a, 0x7a3a1a, 0x3a2414, { band: '#1a2a08' }), model: { weapon: 'bow', head: 'beast', tail: { w: 0.9 } }, shot: { dmg: 40, color: 0x9aff4a, speed: 16, homing: 0.4, st: ['burn', 4, 6] } },
+    brute: { name: '사암 골렘', short: '골렘', title: '협곡의 수호석', col: C(0xff8a3a, 0xb06a3a, 0x7a4a2a, { band: '#2a1208' }), model: { weapon: 'rock', head: 'stone', bulk: 1.25, spikes: false }, skill: '사암 붕괴', st: ['slow', 2.5, 0.6] },
+    boss: { name: '모래 파라오 세크메트', short: '세크메트', title: '협곡의 저주받은 왕', s1: '사풍 돌진', s2: '모래 폭풍 강타', col: C(0xffd040, 0x2a3a6a, 0x1a1408, { trim: 0xffc040, cloth: 0x2a3a8a, band: '#2a1a04' }), model: { weapon: 'spear', head: 'skull', hat: 'nemes', cape: true }, st: ['slow', 2, 0.7],
+      rain: { color: 0xffb040, color2: 0xfff0b0, style: 'up', st: ['slow', 3, 0.5] }, volley: { color: 0xffc040, st: ['bleed', 3, 6] } },
+  }),
+  // 3. 빙설 요새 — 서리 늑대 · 얼음 투척병 · 예티 · 빙설 여왕
+  snow: makeSet({ id: 'snow',
+    grunt: { name: '서리 늑대병', short: '늑대병', title: '설원 약탈자', fast: true, speed: 5.4, col: C(0x7ad8ff, 0xc8d8e8, 0x3a4a5a, { band: '#08182a' }), model: { weapon: 'claw', head: 'beast', mane: true, cloth: true, tail: { w: 1.3 } }, st: ['slow', 1.5, 0.75] },
+    archer: { name: '얼음 투척병', short: '투척병', title: '요새의 척후', skill: '고드름 투척', col: C(0x9af0ff, 0x4a6a8a, 0x1a2a3a, { band: '#0a1a2a' }), model: { weapon: 'orb', head: 'hood' }, shot: { dmg: 42, color: 0xbaf4ff, speed: 14, st: ['slow', 2.5, 0.55] } },
+    brute: { name: '설원 예티', short: '예티', title: '빙하의 거수', scale: 1.5, col: C(0x6ac8ff, 0xf0f4f8, 0x8a9aaa, { cloth: 0xf0f4f8, band: '#0a1a2a' }), model: { weapon: 'club', head: 'beast', mane: true, bulk: 1.35, flat: false, smooth: true }, skill: '빙하 내려찍기', st: ['slow', 3, 0.5] },
+    boss: { name: '빙설 여왕 이스벨', short: '이스벨', title: '얼어붙은 요새의 주인', s1: '서리 질주', s2: '빙결 파동', col: C(0x8ae8ff, 0xd8ecff, 0x2a3a5a, { trim: 0xc8f0ff, cloth: 0x4a7aaa, band: '#06142a' }), model: { weapon: 'staff', head: 'crystal', crown: true, cape: true, wings: 'glow' }, st: ['slow', 2, 0.65],
+      rain: { color: 0xa8f0ff, color2: 0xffffff, style: 'fall', st: ['slow', 3.5, 0.4], n: 6 }, volley: { color: 0xc8f8ff, st: ['slow', 2, 0.6] } },
+  }),
+  // 4. 바람의 평원 — 고블린 · 고블린 투석병 · 오우거 · 폭풍 켄타우로스
+  plains: makeSet({ id: 'plains',
+    grunt: { name: '고블린 약탈자', short: '고블린', title: '마을 습격대', fast: true, speed: 5.2, scale: 0.85, hp: 240, col: C(0xd8ff4a, 0x4a7a2a, 0x3a2a1a, { band: '#14240a' }), model: { weapon: 'dagger', head: 'goblin', spikes: false } },
+    archer: { name: '고블린 투석병', short: '투석병', title: '언덕의 매복병', skill: '돌팔매', scale: 0.85, col: C(0xffe08a, 0x5a7a2a, 0x3a2a1a, { band: '#14240a' }), model: { weapon: 'rock', head: 'goblin', spikes: false }, shot: { dmg: 46, color: 0xc8b090, speed: 15, homing: 0.3, arc: 0.18 } },
+    brute: { name: '평원 오우거', short: '오우거', title: '건초밭의 폭군', scale: 1.55, hp: 1000, col: C(0xffa04a, 0x8a9a5a, 0x5a4a3a, { cloth: 0x6a4a2a, band: '#241a0a' }), model: { weapon: 'club', head: 'mask', bulk: 1.4, flat: false, smooth: true, spikes: false }, skill: '몽둥이 내려찍기' },
+    boss: { name: '폭풍 켄타우로스 갈레', short: '갈레', title: '평원을 달리는 폭풍', speed: 5.4, s1: '질풍 돌격', s2: '돌풍 짓밟기', col: C(0x7affd0, 0x3a6a4a, 0x2a2014, { trim: 0xd8c070, cloth: 0x2a5a3a, band: '#06241a' }), model: { weapon: 'spear', head: 'helmet', mane: true, tail: { w: 1.2 } },
+      rain: { color: 0x9affe0, color2: 0xffffff, style: 'up', n: 6, gap: 0.18 }, volley: { color: 0xb8ffe8, n: 6, speed: 18 } },
+  }),
+  // 5. 노을빛 해상 — 해골 해적 · 해적 총잡이 · 심해 어인 · 유령 선장
+  ocean: makeSet({ id: 'ocean',
+    grunt: { name: '해골 해적', short: '해골', title: '저주받은 선원', col: C(0x4affd8, 0xe8e0c8, 0x2a2a3a, { cloth: 0x8a1a2a, band: '#08201e' }), model: { weapon: 'scimitar', head: 'skull', spikes: false, flat: false }, st: ['bleed', 3, 5] },
+    archer: { name: '해적 총잡이', short: '총잡이', title: '갑판의 사수', skill: '권총 사격', col: C(0xffd060, 0x6a3a2a, 0x1a1a24, { trim: 0xd8a040, band: '#241608' }), model: { weapon: 'pistol', head: 'skull', hat: 'tricorn', spikes: false }, shot: { dmg: 48, color: 0xffe08a, speed: 24, homing: 0.15, r: 0.2 } },
+    brute: { name: '심해 어인', short: '어인', title: '바다 밑의 전사', scale: 1.45, col: C(0x3affc8, 0x2a6a7a, 0x1a3a4a, { cloth: 0x3a9aa8, band: '#04202a' }), model: { weapon: 'trident', head: 'fish', fins: true, bulk: 1.2, flat: false, smooth: true, spikes: false }, skill: '해일 강타', st: ['slow', 2.5, 0.6] },
+    boss: { name: '유령 선장 블랙타이드', short: '블랙타이드', title: '노을 바다의 망령', s1: '망령 돌진', s2: '심해의 일격', col: C(0x5affd0, 0x1a2a3a, 0x0a1218, { trim: 0xd8a040, cloth: 0x2a0a14, band: '#041a1a' }), model: { weapon: 'sword', head: 'skull', hat: 'tricorn', cape: true }, st: ['slow', 2, 0.7],
+      rain: { color: 0xffa040, color2: 0x2a2a2a, style: 'fall', dmg: 90 }, volley: { color: 0x7affe0, st: ['slow', 2, 0.6] } },
+  }),
+  // 6. 용암 분화구 — 용암 임프 · 화염 술사 · 흑요석 골렘 · 화염 거인
+  volcano: makeSet({ id: 'volcano',
+    grunt: { name: '용암 임프', short: '임프', title: '분화구의 졸개', fast: true, speed: 5.2, scale: 0.85, hp: 240, col: C(0xff6a1a, 0x5a1a10, 0x2a0a06, { trim: 0x2a1a1a, band: '#2a0a04' }), model: { weapon: 'claw', head: 'mask', horns: 0.12, tail: { glow: true }, wings: true, cloth: 0x3a1010 }, st: ['burn', 3, 6] },
+    archer: { name: '화염 술사', short: '술사', title: '불꽃 교단', skill: '화염구', col: C(0xff8a2a, 0x3a1a14, 0x1a0806, { cloth: 0x5a1a10, band: '#2a0a04' }), model: { weapon: 'flame', head: 'hood' }, shot: { dmg: 40, color: 0xff7a2a, speed: 12, homing: 0.8, r: 0.36, st: ['burn', 4, 8] } },
+    brute: { name: '흑요석 골렘', short: '흑요석', title: '용암의 핵', scale: 1.5, col: C(0xff5a10, 0x1a1418, 0x0a0808, { band: '#2a0804' }), model: { weapon: 'rock', head: 'stone', bulk: 1.3, metal: 0.7, rough: 0.2 }, skill: '용암 분출', st: ['burn', 4, 10] },
+    boss: { name: '화염 거인 수르트', short: '수르트', title: '분화구의 왕', scale: 1.75, s1: '불꽃 돌진', s2: '대지 용융', col: C(0xff4a10, 0x2a1410, 0x140806, { trim: 0xff8a2a, cloth: 0x3a0a06, band: '#2a0604' }), model: { weapon: 'greatsword', head: 'mask', horns: 0.22, crown: true, bulk: 1.15 }, st: ['burn', 3, 8],
+      rain: { color: 0xff5a10, color2: 0xffd080, style: 'fall', st: ['burn', 4, 10], n: 6 }, volley: { color: 0xff7a2a, st: ['burn', 3, 8] } },
+  }),
+  // 7. 천봉 정상 — 산악 수행승 · 바람매 궁수 · 돌 수호상 · 천둥 산신
+  peak: makeSet({ id: 'peak',
+    grunt: { name: '타락한 수행승', short: '수행승', title: '정상의 파계승', fast: true, col: C(0xffb04a, 0xa83a1a, 0x2a1a14, { cloth: 0xc84a1a, band: '#2a1004' }), model: { weapon: 'staff', head: 'beast', spikes: false, hat: 'straw' } },
+    archer: { name: '바람매 궁수', short: '매궁수', title: '하늘 사냥꾼', skill: '바람 화살', col: C(0xa8e0ff, 0x5a4a3a, 0x2a2420, { cloth: 0x6a5a4a, band: '#0a1a2a' }), model: { weapon: 'bow', head: 'beast', wings: true, spikes: false }, shot: { dmg: 22, n: 3, color: 0xc8f0ff, speed: 20, homing: 0.3, r: 0.22 } },
+    brute: { name: '돌 수호상', short: '수호상', title: '불탑의 문지기', scale: 1.5, col: C(0x7ad0ff, 0x8a8a80, 0x5a5a54, { band: '#14181a' }), model: { weapon: 'axe', head: 'stone', bulk: 1.3, rough: 0.8, metal: 0.1 }, skill: '바위 내려찍기', st: ['slow', 2, 0.6] },
+    boss: { name: '천둥 산신 뇌공', short: '뇌공', title: '구름 위의 산신', s1: '번개 돌진', s2: '뇌성 강타', col: C(0x8ad8ff, 0x2a2a4a, 0x10101c, { trim: 0xffd060, cloth: 0x3a3a6a, band: '#060a2a' }), model: { weapon: 'hammer', head: 'mask', horns: 0.14, halo: true, cape: true }, st: ['vuln', 3, 1.15],
+      rain: { color: 0x9ae0ff, color2: 0xffffff, style: 'fall', st: ['vuln', 3, 1.2], n: 7, gap: 0.15, warn: 0.75 }, volley: { color: 0xbaf0ff, n: 7, speed: 22, st: ['vuln', 2, 1.15] } },
+  }),
+  // 8. 죽림 사당 — 그림자 닌자 · 수리검 닌자 · 오니 · 구미호
+  bamboo: makeSet({ id: 'bamboo',
+    grunt: { name: '그림자 닌자', short: '닌자', title: '죽림의 자객', fast: true, speed: 5.6, hp: 250, col: C(0xff3a4a, 0x1a1a24, 0x0a0a10, { cloth: 0x14141c, band: '#1a0408' }), model: { weapon: 'katana', head: 'hood', spikes: false }, st: ['bleed', 3, 6] },
+    archer: { name: '수리검 닌자', short: '수리검', title: '나무 위의 눈', skill: '수리검 난사', col: C(0xc8c8ff, 0x24243a, 0x0a0a14, { cloth: 0x1a1a2a, band: '#0a0a1a' }), model: { weapon: 'shuriken', head: 'hood', spikes: false }, shot: { dmg: 20, n: 3, color: 0xd8d8ff, speed: 19, homing: 0.2, r: 0.2, st: ['bleed', 2, 5] } },
+    brute: { name: '사당의 오니', short: '오니', title: '붉은 도깨비', scale: 1.55, col: C(0xffd040, 0xc83a2a, 0x5a1a14, { trim: 0xe8e0c8, cloth: 0x2a2a3a, band: '#2a0806' }), model: { weapon: 'club', head: 'mask', horns: 0.14, bulk: 1.35, flat: false, smooth: true, spikes: false }, skill: '도깨비 방망이' },
+    boss: { name: '구미호 쿠즈하', short: '쿠즈하', title: '사당을 삼킨 여우', speed: 5.2, s1: '여우불 질주', s2: '요기 폭발', col: C(0xff7ad0, 0xf0e8f0, 0x2a1a2a, { trim: 0xff5a8a, cloth: 0xc82a4a, band: '#2a0a1a' }), model: { weapon: 'katana', head: 'beast', tail: { w: 1.2, n: 9 }, cape: true }, st: ['bleed', 3, 6],
+      rain: { color: 0x8a6aff, color2: 0xff8ad0, style: 'up', n: 9, gap: 0.12, r: 1.3, dmg: 70 }, volley: { color: 0xa88aff, n: 9, speed: 13, st: ['bleed', 3, 5] } },
+  }),
+  // 9. 네온 시티 옥상 — 사이버 깡패 · 저격 드로이드 · 중장갑 메크 · 메가 메크
+  neon: makeSet({ id: 'neon',
+    grunt: { name: '사이버 깡패', short: '깡패', title: '옥상 갱단', fast: true, col: C(0xff2ad8, 0x2a2a3a, 0x14141c, { trim: 0x2affff, band: '#1a0420' }), model: { weapon: 'sword', head: 'visor', spikes: false }, st: ['vuln', 2, 1.1] },
+    archer: { name: '저격 드로이드', short: '드로이드', title: '보안 시스템', skill: '레이저 사격', col: C(0x2affff, 0x3a3a4a, 0x1a1a24, { trim: 0xff2ad8, band: '#04202a' }), model: { weapon: 'blaster', head: 'visor', spikes: false, metal: 0.8, rough: 0.2 }, shot: { dmg: 44, color: 0x4affff, speed: 28, homing: 0.1, r: 0.18, st: ['vuln', 3, 1.12] } },
+    brute: { name: '중장갑 메크', short: '메크', title: '진압용 기체', scale: 1.5, col: C(0xffd02a, 0x4a4a5a, 0x2a2a34, { trim: 0xffd02a, band: '#2a2004' }), model: { weapon: 'hammer', head: 'visor', bulk: 1.35, pack: true, metal: 0.8, rough: 0.25 }, skill: '파일 드라이버' },
+    boss: { name: '메가 메크 오버클럭', short: '오버클럭', title: '옥상의 최종 병기', scale: 1.8, s1: '부스터 돌진', s2: '충격 착지', col: C(0xff2a6a, 0x2a2a38, 0x101018, { trim: 0x2affff, band: '#20041a' }), model: { weapon: 'greatsword', head: 'visor', pack: true, bulk: 1.2, wings: 'glow', metal: 0.85, rough: 0.2 }, st: ['vuln', 2, 1.12],
+      rain: { color: 0xff3a8a, color2: 0x4affff, style: 'fall', n: 7, gap: 0.14, dmg: 80 }, volley: { color: 0x4affff, n: 6, speed: 26, st: ['vuln', 2, 1.15] } },
+  }),
+  // 10. 궤도 성역 — 별빛 수호병 · 성좌 마법사 · 수정 거상 · 성좌의 심판자
+  orbit: makeSet({ id: 'orbit',
+    grunt: { name: '별빛 수호병', short: '수호병', title: '성역의 파수꾼', col: C(0x9ab8ff, 0xe8e8f0, 0x2a2a3a, { trim: 0xd8c070, band: '#0a0a2a' }), model: { weapon: 'spear', head: 'helmet', spikes: false } },
+    archer: { name: '성좌 마법사', short: '마법사', title: '별을 읽는 자', skill: '성광탄', col: C(0xd0a8ff, 0x3a2a6a, 0x14102a, { cloth: 0x2a1a5a, trim: 0xd8c070, band: '#120a2a' }), model: { weapon: 'staff', head: 'hood', halo: true }, shot: { dmg: 24, n: 3, color: 0xe0c8ff, speed: 11, homing: 0.9, r: 0.26, st: ['slow', 2, 0.7] } },
+    brute: { name: '수정 거상', short: '거상', title: '궤도의 기둥', scale: 1.55, col: C(0x8ae0ff, 0x9ad8f0, 0x3a4a6a, { band: '#04142a' }), model: { weapon: 'greatsword', head: 'crystal', bulk: 1.3, metal: 0.2, rough: 0.05 }, skill: '수정 붕괴', st: ['slow', 2.5, 0.55] },
+    boss: { name: '성좌의 심판자 아스트라', short: '아스트라', title: '궤도 성역의 천칭', s1: '유성 돌진', s2: '중력 붕괴', col: C(0xffe08a, 0xf0f0ff, 0x1a1a3a, { trim: 0xffd060, cloth: 0x3a3a8a, band: '#0a0a2a' }), model: { weapon: 'spear', head: 'star', halo: true, wings: 'glow', crown: true }, st: ['slow', 2, 0.65],
+      rain: { color: 0xffe08a, color2: 0x9ab8ff, style: 'fall', n: 7, st: ['slow', 3, 0.45] }, volley: { color: 0xfff0b0, n: 7, speed: 12, st: ['slow', 2, 0.6] } },
+  }),
 };
-export const ARCHER = {
-  id: 'archer', name: '공허 사수', short: '사수', title: '원거리 잡병', enemy: true,
-  stats: { hp: 210, speed: 4.2, jump: 8, daze: 55, breakTime: 3 }, palettes: [pal(0xb06aff, 0x231f33, '#1a0a2a')],
-  skills: { s1: { name: '공허탄', cd: 2.2 }, s2: { name: '-', cd: 1 }, ult: { name: '-', sub: '' } },
-  createModel: (p) => construct(p, 'dagger'), poses,
-  moves: {
-    light1: slow(T.light1, { k: 1.3, windup: 0.4, dmg: 0.6 }),
-    s1: { ...slow(T.s1, { k: 1.4, windup: 0.5, ev: [[0.5 + 0.24 * 1.4, (f, o, G) => o && shot(f, o, G, { dmg: 45 })]] }), cd: 's1', tick: undefined },
-  },
-  ai: { range: 11, keep: 7, cdMin: 1.0, cdMax: 2.2, pick: (f, o, d) => (d > 4 && f.cd.s1 <= 0 ? 's1' : d < 2.6 ? 'light' : null) },
-};
-export const BRUTE = {
-  id: 'brute', name: '공허 파쇄자', short: '파쇄자', title: '중장갑 정예', enemy: true, scale: 1.4,
-  stats: { hp: 900, speed: 3.4, jump: 7, daze: 150, armor: true, breakTime: 4 }, palettes: [pal(0xff6a2a, 0x332622, '#2a1006')],
-  skills: { s1: { name: '-', cd: 1 }, s2: { name: '지면 강타', cd: 6 }, ult: { name: '-', sub: '' } },
-  createModel: (p) => construct(p, 'hammer'), poses,
-  moves: {
-    light1: slow(T.light2, { k: 1.5, windup: 0.6, dmg: 1.5, ev: [[0.6 + 0.09 * 1.5, chop]] }),
-    s2: { ...slow(T.s2, { k: 1.2, windup: 0.7, tele: 'red', ev: [[0.7 + 0.1 * 1.2, (f) => { f.vel.y = 5; f.onGround = false; }], [0.7 + 0.55 * 1.2, (f, o, G) => slam(f, G, 4.5, 110, f.palette.accent)]] }), cd: 's2' },
-  },
-  ai: { range: 2.9, keep: 2, cdMin: 1.6, cdMax: 3, pick: (f, o, d) => (d < 3.4 ? (f.cd.s2 <= 0 && Math.random() < 0.45 ? 's2' : 'light') : null) },
-};
-
-/* ---------- 보스 ---------- */
-export const BOSS = {
-  id: 'boss', name: '공허의 기사 니힐', short: '니힐', title: '공허의 기사', enemy: true, boss: true, scale: 1.6,
-  stats: { hp: 4200, speed: 4.6, jump: 9, daze: 340, armor: true, breakTime: 5 }, palettes: [pal(0xb04aff, 0x241c30, '#1a0628')],
-  skills: { s1: { name: '공허 돌진', cd: 6 }, s2: { name: '파멸의 강타', cd: 8 }, ult: { name: '-', sub: '' } },
-  createModel: (p) => construct(p, 'greatsword'), poses,
-  moves: {
-    light1: slow(T.light1, { k: 1.25, windup: 0.5, next: 'light2', dmg: 1.6, ev: [[0.5 + 0.08 * 1.25, swish]] }),
-    light2: slow(T.light2, { k: 1.25, windup: 0.2, tele: null, next: 'light3', dmg: 1.6, ev: [[0.2 + 0.09 * 1.25, chop]] }),
-    light3: slow(T.light3, { k: 1.2, windup: 0.35, tele: 'yellow', dmg: 1.5 }),
-    heavy: slow(T.heavy, { k: 1.2, windup: 0.55, dmg: 1.4 }),
-    // 공허 돌진: 빨간 예고 뒤 멀리서 단숨에 베어 지나간다 (회피해야 함)
-    s1: { ...slow(T.light3, { k: 1.0, windup: 0.75, tele: 'red', unblock: true, dmg: 1.8, lunge: [[0.75 + 0.12, 0.75 + 0.36, 20]], ev: [[0.75 + 0.12, (f, o, G) => { sfx('dash'); G.fx.burst(f.chest(), 20, f.palette.accent, 6); }]] }), cd: 's1' },
-    s2: { ...slow(T.s2, { k: 1.15, windup: 0.8, tele: 'red', ev: [[0.8 + 0.1 * 1.15, (f) => { f.vel.y = 7; f.onGround = false; }], [0.8 + 0.55 * 1.15, (f, o, G) => {
-      slam(f, G, 5.5, 130, f.palette.accent);
-      for (let i = 1; i <= 2; i++) G.spawn({ done: false, t: 0, update(dt) { this.t += dt; if (this.t > i * 0.35 && !this.d) { this.d = true; const c = f.pos.clone().setY(0.06); G.fx.ring(c, { normal: new V3(0, 1, 0), r0: 2, r1: 5.5 + i * 3, life: 0.6, color: f.palette.accent }); areaHit(f, c, 5.5 + i * 3, { dmg: 50, kb: [6, 5], stun: 0.4, unblock: true, noCrit: true }, 0.5); } if (this.t > 1.2) this.done = true; } });
-    }]] }), cd: 's2' },
-    // 2페이즈 전용: 플레이어 발밑에 공허 기둥 연속 소환
-    rain: { dur: 1.6, aim: true, track: 0.4, tele: [0.2, 'red'], keys: [[0, 'base'], [0.3, { shoulderR: [-3.0, 0, -0.2], spine: [-0.2, 0, 0] }], [1.2, {}], [1.6, 'base']],
-      ev: [[0.45, (f, o, G) => { if (!o) return; sfx('charge'); for (let i = 0; i < 5; i++) { const a = rand(0, TAU), r = i === 0 ? 0 : rand(1.5, 4); G.spawn(voidPillar(G, f, o.pos.x + Math.cos(a) * r, o.pos.z + Math.sin(a) * r, i * 0.22)); } }]] },
-  },
-  ai: { range: 3.4, keep: 2.2, cdMin: 0.9, cdMax: 2.0, chain: 0.85,
-    pick: (f, o, d) => {
-      if (f.enraged && Math.random() < 0.25) return 'rain';
-      if (d > 5 && f.cd.s1 <= 0) return 's1';
-      if (d < 4 && f.cd.s2 <= 0 && Math.random() < 0.35) return 's2';
-      if (d < 3.6) return Math.random() < 0.7 ? 'light' : 'heavy';
-      return f.cd.s1 <= 0 ? 's1' : null;
-    } },
-};
-BOSS.ai.range = 8; // 멀리서도 돌진을 고를 수 있게 (근접 기술은 pick 에서 거리로 거른다)
-
-export const ENEMIES = { grunt: GRUNT, archer: ARCHER, brute: BRUTE, boss: BOSS };
-// 토벌전 구성 (마지막은 보스)
+// 맵에 맞는 세트 (모르는 맵이면 일식의 신전 세트)
+export const enemiesFor = (mapId) => ENEMY_SETS[mapId] || ENEMY_SETS.eclipse;
+export const ENEMIES = ENEMY_SETS.eclipse;
+// 토벌전 구성 (역할 이름, 마지막은 보스)
 export const WAVES = [['grunt', 'grunt', 'grunt'], ['grunt', 'archer', 'grunt', 'archer'], ['brute', 'grunt', 'archer'], ['boss']];
