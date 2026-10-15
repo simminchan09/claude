@@ -163,8 +163,8 @@ class HookShot {
         sfx('block'); G.fx.burst(this.pos, 16, TOX, 5);
         if (r === 'hit' && f.act === moves.heavy) {
           this.hooked = t; this.phase = 'pull'; this.t = 0; addHunt(f, 20);
-          const heavyFoe = t.scale > 1.2 || t.def.boss || (t.def.stats && t.def.stats.armor);
-          this.mode = heavyFoe || f.dist() > 9 ? 'me' : 'them'; G.say(f, this.mode === 'me' ? '"도망칠 곳은 없다."' : '"이리 와."');
+          // 거리 · 덩치와 상관없이 항상 상대를 내 앞으로 끌어온다
+          this.mode = 'them'; f.faceOpp(); G.say(f, '"이리 와."');
         } else { this.phase = 'back'; this.t = 0; }
         break;
       }
@@ -465,7 +465,7 @@ export default {
   aiPick, aimRange: 15, aiRange: [2.4, 4.4], onReset,
   resource: (f) => hunt(f) >= 100 ? { v: 1, label: '사냥', color: MAG2, full: true } : { v: hunt(f) / 100, label: '사냥', color: MAG },
   moveList: [['좌클 ×4', '사슬 연격 (사거리 약 4.2m): 가로 채찍 42 → 되돌아오는 역채찍 44 → 머리 위에서 내려치는 채찍 44 → 머리 위로 갈고리를 돌리다 내던짐 26 · 끌어당기며 훑기 24'], ['공중 좌클', '사슬을 휘돌렸다가 갈고리째 내리꽂아 독을 튀김'],
-    ['우클 · 사냥 갈고리', '갈고리를 최대 17m 던져 꽂히면 끌어온다 28 (9m 안이면 상대를, 멀거나 무거운 상대면 내 몸을) → 아가리로 물기 62. 사냥 게이지가 가득 차면 세 번 물어뜯는 처형 물기 36 · 36 · 54 + 출혈'],
+    ['우클 · 사냥 갈고리', '갈고리를 최대 17m 던져 꽂히면 상대를 내 앞으로 끌어온다 28 (거리 · 덩치 상관없이) → 아가리로 물기 62. 사냥 게이지가 가득 차면 세 번 물어뜯는 처형 물기 36 · 36 · 54 + 출혈'],
     ['Shift · 독병 투척', '아가리에 문 독병을 최대 12m 포물선으로 던져 깨뜨림 32 + 출혈 → 4.5초 동안 자홍 독구름 (안에 있으면 출혈 초당 12 · 둔화)'],
     ['E · 아가리 포식', '부풀어 오른 아가리를 벌리고 돌진해 처음 걸린 적을 물어 올림 24 → 물고 흔들며 네 번 씹기 14 ×4 (체력 흡수 초당 12) → 뱉어 날려 보냄 36 + 출혈'],
     ['Q · 처형의 사슬', '갈고리를 던져 사슬로 칭칭 감아 묶음 26 → 머리 위로 한 바퀴 휘돌린 뒤 앞 · 뒤 · 앞으로 세 번 메다꽂기 30 ×3 → 끌어당겨 독 폭발 160 + 출혈 · 둔화'],
