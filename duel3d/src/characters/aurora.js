@@ -280,7 +280,7 @@ const moves = {
     end: (f) => { gem(f, 0); pull(f, 0); } },
 
   /* --- 우클: 뇌광 관통시 — 끝까지 당겨 번개를 두른 화살을 쏜다 (관통). 모은 잔광을 모두 실어, 칸마다 피해 ↑ · 낙뢰가 따라 떨어진다 --- */
-  // 차징: 우클을 누르고 있으면 끝까지 당긴 채로 힘을 모은다 (최대 1.2초 · 짧게 쏘면 ×0.7, 완충 ×1.6)
+  // 차징: 우클을 누르고 있으면 끝까지 당긴 채로 힘을 모은다 (최대 1.2초 · 누른 시간에 비례: 바로 떼면 ×0.4 → 완충 ×2.0)
   heavy: { dur: 1.0, cd: 'heavy', ikOff: true, track: 0.5, shout: true, noMove: true, hold: { key: 'heavy', at: 0.52, max: 1.2 },
     keys: [[0, 'aimPrep'], [0.16, 'aim'], [0.5, 'draw'], [0.58, { ...poses.aim, spine: [-0.08, 0.35, 0], weapon: [0.12, 0.1, 0.5] }], [0.78, {}], [1.0, 'base']],
     start: (f, o, G) => { f.shotC = charges(f); gem(f, 1); sfx('charge'); G.say(f, f.shotC >= 3 ? '"모든 빛이여 — 꿰뚫어라."' : '"빛이여, 꿰뚫어라."'); },
@@ -288,7 +288,7 @@ const moves = {
         for (let i = 0; i < n; i++) { const a = rand(0, TAU), q = p.clone().add(new V3(Math.cos(a) * 0.9, rand(-0.6, 0.6), Math.sin(a) * 0.9)), v = p.clone().sub(q).multiplyScalar(5); G.fx.p(q, { vel: [v.x, v.y, v.z], size: 0.12, size1: 0.03, life: 0.2, color: LIGHTS[i % 3], alpha: 0.9 }); }
         if (Math.random() < 0.5) zap(G, p, p.clone().add(new V3(rand(-0.6, 0.6), rand(-0.6, 0.6), rand(-0.6, 0.6))), { w: 0.6, amp: 0.1 }); } },
     ev: [[0.56, (f, o, G) => { const c = f.shotC; f.glowP = Math.max(0, (f.glowP || 0) - c * CHARGE); pull(f, 0); sfx('shot'); sfx('zap'); sfx('heavy'); G.shake(0.1); G.flash(BOLT, 0.12 + c * 0.04);
-        const hk = 0.7 + 0.9 * (f.holdK || 0), dir = shoot(f, G, { dmg: Math.round((70 + c * 16) * hk), speed: 80, size: (1.7 + c * 0.25) * (0.85 + 0.45 * (f.holdK || 0)), pierce: true, bolt: true, life: 0.7, kb: [7, 2.5], stun: 0.75, hs: 0.12, daze: 30, hit: { shake: 0.16, snd: 'big' },
+        const hk = 0.4 + 1.6 * (f.holdK || 0), dir = shoot(f, G, { dmg: Math.round((70 + c * 16) * hk), speed: 80, size: (1.7 + c * 0.25) * (0.85 + 0.45 * (f.holdK || 0)), pierce: true, bolt: true, life: 0.7, kb: [7, 2.5], stun: 0.75, hs: 0.12, daze: 30, hit: { shake: 0.16, snd: 'big' },
           onHit: (ar, t, res) => { if (res !== 'hit' || !c) return; let k = 0; G.spawn({ t: 0, done: false, update(dt) { this.t += dt; while (k < c && this.t >= 0.22 + k * 0.16) { k++; if (!t.gone && t.state !== 'ko') skyStrike(G, f, t.pos.clone().setY(t.onGround ? t.pos.y : 0), { dmg: 20, kb: [0.5, 3], stun: 0.5, hs: 0.06, daze: 12, noCrit: true, force: false }, 1.1); } if (k >= c) this.done = true; }, kill() { this.done = true; } }); } });
         const from = f.model.tipPos(new V3()); zap(G, from, from.clone().addScaledVector(dir, 6), { w: 1.4, amp: 0.25, branch: 2 }); G.fx.ring(from, { r0: 0.1, r1: 1.4, life: 0.28, color: ICE, billboard: true }); G.fx.light(from, BOLT, 90, 0.25);
         f.vel.addScaledVector(dir.clone().setY(0).normalize(), -5); }],
