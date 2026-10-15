@@ -1312,12 +1312,18 @@ function fitCol(fid,obj,shrink,capTop,room){
 /* 장비 설치 — 조작 패널이 문을 향하고, 판정은 장비 앞면 바로 앞에 붙는다 */
 function install(fid,builder,x,z,ry,opt){
   const g=F[fid].group, m=builder();
-  m.position.set(x,0,z); m.rotation.y=ry||0;
+  if(DETAIL[opt.id]) DETAIL[opt.id](m,m.userData.parts||{});   // 장비별 외관 디테일
+  m.position.set(x,0,z); m.rotation.y=(ry||0)+PI;     // 조작 패널·로드포트(로컬 +z)가 문 쪽을 향하도록
   if(opt.scale) m.scale.setScalar(opt.scale);
   g.add(m);
+  const dirX = -Math.sin(ry||0);                       // 장비 정면 방향(월드 x)
+  if(opt.room){                                        // 문 쪽에 설 자리가 남도록 뒤로 민다
+    const bb0=new T.Box3().setFromObject(m);
+    const face=dirX>0?bb0.max.x:bb0.min.x, wall=opt.room.x+dirX*opt.room.w/2, clr=(wall-face)*dirX;
+    if(clr<1.8) m.position.x-=dirX*(1.8-clr);
+  }
   const c=fitCol(fid,m,0.1,opt.ctop||5.5,opt.room);
   const s=opt.scale||1;
-  const dirX = -Math.sin(ry||0);                       // 장비 정면 방향(월드 x)
   const lat  = (ry||0)<0 ? -1 : 1;                     // 장비 길이축 -> 월드 z
   const front = c.x + dirX*(c.hw+0.55);
   const side  = c.z + lat*(opt.px||0)*s;
@@ -1327,6 +1333,7 @@ function install(fid,builder,x,z,ry,opt){
   slot.position.set(c.x + dirX*(c.hw-0.18), opt.sly||1.22, side);
   g.add(slot); rec.slot=slot;
   m.userData.rec=rec; rec.col=c; rec.room=opt.room||null;
+  decorateInstall(fid,rec,m,c,dirX,opt);
   return m;
 }
 /* 재료 수령대 */
@@ -3184,6 +3191,7 @@ function applyLive(t){
   if(!vals) return;
   try{ fn(rec.mach.userData.parts||{}, vals, t); }catch(e){}
   try{ fxLightApply(rec, vals); }catch(e){}
+  try{ progApply(rec, vals, t); }catch(e){ if(!progApply.err){ progApply.err=1; console.error(e); } }
 }
 
 /* ============================================================
@@ -3614,7 +3622,7 @@ function sideProgress(p,stepText){
   if(!SIDE.prog||paramPane.style.display!=='flex') return;
   SIDE.prog.style.width=Math.round(p*100)+'%';
   SIDE.step.textContent='▸ '+stepText+'  ·  '+Math.round(p*100)+'%';
-  if(SIDE.rec) renderStat(SIDE.rec,paramVals,'가동 중 '+Math.round(p*100)+'%');
+  if(SIDE.rec){ renderStat(SIDE.rec,paramVals,'가동 중 '+Math.round(p*100)+'%'); pvRows(SIDE.rec,paramVals,p); }
 }
 function showResult(g,after){
   const mk=(tag,cls,txt)=>{ const e=document.createElement(tag); if(cls)e.className=cls; if(txt!==undefined)e.textContent=txt; return e; };
@@ -4718,6 +4726,495 @@ function frame(){
 
   renderer.render(scene,camera);
 }
+
+/* ============================================================
+   장비 외관 디테일 + 가동 중 실시간 변화
+   - DETAIL: 장비별 부품(호스·볼트·게이지·창·내부 구조) 추가, 속이 가려진 외장은 투명 창으로
+   - decorateInstall: 운전 콘솔(실시간 HMI 화면) · 천장 행거 사인 · 바닥 안전선 · 배기 덕트
+   - PROG: 공정 진행률(0→1)에 따라 결과물이 실제로 변해 가는 모습 + 파티클
+   ============================================================ */
+M.hoseR=mat(0x9a3a30); M.hoseB=mat(0x2f5f9e); M.hoseY=mat(0xc9a43a);
+const _c1=new T.Color(), _c2=new T.Color();
+function kids(g,type,a,b,c){
+  return g.children.filter(o=>{ const q=o.geometry&&o.geometry.parameters; if(!q) return false;
+    if(type==='box') return q.width===a&&q.height===b&&q.depth===c;
+    if(type==='sph') return o.geometry.type==='SphereGeometry'&&q.radius===a;
+    return q.radiusTop===a&&q.radiusBottom===b&&q.height===c; });
+}
+function kid(g,type,a,b,c){ return kids(g,type,a,b,c)[0]||null; }
+const shellEdge=new T.LineBasicMaterial({color:0xa9bcc4,transparent:true,opacity:0.75});
+function glassify(mesh,op){                            // 불투명 외장 → 안이 보이는 관측창
+  if(!mesh) return;
+  mesh.material=new T.MeshLambertMaterial({color:0xd6e9ef,transparent:true,opacity:op||0.2,depthWrite:false,side:T.DoubleSide});
+  if(T.EdgesGeometry) mesh.add(new T.LineSegments(new T.EdgesGeometry(mesh.geometry,30),shellEdge));
+}
+function glow(c,op){ return new T.MeshBasicMaterial({color:c,transparent:true,opacity:op||0,depthWrite:false,side:T.DoubleSide}); }
+function fx(P,o){ (P.__fx=P.__fx||[]).push(o); o.visible=false; return o; }      // 가동 중에만 보이는 연출 메시
+function tint(P,mesh,hex,k){                           // 결과물 색 변화 (원래 색 기억 → 끝나면 복원)
+  if(!mesh||!mesh.material||!mesh.material.color) return;
+  const u=mesh.userData;
+  if(mesh.material!==u.tMat){ u.tMat=mesh.material.clone(); u.tOrig=u.tMat.color.getHex(); mesh.material=u.tMat;
+    P.__tint=P.__tint||[]; if(P.__tint.indexOf(mesh)<0) P.__tint.push(mesh); }
+  _c1.setHex(u.tOrig); _c2.setHex(hex); mesh.material.color.copy(_c1).lerp(_c2,cl(k,0,1));
+}
+/* 박막 간섭색 (SiO₂ 두께 nm → 보이는 색) */
+const FILM=[[0,0x8e9aa6],[40,0xa8906a],[70,0x8a5a86],[100,0x3d4fb4],[140,0x5ea6dc],[180,0xcfd8b0],[210,0xd9b54a],
+  [260,0xb8508a],[310,0x4a5ac4],[360,0x4fb0c4],[410,0x8cc85a],[470,0xd4b456],[520,0xc0607a],[580,0x6a62c4],[640,0x56b4a4]];
+function filmColor(nm){
+  nm=Math.max(0,nm); if(nm>640) nm=330+(nm-330)%310;
+  for(let i=1;i<FILM.length;i++) if(nm<=FILM[i][0]){ const a=FILM[i-1], b=FILM[i];
+    return _c1.setHex(a[1]).lerp(_c2.setHex(b[1]),(nm-a[0])/(b[0]-a[0])).getHex(); }
+  return FILM[FILM.length-1][1];
+}
+/* 파티클 (연기 · 슬러리 · 거품 · 스파크 · 김) */
+const PART={live:[],pool:[]}, partGeo=new T.SphereGeometry(1,6,4);
+const rnd=(a,b)=>a+Math.random()*(b-a);
+function nEmit(rate,dt){ return Math.floor(rate*dt+Math.random()); }
+function emit(par,x,y,z,vx,vy,vz,life,col,size,grav){
+  if(PART.live.length>360) return;
+  const m=PART.pool.pop()||new T.Mesh(partGeo,new T.MeshBasicMaterial({transparent:true,depthWrite:false}));
+  m.material.color.setHex(col); m.scale.setScalar(size); m.position.set(x,y,z); par.add(m);
+  PART.live.push({m:m,v:[vx,vy,vz],life:life,max:life,g:grav||0});
+}
+anim(dt=>{
+  for(let i=PART.live.length-1;i>=0;i--){ const q=PART.live[i]; q.life-=dt;
+    if(q.life<=0 || !q.m.parent){ if(q.m.parent) q.m.parent.remove(q.m); PART.pool.push(q.m); PART.live.splice(i,1); continue; }
+    q.v[1]-=q.g*dt; q.m.position.x+=q.v[0]*dt; q.m.position.y+=q.v[1]*dt; q.m.position.z+=q.v[2]*dt;
+    q.m.material.opacity=0.85*Math.min(1,q.life/q.max*1.6); }
+});
+function overlayDisc(par,r,x,y,z){                     // 웨이퍼 위에 덮는 캔버스 텍스처 (노광 필드 · 웨이퍼 맵 · 패턴)
+  const cv=document.createElement('canvas'); cv.width=cv.height=128;
+  const tex=new T.CanvasTexture(cv);
+  const m=cyl(par,r,r,0.004,28,new T.MeshBasicMaterial({map:tex,transparent:true,depthWrite:false}),x,y,z);
+  m.userData.cv=cv; m.userData.tex=tex; return m;
+}
+const capXY=(lx,lz,r)=>[(lz/r*0.5+0.5)*128,(0.5-lx/r*0.5)*128];   // 원판 윗면 로컬 좌표 → 캔버스 좌표
+function drawPattern(cv){
+  const x=cv.getContext('2d'); if(!x||!x.fillRect) return;
+  x.clearRect(0,0,128,128); x.save(); x.beginPath(); x.arc(64,64,62,0,PI*2); x.clip();
+  for(let i=0;i<8;i++) for(let j=0;j<8;j++){ const px=i*16, py=j*16;
+    x.fillStyle='rgba(40,60,120,0.55)'; x.fillRect(px+1,py+1,14,14);
+    x.fillStyle='rgba(215,228,255,0.92)'; for(let k=0;k<4;k++) x.fillRect(px+3,py+3+k*3,10-(k%2)*4,1); }
+  x.restore();
+}
+const hash01=i=>{ const s=Math.sin(i*12.9898+4.1)*43758.5453; return s-Math.floor(s); };
+
+/* ---------- 장비별 외관 디테일 (빌더 로컬 좌표, 스케일 전) ---------- */
+const DETAIL={
+ cz(g,P){
+  glassify(kid(g,'cyl',1.15,1.25,2.2),0.22); glassify(kid(g,'cyl',0.75,1.1,0.9),0.22);
+  P.heater=cyl(g,0.98,0.98,1.1,22,glow(0xff5a1a,0.08),0,1.05,0);              // 흑연 히터
+  cyl(g,0.8,0.8,0.08,20,M.steelDark,0,0.72,0);                                  // 서셉터
+  cyl(g,0.74,0.64,0.72,22,M.quartz,0,1.1,0);                                    // 석영 도가니
+  P.melt=cyl(g,0.68,0.6,0.5,22,new T.MeshBasicMaterial({color:0xffa040}),0,1.0,0); // 실리콘 용탕
+  P.cable=cyl(g,0.012,0.012,1,6,M.steelDark,0,3.1,0); P.cable.scale.y=0.2;
+  [[0.4,M.hoseB],[0.75,M.hoseR],[2.6,M.hoseB],[2.95,M.hoseR]].forEach(h=>{        // 냉각수 호스
+    const x=Math.cos(h[0])*1.32, z=Math.sin(h[0])*1.32;
+    cyl(g,0.035,0.035,2.1,8,h[1],x,1.45,z); tor(g,0.06,0.02,8,M.steelDark,x,2.5,z,HP); });
+  bolts(g,1.21,20,2.58,M.steel); bolts(g,0.68,12,3.44,M.steel); bolts(g,0.68,12,6.6,M.steel);
+  gauge(g,0.9,2.0,0.85,0.8); gauge(g,-0.9,2.0,0.85,-0.8);
+  for(let i=0;i<15;i++) box(g,0.1,0.15,0.12,M.black,-0.7,3.55+i*0.2,0);       // 케이블 체인
+  box(g,0.9,0.5,0.9,M.paintGray,0,7.1,0); cyl(g,0.22,0.22,0.5,14,M.motor,0.25,7.55,0);   // 인상 구동부
+  box(g,0.5,0.14,0.02,M.label,0,7.1,0.46); box(g,0.5,0.3,0.02,M.hazard,0,0.95,1.27);
+ },
+ saw(g,P){
+  glassify(kid(g,'box',3.6,2.4,2.4),0.2);
+  box(g,2.1,0.06,0.1,M.paintBlue,0,2.05,0.35); box(g,2.1,0.06,0.1,M.paintBlue,0,2.05,-0.35);   // 슬러리 노즐 바
+  P.sp0=cyl(g,0.3,0.3,0.16,18,M.steel,-1.15,0.62,1.34,HP); P.sp1=cyl(g,0.3,0.3,0.16,18,M.steel,1.15,0.62,1.34,HP);
+  [P.sp0,P.sp1].forEach(s=>{ cyl(s,0.34,0.34,0.02,18,M.steelDark,0,0.09,0); cyl(s,0.34,0.34,0.02,18,M.steelDark,0,-0.09,0);
+    box(s,0.04,0.17,0.5,M.copper,0,0,0); });                                     // 공급 · 권취 스풀
+  box(g,0.05,0.05,0.7,M.chrome,0,0.95,1.34,0,0.5,0); cyl(g,0.06,0.06,0.08,10,M.steelDark,0,0.95,1.34,HP);  // 텐션 댄서
+  [-1.35,1.35].forEach(x=>cyl(g,0.02,0.02,0.5,8,M.chrome,x,1.7,1.29));          // 도어 손잡이
+  for(let i=0;i<6;i++) box(g,0.03,0.04,1.6,M.steelDark,1.82,0.6+i*0.12,0);
+  P.kerfMat=new T.MeshBasicMaterial({color:0x1b2126,transparent:true,opacity:0});
+  for(let i=0;i<13;i++) tor(P.ing,0.405,0.009,18,P.kerfMat,0,-0.6+i*0.1,0,HP);  // 절단선
+ },
+ cmp(g,P){
+  P.cw=[kid(P.arm0,'cyl',0.32,0.32,0.04),kid(P.arm1,'cyl',0.32,0.32,0.04)];
+  [-0.85,0.85].forEach((x,i)=>{
+    tor(g,1.06,0.035,30,M.steelDark,x,1.36,-0.3,HP);                             // 스플래시 가드
+    P['pud'+i]=fx(P,cyl(g,0.9,0.9,0.012,28,new T.MeshLambertMaterial({color:0xeef4f6,transparent:true,opacity:0.55}),x,1.345,-0.3));
+    const px=x+(i?0.95:-0.95), pz=0.6, c=new T.Object3D(); c.position.set(px,1.45,pz); g.add(c);   // 패드 컨디셔너
+    cyl(c,0.06,0.06,0.25,10,M.steel,0,0.05,0); box(c,0.8,0.06,0.1,M.steelDark,0.4,0.12,0);
+    cyl(c,0.16,0.16,0.06,16,M.paintGray,0.8,-0.05,0); cyl(c,0.15,0.15,0.01,16,M.black,0.8,-0.085,0);
+    c.userData.base=Math.atan2(-(-0.3-pz),x-px); c.rotation.y=c.userData.base; P['cond'+i]=c;
+  });
+  for(let i=0;i<3;i++){ box(g,1.0,0.75,0.02,M.paintGray,-1.1+i*1.1,0.5,1.51); cyl(g,0.015,0.015,0.3,6,M.chrome,-0.75+i*1.1,0.55,1.53); }
+  box(g,0.5,0.14,0.02,M.label,1.1,0.87,1.52);
+ },
+ clean(g,P){
+  glassify(kid(g,'box',5.0,0.9,1.7),0.14); kids(g,'box',0.95,0.55,1.1).forEach(m=>glassify(m,0.3));   // 후드 · 약액조
+  const cas=new T.Object3D(); cas.position.set(0,-0.8,0.15); P.rob.add(cas); P.cas=fx(P,cas);   // 웨이퍼 카세트
+  box(cas,0.36,0.3,0.28,M.plastic,0,0,0); for(let i=0;i<5;i++) cyl(cas,0.12,0.12,0.012,16,M.wafer,0,-0.1+i*0.05,0.02);
+  P.htr=box(g,0.86,0.03,1.0,glow(0xff4020,0),-0.6,1.0,0);                       // SC-1 히터
+  for(let i=0;i<4;i++){ const x=-1.75+i*1.15;
+    cyl(g,0.02,0.02,0.45,6,M.glass,x+0.38,1.25,0.57); box(g,0.5,0.12,0.01,M.label,x,1.08,0.56);
+    valve(g,x,0.72,0.84,0.7); }
+ },
+ ox(g,P){
+  glassify(kid(g,'box',4.4,3.4,2.2),0.2);
+  for(let i=0;i<2;i++){ const y=1.0+i*1.35;
+    cyl(g,0.38,0.38,2.1,16,M.quartz,0,y,0,HP);                                   // 노 안쪽 석영 튜브
+    P['sl'+i]=cyl(g,0.47,0.47,2.0,18,glow(0xff7a2a,0.04),0,y,0,HP); }          // 히터 슬리브
+  P.oxw=[];
+  [0,1].forEach(i=>P['boat'+i].children.forEach(o=>{ const q=o.geometry&&o.geometry.parameters; if(q&&q.radiusTop===0.28) P.oxw.push(o); }));
+  for(let i=0;i<2;i++){ const y=1.0+i*1.35;
+    for(let z=0;z<4;z++) box(g,0.3,0.08,0.02,M.label,-1.4+z*0.95,y+0.42,1.11);
+    cyl(g,0.012,0.012,1.2,6,M.copper,0.42,y,1.75,HP); }                        // 열전대
+  P.zl=[]; for(let i=0;i<4;i++) P.zl.push(box(g,0.5,0.16,0.02,glow(0xff8a3a,0.15),-1.5+i*1.0,3.05,1.11));   // 존 온도창
+  for(let i=0;i<8;i++){ box(g,0.02,0.05,1.6,M.steelDark,2.21,0.6+i*0.3,0); box(g,0.02,0.05,1.6,M.steelDark,-2.21,0.6+i*0.3,0); }
+ },
+ coat(g,P){
+  kids(g,'box',1.7,2.3,2.2).forEach(m=>glassify(m,0.16));
+  P.film=fx(P,cyl(g,0.33,0.33,0.012,26,new T.MeshLambertMaterial({color:0xc8782e,transparent:true,opacity:0.9}),-3.4,1.43,0));
+  P.pud=fx(P,cyl(g,0.33,0.33,0.014,26,new T.MeshLambertMaterial({color:0x7fd0e0,transparent:true,opacity:0.6}),-1.68,1.43,0));
+  P.pat=fx(P,overlayDisc(g,0.33,-1.68,1.424,0)); drawPattern(P.pat.userData.cv); P.pat.userData.tex.needsUpdate=true;
+  const n=new T.Object3D(); n.position.set(-2.85,1.85,0.55); g.add(n); P.noz=n;   // PR 디스펜스 노즐 암
+  cyl(n,0.04,0.04,0.35,8,M.steel,0,0,0); box(n,0.78,0.04,0.05,M.steelDark,0.39,0.1,0); cyl(n,0.015,0.01,0.15,6,M.chrome,0.78,0.02,0);
+  n.userData.base=Math.atan2(0.55,-0.55); n.rotation.y=n.userData.base+1.2;
+  [-3.4,-1.68].forEach(x=>cyl(g,0.07,0.07,0.9,8,M.pipe,x,0.55,-0.6));            // 컵 배기
+  for(let i=0;i<5;i++) box(g,0.5,0.12,0.01,M.label,-3.4+i*1.72,2.1,1.14);
+ },
+ expo(g,P){
+  glassify(kid(g,'box',4.2,2.6,3.0),0.18);
+  P.ex=fx(P,overlayDisc(P.stg,0.36,0,0.078,0));
+  box(P.stg,0.9,0.1,0.02,M.chrome,0,0.05,-0.47); box(P.stg,0.02,0.1,0.9,M.chrome,0.47,0.05,0);   // 간섭계 미러
+  box(g,0.8,0.5,0.7,M.paint,0.6,3.6,-1.0); box(g,0.6,0.08,0.02,M.label,0.6,3.62,-0.64);          // 레티클 라이브러리
+  cyl(g,0.04,0.04,1.6,8,M.hoseB,2.4,0.25,-0.3,0,0,HP); cyl(g,0.04,0.04,1.6,8,M.hoseR,2.4,0.35,-0.45,0,0,HP);
+  P.fields=[];
+  for(let j=0;j<8;j++){ const row=[]; for(let i=0;i<8;i++){ const fx0=(i-3.5)*0.09, fz0=(j-3.5)*0.09;
+      if(Math.hypot(fx0,fz0)<0.36-0.05) row.push([fx0,fz0]); } if(j%2) row.reverse(); P.fields.push.apply(P.fields,row); }
+ },
+ etch(g,P){
+  P.ew=[];
+  for(let i=0;i<4;i++){ const c=P['glow'+i].parent;
+    glassify(kid(c,'cyl',0.85,0.85,1.1),0.24);
+    P.ew.push(cyl(c,0.3,0.3,0.02,20,M.wafer,0,1.12,0));
+    cyl(c,0.05,0.05,1.9,8,M.black,0.9,1.15,0.28);                               // RF 케이블
+    gauge(c,0.55,2.0,0.62,0); }
+  box(g,0.8,0.12,0.01,M.label,0,2.0,4.52);
+ },
+ implant(g,P){
+  glassify(kid(g,'cyl',1.25,1.25,1.5),0.22);
+  P.iw=P.disk.children.filter(o=>{ const q=o.geometry&&o.geometry.parameters; return q&&q.radiusTop===0.3; });
+  const fz=1.0;                                                                   // 고전압 펜스
+  for(let i=0;i<=6;i++) box(g,0.03,1.8,0.03,M.hazard,-4.1+i*0.3,0.9,fz);
+  [0.1,0.9,1.8].forEach(y=>box(g,1.85,0.04,0.04,M.hazard,-3.2,y,fz));
+  box(g,0.5,0.32,0.02,M.hazard,-3.2,1.35,fz+0.03); box(g,0.36,0.2,0.01,M.black,-3.2,1.35,fz+0.045);
+ },
+ cvd(g,P){
+  glassify(kid(g,'box',2.4,4.4,2.4),0.18);
+  P.cvw=P.boat.children.filter(o=>{ const q=o.geometry&&o.geometry.parameters; return q&&q.radiusTop===0.3; });
+  P.heat=cyl(g,0.74,0.74,2.9,20,glow(0xff5a2a,0),0,3.05,0);
+  gauge(g,1.0,4.4,1.22,0); gauge(g,0.6,4.4,1.22,0);
+  cyl(g,0.25,0.25,0.6,12,M.steel,2.0,1.25,-0.6); box(g,0.4,0.1,0.01,M.label,2.0,1.25,-0.34);   // 배기 트랩
+ },
+ pvd(g,P){
+  glassify(kid(g,'cyl',1.1,1.1,1.3),0.24); glassify(kid(g,'sph',1.1),0.24);
+  P.race=fx(P,tor(g,0.5,0.07,26,new T.MeshBasicMaterial({color:0x3a1a10,transparent:true,opacity:0.8}),0,2.55,0,HP));   // 타깃 침식 레이스트랙
+  P.mag=new T.Object3D(); P.mag.position.set(0,3.42,0); g.add(P.mag);           // 회전 마그넷
+  cyl(P.mag,0.12,0.12,0.15,10,M.motor,0,0,0); box(P.mag,0.7,0.06,0.12,M.steelDark,0,-0.05,0);
+  cyl(g,0.04,0.04,1.2,8,M.hoseB,0.35,3.1,0.4); cyl(g,0.04,0.04,1.2,8,M.hoseR,-0.35,3.1,0.4);
+ },
+ wire(g,P){
+  P.ww=[0,1,2].map(i=>kid(P['head'+i],'cyl',0.34,0.34,0.03));
+  for(let i=0;i<3;i++){ const x=-1.2+i*1.2;
+    tor(g,0.52,0.03,20,M.steelDark,x,1.9,0,HP); box(g,0.3,0.1,0.01,M.label,x,1.25,0.51);
+    cyl(g,0.012,0.012,0.6,6,M.hazard,x+0.38,1.6,0.2); }
+ },
+ eds(g,P){
+  P.map=fx(P,overlayDisc(P.stg,0.36,0,0.188,0));
+  cyl(g,0.07,0.07,2.6,10,M.black,-1.45,2.55,0.2,0,0,HP);                         // 테스트 헤드 케이블
+  box(g,0.6,0.1,0.02,M.label,0,1.0,1.11);
+  P.dies=[]; for(let i=0;i<15;i++) for(let j=0;j<15;j++){ const x=(i-7)*0.048, z=(j-7)*0.048, r=Math.hypot(x,z);
+    if(r<0.36-0.03) P.dies.push({x:x,z:(i%2?-z:z),e:r/0.36}); }
+ },
+ pkg(g,P){
+  P.chips=[]; g.traverse(o=>{ const q=o.geometry&&o.geometry.parameters; if(q&&q.width===0.26&&q.height===0.12&&q.depth===0.26) P.chips.push(o); });
+  const st=new T.Object3D(); st.position.set(-4.2,1.16,0); g.add(st); P.strip=fx(P,st);   // 리드프레임 스트립
+  box(st,0.9,0.02,0.3,M.gold,0,0,0); for(let i=0;i<4;i++) box(st,0.12,0.04,0.12,M.silicon,-0.33+i*0.22,0.03,0);
+  [-3.2,-0.6,2.2].forEach(x=>box(g,0.6,0.12,0.01,M.label,x,1.42,-0.29));
+ }
+};
+
+/* ---------- 공정 진행 연출 ---------- */
+const ETCH_ANG=[0.6,1.85,-0.6,-1.85];
+const PROG={
+ cz:{run(P,p,v,t,dt,g){
+    const L=cl(p*1.06,0.04,1), sc=1-0.65*L, top=0.75+0.5*sc;                    // 용탕이 줄고 잉곳이 위로 자란다
+    if(P.melt){ P.melt.scale.y=sc; P.melt.position.y=0.75+0.25*sc;
+      P.melt.material.color.setHex(v.temp>1465?0xffd890:(v.temp<1395?0xd06a20:0xffa040)); }
+    if(P.ingot){ const d=cl(1.25/Math.max(0.2,v.pull||1.2),0.35,1.9);
+      P.ingot.visible=true; P.ingot.scale.set(d,L,d); P.ingot.position.y=top+0.8*L; }
+    const it=top+1.6*L, len=Math.max(0.02,3.2-it); if(P.cable){ P.cable.scale.y=len; P.cable.position.y=it+len/2; }
+    if(P.heater) P.heater.material.opacity=(p<0.94?0.24:0.08)*(0.8+0.2*Math.sin(t*5));
+    for(let i=nEmit(10,dt);i>0;i--) emit(g,-1.9+rnd(-0.1,0.1),1.2,1.1+rnd(-0.1,0.1),rnd(-0.1,0.1),rnd(0.4,0.7),rnd(-0.1,0.1),1.8,0xd5dde0,rnd(0.04,0.08),-0.1);
+  }, reset(P){ if(P.ingot){ P.ingot.visible=false; P.ingot.scale.set(1,0.05,1); P.ingot.position.y=2.6; }
+    if(P.melt){ P.melt.scale.y=1; P.melt.position.y=1.0; } if(P.cable){ P.cable.scale.y=0.2; P.cable.position.y=3.1; }
+    if(P.heater) P.heater.material.opacity=0.08; }},
+ saw:{run(P,p,v,t,dt,g){
+    if(P.ing){ P.ing.visible=true; P.ing.position.y=1.2+0.55*p; }                // 잉곳이 와이어 웹을 통과
+    if(P.kerfMat) P.kerfMat.opacity=cl((p-0.15)/0.5,0,0.9);
+    if(P.sp0){ P.sp0.rotation.y+=dt*(v.wire||12)*0.6; P.sp1.rotation.y+=dt*(v.wire||12)*0.6; }
+    for(let i=nEmit(30*(v.slurry||70)/70,dt);i>0;i--) emit(g,rnd(-1,1),2.0,Math.random()<0.5?0.35:-0.35,0,-1,0,0.3,0xbfc8cf,0.025,4);
+  }, reset(P){ if(P.ing){ P.ing.visible=false; P.ing.position.y=1.2; } if(P.kerfMat) P.kerfMat.opacity=0; }},
+ cmp:{run(P,p,v,t,dt,g){
+    [0,1].forEach(i=>{ const pd=P['pud'+i]; if(pd){ pd.visible=true; pd.rotation.y=t*2; }
+      tint(P,P.cw[i],0xe8f2fa,p);                                                 // 연마될수록 거울면
+      const c=P['cond'+i]; if(c) c.rotation.y=c.userData.base+0.35*Math.sin(t*1.6+i*2);
+      const x=i?0.85:-0.85;
+      for(let k=nEmit(10,dt);k>0;k--) emit(g,x,1.72,0.5,0,-0.6,0,0.5,0xf2f6f8,0.025,3);
+      for(let k=nEmit(6,dt);k>0;k--){ const a=rnd(0,PI*2); emit(g,x+Math.cos(a)*0.95,1.38,-0.3+Math.sin(a)*0.95,Math.cos(a)*0.6,0.4,Math.sin(a)*0.6,0.35,0xeef4f6,0.02,4); }
+    });
+  }},
+ clean:{run(P,p,v,t,dt,g){
+    const k=Math.min(3,Math.floor(p*4)), f=p*4-k, x=-1.75+k*1.15;              // 4개 조를 차례로 담갔다 뺀다
+    const dip=f<0.2?f/0.2:(f>0.8?(1-f)/0.2:1);
+    if(P.rob){ P.rob.position.x=ease(P.rob.position.x,x,dt,5); P.rob.position.y=2.45-0.5*dip; }
+    if(P.cas) P.cas.visible=true;
+    if(P.htr) P.htr.material.opacity=k===1?0.5+0.2*Math.sin(t*4):0.1;
+    if(dip>0.6) for(let i=nEmit(26,dt);i>0;i--) emit(g,x+rnd(-0.38,0.38),1.05,rnd(-0.42,0.42),0,rnd(0.3,0.5),0,0.7,0xe8f6fa,0.025,0);
+  }, reset(P){ if(P.rob) P.rob.position.y=2.2; if(P.htr) P.htr.material.opacity=0; }},
+ ox:{run(P,p,v,t,dt,g){
+    const inz=p<0.12?p/0.12:(p>0.9?1-(p-0.9)/0.1:1);                            // 보트 장입 → 승온 · 산화 → 냉각 · 인출
+    const h=p<0.12?0.15:(p<0.25?0.15+0.85*(p-0.12)/0.13:(p<0.85?1:Math.max(0.2,1-(p-0.85)/0.15)));
+    for(let i=0;i<2;i++){ const b=P['boat'+i]; if(b) b.position.z=2.3-1.6*inz;
+      const gl=P['glow'+i]; if(gl) gl.material.opacity=0.2+0.7*h*(0.9+0.1*Math.sin(t*4+i));
+      const sl=P['sl'+i]; if(sl) sl.material.opacity=0.04+0.3*h*(0.85+0.15*Math.sin(t*3+i)); }
+    (P.zl||[]).forEach((l,i)=>l.material.opacity=0.12+0.8*h*(0.85+0.15*Math.sin(t*3+i)));
+    const nm=oxT(v,(v.time||60)*cl((p-0.15)/0.7,0,1)), col=filmColor(nm);      // 두께에 따라 간섭색이 바뀐다
+    (P.oxw||[]).forEach(w=>tint(P,w,col,1));
+  }, reset(P){ (P.zl||[]).forEach(l=>l.material.opacity=0.15); for(let i=0;i<2;i++){ if(P['sl'+i]) P['sl'+i].material.opacity=0.04; } for(let i=0;i<2;i++){ if(P['boat'+i]) P['boat'+i].position.z=2.3; } }},
+ coat:{run(P,p,v,t,dt,g){
+    const n=P.noz, inA=p<0.1?p/0.1:(p<0.22?1:Math.max(0,1-(p-0.22)/0.08));
+    if(n) n.rotation.y=n.userData.base+1.2*(1-inA);
+    const tx=-2.85+0.78*Math.cos(n.rotation.y), tz=0.55-0.78*Math.sin(n.rotation.y);
+    if(p>0.08&&p<0.2) for(let i=nEmit(18,dt);i>0;i--) emit(g,tx,1.66,tz,0,-1.4,0,0.18,0xc8782e,0.03,6);
+    const sp=cl((p-0.12)/0.25,0,1), f=P.film;                                    // 감광액이 중심에서 퍼진다
+    if(f){ f.visible=true; const r=Math.max(0.05,sp); f.scale.set(r,1,r);
+      f.position.y=1.4+0.015*(P.spin0?P.spin0.scale.y:1)+0.007; if(P.spin0) f.rotation.y=P.spin0.rotation.y;
+      const th=cl(Math.sqrt(3500/Math.max(300,v.rpm||3500)),0.5,2.2); f.material.color.setHex(th>1.4?0xa85a1e:(th<0.8?0xe8a860:0xc8782e)); }
+    if(p>0.15&&p<0.45) for(let i=nEmit(40,dt);i>0;i--){ const a=rnd(0,PI*2); emit(g,-3.4+Math.cos(a)*0.34,1.45,Math.sin(a)*0.34,Math.cos(a)*1.8,0.15,Math.sin(a)*1.8,0.22,0xd08a40,0.014,2); }
+    if(p>0.6){ if(P.rob) P.rob.position.x=ease(P.rob.position.x,0.04,dt,4);         // 핫플레이트 소프트베이크
+      for(let i=nEmit(6,dt);i>0;i--) emit(g,0.04+rnd(-0.3,0.3),1.48,rnd(-0.3,0.3),0,0.4,0,0.8,0xffd0a0,0.03,0); }
+  }, reset(P){ if(P.noz) P.noz.rotation.y=P.noz.userData.base+1.2; }},
+ dev:{run(P,p,v,t,dt,g){
+    const pd=P.pud; if(pd){ pd.visible=true; pd.material.opacity=0.6*cl((p-0.05)/0.1,0,1)*(p<0.7?1:cl(1-(p-0.7)/0.1,0,1)); }
+    const pt=P.pat; if(pt){ pt.visible=true; pt.material.opacity=cl((p-0.25)/0.45,0,1); if(P.spin1) pt.rotation.y=P.spin1.rotation.y; }   // 패턴이 드러난다
+    if(p>0.72&&p<0.86) for(let i=nEmit(40,dt);i>0;i--){ const a=rnd(0,PI*2); emit(g,-1.68+Math.cos(a)*0.34,1.45,Math.sin(a)*0.34,Math.cos(a)*1.6,0.2,Math.sin(a)*1.6,0.22,0x9fe0f0,0.014,2); }
+  }},
+ expo:{run(P,p,v,t,dt,g){
+    const N=P.fields.length, n=Math.min(N-1,Math.floor(p*N)), f=P.fields[n];    // 스텝 앤드 스캔: 필드를 하나씩 찍는다
+    if(P.stg){ P.stg.position.x=ease(P.stg.position.x,-0.6-f[0],dt,12); P.stg.position.z=ease(P.stg.position.z,-f[1]+0.03*Math.sin(t*20),dt,12); }
+    if(P.beam) P.beam.material.opacity=0.3+0.6*Math.abs(Math.sin(t*14));
+    const ov=P.ex; if(ov){ ov.visible=true;
+      if(ov.userData.n!==n){ ov.userData.n=n; const x=ov.userData.cv.getContext('2d');
+        if(x&&x.fillRect){ x.clearRect(0,0,128,128);
+          for(let i=0;i<=n;i++){ const c=capXY(P.fields[i][0],P.fields[i][1],0.36);
+            x.fillStyle=i===n?'rgba(235,225,255,0.95)':'rgba(170,140,255,0.6)'; x.fillRect(c[0]-7,c[1]-7,14,14); }
+          ov.userData.tex.needsUpdate=true; } } }
+  }, reset(P){ if(P.stg) P.stg.position.set(-0.6,2.02,0); if(P.ex) P.ex.userData.n=-1; }},
+ etch:{run(P,p,v,t,dt,g){
+    const k=Math.min(3,Math.floor(p*4)), f=p*4-k;                                // 챔버 4기를 차례로
+    if(P.rob){ const tgt=-ETCH_ANG[k], d=((tgt-P.rob.rotation.y+PI*3)%(PI*2))-PI; P.rob.rotation.y+=d*Math.min(1,dt*5); }
+    for(let i=0;i<4;i++){ const gl=P['glow'+i]; if(!gl) continue;
+      if(i===k){ gl.material.opacity=0.28+0.35*Math.abs(Math.sin(t*6)); if(f>0.82) gl.material.color.setHex(0xff9a5a); }   // 종점 검출 시 발광색 변화
+      else gl.material.opacity=0.03;
+      tint(P,P.ew[i],0x46505a,i<k?1:(i===k?f:0)); }
+  }},
+ implant:{run(P,p,v,t,dt,g){
+    if(P.beam) P.beam.position.z=0.3*Math.sin(t*7);                             // 빔 스캔
+    if(P.disk) P.disk.rotation.y=t*10;
+    (P.iw||[]).forEach(w=>tint(P,w,0x5a6070,p*0.85));
+  }, reset(P){ if(P.beam) P.beam.position.z=0; }},
+ cvd:{run(P,p,v,t,dt,g){
+    if(P.boat) P.boat.position.y=p<0.15?1.4+1.2*p/0.15:(p>0.88?2.6-1.2*(p-0.88)/0.12:2.6);   // 보트 상승 → 증착 → 하강
+    const h=p<0.15?0.2:(p<0.85?1:Math.max(0.15,1-(p-0.85)/0.15));
+    if(P.heat) P.heat.material.opacity=0.28*h*(0.85+0.15*Math.sin(t*3));
+    const nm=cvR(v)*(v.time||45)*cl((p-0.15)/0.7,0,1)*1.37, col=filmColor(nm);
+    (P.cvw||[]).forEach(w=>tint(P,w,col,1));
+  }, reset(P){ if(P.boat) P.boat.position.y=1.4; if(P.heat) P.heat.material.opacity=0; }},
+ pvd:{run(P,p,v,t,dt,g){
+    if(P.race){ P.race.visible=true; P.race.material.opacity=0.8*p; }
+    if(P.mag) P.mag.rotation.y=t*3;
+    tint(P,P.w,0xc0743c,p*1.1);                                                   // 웨이퍼가 구리색으로
+    for(let i=nEmit(50*(v.power||8)/8,dt);i>0;i--) emit(g,rnd(-0.5,0.5),2.5,rnd(-0.5,0.5),0,-1.9,0,0.48,0xc9a0ff,0.02,0);
+  }},
+ wire:{run(P,p,v,t,dt,g){
+    const d=p<0.08?p/0.08:(p<0.78?1:Math.max(0,1-(p-0.78)/0.06));
+    for(let i=0;i<3;i++){ const h=P['head'+i]; if(h) h.position.y=2.35-0.46*d;
+      tint(P,P.ww[i],0xc2703a,cl((p-0.08)/0.65,0,1));
+      if(d>0.5) for(let k=nEmit(10,dt);k>0;k--) emit(g,-1.2+i*1.2+rnd(-0.3,0.3),1.2,rnd(-0.3,0.3),0,0.45,0,0.9,0xbfe4f4,0.02,0); }
+    if(P.ag) P.ag.material.opacity=p>0.84?0.5+0.4*Math.sin(t*6):0.2;          // 어닐
+  }},
+ eds:{run(P,p,v,t,dt,g){
+    const N=P.dies.length, n=Math.min(N-1,Math.floor(p*N)), d=P.dies[n];       // 다이를 하나씩 찍으며 합/불 판정
+    if(P.stg){ P.stg.position.x=ease(P.stg.position.x,-d.x,dt,14); P.stg.position.z=ease(P.stg.position.z,-d.z,dt,14); }
+    if(P.head) P.head.position.y=2.0+0.03*Math.abs(Math.sin(t*14));
+    const ov=P.map; if(ov){ ov.visible=true;
+      if(ov.userData.n!==n){ ov.userData.n=n; const x=ov.userData.cv.getContext('2d'), y=edsY(v);
+        if(x&&x.fillRect){ x.clearRect(0,0,128,128);
+          P.dies.forEach((q,i)=>{ const c=capXY(q.x,q.z,0.36);
+            x.fillStyle=i>n?'rgba(120,130,140,0.3)':(i===n?'#ffffff':(hash01(i)<(1-y)*(0.5+q.e*1.1)?'#f07167':'#6cc59a'));
+            x.fillRect(c[0]-7.5,c[1]-7.5,15,15); });
+          ov.userData.tex.needsUpdate=true; } } }
+  }, reset(P){ if(P.stg) P.stg.position.set(0,1.4,0); if(P.map) P.map.userData.n=-1; }},
+ pkg:{run(P,p,v,t,dt,g){
+    if(P.strip){ P.strip.visible=true; P.strip.position.x=-4.2+((t*0.9)%1)*8.4; }  // 리드프레임이 라인을 흐른다
+    const n=Math.floor(p*(P.chips.length+0.99)); P.chips.forEach((c,i)=>c.visible=i<n);   // 완성 칩이 트레이에 쌓인다
+    if(P.ram && P.ram.position.y<1.6) for(let i=nEmit(14,dt);i>0;i--) emit(g,2.2+rnd(-0.8,0.8),1.3,-1.1+rnd(-0.7,0.7),0,0.6,0,0.9,0xe0e6ea,0.04,0);
+  }, reset(P){ (P.chips||[]).forEach(c=>c.visible=true); }}
+};
+function progApply(rec,vals,t){
+  const pr=PROG[rec.id]; if(!pr||!rec.mach||!vals) return;
+  let p, hold=false;
+  if(running && running.rec===rec) p=Math.min(1,running.t/running.dur);
+  else if(rec.__prog){ p=1; hold=true; }                // 결과 화면을 보는 동안은 완료 상태 유지
+  else return;
+  rec.__prog=true;
+  const dt=hold?0:cl(t-(rec.__pt||t),0,0.05); rec.__pt=t;
+  pr.run(rec.mach.userData.parts,p,vals,t,dt,rec.mach);
+}
+function progReset(rec){
+  const P=rec.mach&&rec.mach.userData.parts; if(!P) return;
+  (P.__fx||[]).forEach(o=>o.visible=false);
+  (P.__tint||[]).forEach(m=>{ if(m.userData.tMat) m.material.color.setHex(m.userData.tOrig); });
+  const pr=PROG[rec.id]; if(pr&&pr.reset) try{ pr.reset(P,rec.mach); }catch(e){}
+}
+anim(()=>{ IX.forEach(o=>{ if(o.__prog && !(running&&running.rec===o) && paramTarget!==o){ o.__prog=false; progReset(o); } }); });
+
+/* ---------- 실측값(PV) — 설정값(SV)을 따라 오르내리는 값 ---------- */
+function pvVal(q,sv,prog,t,i){
+  if(q.u==='s'||q.u==='min') return sv*prog;
+  const base=(q.u==='℃')?25:q.min;
+  let k=prog<0.18?prog/0.18:1;
+  if(q.u==='℃' && prog>0.9) k=1-(prog-0.9)/0.1*0.5;
+  k=1-(1-k)*(1-k);
+  return base+(sv-base)*k+(q.max-q.min)*(0.004*Math.sin(t*7.3+i*1.7)+0.003*Math.sin(t*2.3+i));
+}
+function pvRows(rec,vals,prog){
+  const def=RECIPE[rec.id]; if(!def) return;
+  def.p.filter(q=>q.type!=='sel').slice(0,3).forEach((q,i)=>{
+    const r=document.createElement('div'); r.className='r';
+    const a=document.createElement('span'); a.textContent='실측 '+q.l;
+    const b=document.createElement('span'); b.textContent=fmt(pvVal(q,vals[q.k],prog,clock.elapsedTime,i),q.d)+' '+(q.u||'');
+    b.style.color='#f2c86a'; r.appendChild(a); r.appendChild(b); mvStat.appendChild(r); });
+}
+
+/* ---------- 운전 콘솔 · 실시간 HMI 화면 ---------- */
+function hmiStand(fid,x,z,ry,tex){
+  const g=F[fid].group, s=new T.Object3D(); s.position.set(x,0,z); s.rotation.y=ry; g.add(s);
+  cyl(s,0.24,0.28,0.05,14,M.steelDark,0,0.025,0);
+  box(s,0.12,1.2,0.12,M.paintGray,0,0.62,0);
+  box(s,0.56,0.05,0.32,M.paintGray,0,1.02,0.1); box(s,0.46,0.02,0.18,M.black,0,1.055,0.12);   // 키보드 선반
+  cyl(s,0.045,0.045,0.03,12,M.red,0.22,1.07,0.2); cyl(s,0.065,0.065,0.01,12,M.hazard,0.22,1.055,0.2);   // EMO
+  const head=new T.Object3D(); head.position.set(0,1.5,0.02); head.rotation.x=-0.16; s.add(head);
+  box(head,0.8,0.54,0.06,M.black,0,0,0);
+  const scr=new T.Mesh(boxG(0.74,0.4625,0.01),new T.MeshBasicMaterial({map:tex})); scr.position.set(0,0,0.035); head.add(scr);
+  const led=box(head,0.8,0.035,0.05,new T.MeshBasicMaterial({color:0x6f7f88}),0,-0.29,0.02);
+  box(head,0.3,0.05,0.04,M.label,0,0.3,0.02);
+  COL(fid,x,z,0.24,0.24,1.8);
+  s.userData.led=led; return s;
+}
+function keepOut(fid,c,room){                          // 바닥 안전선
+  const g=F[fid].group, m=0.35, w=0.07, y=0.014;
+  let x0=c.x-c.hw-m, x1=c.x+c.hw+m, z0=c.z-c.hd-m, z1=c.z+c.hd+m;
+  if(room){ x0=Math.max(x0,room.x-room.w/2+0.2); x1=Math.min(x1,room.x+room.w/2-0.2);
+    z0=Math.max(z0,room.z-room.d/2+0.2); z1=Math.min(z1,room.z+room.d/2-0.2); }
+  box(g,x1-x0,0.01,w,M.hazard,(x0+x1)/2,y,z0); box(g,x1-x0,0.01,w,M.hazard,(x0+x1)/2,y,z1);
+  box(g,w,0.01,z1-z0,M.hazard,x0,y,(z0+z1)/2); box(g,w,0.01,z1-z0,M.hazard,x1,y,(z0+z1)/2);
+}
+const rayDown=(typeof T.Raycaster!=='undefined')?new T.Raycaster():null;
+const HSIGNS=[];
+anim(()=>{ const v=!CIN.active; if(HSIGNS.length && HSIGNS[0].visible!==v) HSIGNS.forEach(h=>h.visible=v); });
+function decorateInstall(fid,rec,m,c,dirX,opt){
+  const g=F[fid].group, room=opt.room, H=(room&&room.h)||CEIL;
+  const ry=dirX>0?HP:-HP, face=c.x+dirX*c.hw, idx=CHAIN.findIndex(q=>q[0]===opt.id);
+  // 1) 운전 콘솔 — 조작 지점 옆, 장비 정면
+  const cv=document.createElement('canvas'); cv.width=256; cv.height=160;
+  const tex=new T.CanvasTexture(cv);
+  const sd=(rec.z>=c.z)?-1:1;
+  let pz=c.z+sd*Math.max(1.15,c.hd*0.7);
+  if(room) pz=cl(pz,room.z-room.d/2+0.6,room.z+room.d/2-0.6);
+  const stand=hmiStand(fid,face+dirX*0.55,pz,ry,tex);
+  m.traverse(o=>{ if(o.userData&&o.userData.screen) o.userData.screen.material=new T.MeshBasicMaterial({map:tex}); });   // 장비 패널 화면도 같은 내용
+  rec.hmi={cv:cv,ctx:cv.getContext('2d'),tex:tex,rec:rec,hist:[],key:'',led:stand.userData.led};
+  // 2) 천장 행거 사인
+  const hs=new T.Object3D(); g.add(hs); HSIGNS.push(hs);           // 장비 화면(클로즈업)에서는 시야를 가리지 않게 숨긴다
+  sign(hs,face+dirX*0.3,3.1,c.z,ry,2.4,0.52,(idx>=0?CIRC[idx]+' '+CHAIN[idx][1]:rec.name),rec.sub||'','#0f2430','#cfe8f2');
+  [-1,1].forEach(s=>cyl(hs,0.015,0.015,H-3.36,6,M.steelDark,face+dirX*0.3,3.36+(H-3.36)/2,c.z+s*1.0));
+  // 3) 바닥 안전선
+  keepOut(fid,c,room);
+  // 4) 배기 덕트 · 유틸리티 배관 — 장비 지붕에서 천장까지
+  if(rayDown){
+    m.updateMatrixWorld(true);
+    [[c.x-dirX*c.hw*0.35,c.z+0.5,0.2,M.steel],[c.x-dirX*c.hw*0.35,c.z-0.4,0.08,M.hoseY]].forEach(d=>{
+      rayDown.set(new T.Vector3(d[0],H-0.05,d[1]),new T.Vector3(0,-1,0)); rayDown.far=H;
+      const hit=rayDown.intersectObject(m,true)[0]; if(!hit) return;
+      const y0=hit.point.y, L=H-y0; if(L<0.4) return;
+      cyl(g,d[2],d[2],L,12,d[3],d[0],y0+L/2,d[1]);
+      if(d[2]>0.1){ cyl(g,d[2]+0.04,d[2]+0.04,0.06,12,M.steelDark,d[0],y0+0.03,d[1]);
+        for(let yy=y0+0.6;yy<H-0.2;yy+=0.7) tor(g,d[2]+0.01,0.018,12,M.steelDark,d[0],yy,d[1],HP); }
+    });
+  }
+}
+function hmiDraw(h,t){
+  const c=h.ctx; if(!c||!c.fillRect) return;
+  const rec=h.rec, m=rec.mach;
+  let act=rec, st='STANDBY', col='#6f7f88', vals=null, prog=0;
+  if(running && running.mach===m){ act=running.rec||rec; st='RUN'; col='#5ce08a'; vals=running.vals; prog=Math.min(1,running.t/running.dur); }
+  else if(paramTarget && paramTarget.mach===m){ act=paramTarget; st='SETUP'; col='#f2b23d'; vals=paramVals; }
+  else if(rec.done){ st='COMPLETE'; col='#5fd4e4'; }
+  const def=RECIPE[act.id]||{p:[]}, nums=def.p.filter(q=>q.type!=='sel').slice(0,3);
+  const key=st+'|'+act.id+'|'+(rec.lot||'')+'|'+(rec.supplied||[]).length;
+  if(st!=='RUN' && st!=='SETUP' && key===h.key) return;
+  if(st==='RUN' && h.key.indexOf('RUN')!==0) h.hist=[];
+  h.key=key;
+  if(h.led) h.led.material.color.setHex(st==='RUN'?(Math.sin(t*8)>0?0x5ce08a:0x2c6a44):parseInt(col.slice(1),16));
+  const W=256, Hh=160, mono='"IBM Plex Mono",monospace', sans='"IBM Plex Sans KR",sans-serif';
+  c.fillStyle='#061217'; c.fillRect(0,0,W,Hh);
+  c.fillStyle='#0e2832'; c.fillRect(0,0,W,22);
+  c.textBaseline='middle'; c.textAlign='left'; c.fillStyle='#d6eef4'; c.font='bold 12px '+sans; c.fillText(act.name,7,11,170);
+  c.fillStyle=(st==='RUN'&&Math.sin(t*8)<0)?'#2c6a44':col; c.fillRect(W-72,4,66,14);
+  c.fillStyle='#03110a'; c.font='bold 10px '+mono; c.textAlign='center'; c.fillText(st,W-39,11.5); c.textAlign='left';
+  if(st==='RUN'){
+    const si=Math.min(running.steps.length-1,Math.floor(prog*running.steps.length));
+    c.fillStyle='#8fd6e4'; c.font='11px '+sans; c.fillText('▸ '+running.steps[si],7,33,W-14);
+    c.fillStyle='#16303a'; c.fillRect(7,43,W-14,7); c.fillStyle='#5ce08a'; c.fillRect(7,43,(W-14)*prog,7);
+    c.fillStyle='#9fb6c0'; c.font='10px '+mono; c.textAlign='right'; c.fillText(Math.round(prog*100)+'%',W-7,57); c.textAlign='left';
+    nums.forEach((q,i)=>{ const y=69+i*14, sv=vals?vals[q.k]:q.opt;
+      c.fillStyle='#9fb6c0'; c.font='10px '+sans; c.fillText(q.l,7,y,88);
+      c.fillStyle='#f2c86a'; c.font='bold 11px '+mono; c.fillText('PV '+fmt(pvVal(q,sv,prog,t,i),q.d),98,y);
+      c.fillStyle='#6f8a94'; c.font='10px '+mono; c.fillText('SV '+fmt(sv,q.d)+' '+(q.u||''),170,y,82); });
+    if(nums[0]){                                        // 추세 그래프
+      const q=nums[0], sv=vals?vals[q.k]:q.opt; h.hist.push(pvVal(q,sv,prog,t,0)); if(h.hist.length>64) h.hist.shift();
+      const y0=154, y1=114, Y=v=>y0-(cl((v-q.min)/(q.max-q.min||1),0,1))*(y0-y1);
+      c.strokeStyle='#14303a'; c.lineWidth=1; c.strokeRect(7.5,y1-2.5,W-15,y0-y1+5);
+      c.setLineDash&&c.setLineDash([3,3]); c.strokeStyle='#4a6a74'; c.beginPath(); c.moveTo(8,Y(sv)); c.lineTo(W-8,Y(sv)); c.stroke(); c.setLineDash&&c.setLineDash([]);
+      c.strokeStyle='#5fd4e4'; c.lineWidth=1.6; c.beginPath();
+      h.hist.forEach((v,i)=>{ const x=8+i*(W-16)/63; i?c.lineTo(x,Y(v)):c.moveTo(x,Y(v)); }); c.stroke();
+      c.fillStyle='#6f8a94'; c.font='9px '+sans; c.fillText(q.l+' 추세',10,y1+6); }
+  } else if(st==='SETUP'){
+    c.fillStyle='#f2c86a'; c.font='11px '+sans; c.fillText('레시피 설정 중',7,34);
+    def.p.slice(0,5).forEach((q,i)=>{ const y=54+i*19;
+      c.fillStyle='#9fb6c0'; c.font='11px '+sans; c.fillText(q.l,7,y,110);
+      c.fillStyle='#e7eef2'; c.font='bold 12px '+mono; c.textAlign='right';
+      c.fillText(q.type==='sel'?String(vals[q.k]):fmt(vals[q.k],q.d)+' '+(q.u||''),W-8,y,130); c.textAlign='left'; });
+  } else {
+    const sup=rec.supplies||[], got=(rec.supplied||[]).length, ready=!!rec.lot && got>=sup.length;
+    const rows=[['LOT',rec.lot?nm(rec.lot):(rec.done?'반출됨':'대기')],['자재',got+' / '+sup.length+' 종'],
+      ['상태',rec.done?'공정 완료':(ready?'가동 준비 완료':'자재 대기')]];
+    rows.forEach((r,i)=>{ const y=42+i*22; c.fillStyle='#6f8a94'; c.font='11px '+mono; c.fillText(r[0],7,y);
+      c.fillStyle=i===2?(rec.done?'#5fd4e4':(ready?'#5ce08a':'#f2b23d')):'#d6eef4'; c.font='bold 12px '+sans; c.fillText(r[1],60,y,W-68); });
+    c.fillStyle='#14303a'; c.fillRect(7,112,W-14,1);
+    c.fillStyle='#6f8a94'; c.font='10px '+sans; c.fillText((rec.steps||[]).slice(0,2).join(' → '),7,128,W-14);
+    c.fillText(hhmm(clockMin)+'  ·  '+F[rec.floor].name+'  ·  '+(rec.sub||''),7,146,W-14);
+  }
+  h.tex.needsUpdate=true;
+}
+let hmiT=0;
+anim((dt,t)=>{ hmiT+=dt; if(hmiT<0.2) return; hmiT=0;
+  IX.forEach(o=>{ if(o.hmi && o.floor===curFloor) hmiDraw(o.hmi,t); }); });
 
 /* ============================================================
    저장 · 이어하기 · 일시정지 · 지도 · 최종 리포트
