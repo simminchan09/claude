@@ -12,8 +12,11 @@ import aurora from './aurora.js';
 import mudang from './mudang.js';
 import morwen from './morwen.js';
 import reaper from './reaper.js';
+import soot from './soot.js';
+import asura from './asura.js';
+import elus from './elus.js';
 import trainer from './trainer.js';
 
-export const ROSTER = [leo, azazel, aquarist, sui, clown, sniper, lancer, ignethia, guardian, aurora, mudang, morwen, reaper, trainer];
+export const ROSTER = [leo, azazel, aquarist, sui, clown, sniper, lancer, ignethia, guardian, aurora, mudang, morwen, reaper, soot, asura, elus, trainer];
 // 선택 화면에 표시할 빈 슬롯 수 (구현 예정 캐릭터 자리)
 export const EMPTY_SLOTS = 0;
