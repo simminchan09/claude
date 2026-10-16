@@ -4709,7 +4709,7 @@ function frame(){
 
   // 바닥 안내선
   const task=TASKS[taskIdx];
-  if(task && gameOn){
+  if(task && gameOn && !CIN.active){                   // 장비 화면에서는 안내선 · 화살표 숨김
     let tgt=ixAt(task.f,task.id);
     const carry=(P.hand?[P.hand]:[]).concat(CART);
     const useful = tgt && tgt.kind==='run' && carry.some(it=>(it===tgt.need&&!tgt.lot)||missing(tgt).indexOf(it)>=0);
