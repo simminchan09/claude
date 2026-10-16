@@ -5380,7 +5380,7 @@ function drawMap(t){
     ctx.font=(big?'600 13px':'500 10px')+' "IBM Plex Sans KR",sans-serif';
     ctx.fillText(here?'목표 · '+(goal.name||''):'목표는 '+goal.floor+' · 엘리베이터로',W-(big?16:6),big?24:11,W*(big?0.5:0.62)); }
   if(big){ ctx.textAlign='left'; ctx.fillStyle='rgba(231,238,242,.55)'; ctx.font='11px "IBM Plex Mono",monospace';
-    ctx.fillText('▲ 나   ◎ 목표   ● 도움 줄 사람   M · ESC 닫기',16,H-9); }
+    ctx.fillText('▲ 나   ◎ 목표   ● 도움 줄 사람   '+(TOUCH?'지도를 누르면 닫기':'M · ESC 닫기'),16,H-9); }
 }
 anim((dt,t)=>{
   const show=gameOn && !CIN.active && !finalOpen();
@@ -5491,6 +5491,9 @@ const TOUCHMV={on:false,f:0,s:0,id:null,ox:0,oy:0}, TOUCHLK={id:null,x:0,y:0};
   .tb.big b{font-size:24px}
   .tb.on{background:rgba(242,178,61,.38);border-color:var(--amber)}
   .tb:active{transform:scale(.93)}
+  #tcMenu{position:absolute;top:max(8px,env(safe-area-inset-top));left:50%;margin-left:-23px}
+  body.touch #compass{top:62px}
+  body.touch #minimap{pointer-events:auto;cursor:pointer}
   #tcHint{position:absolute;left:50%;top:36%;transform:translateX(-50%);font-size:12.5px;line-height:1.7;text-align:center;
     background:rgba(8,12,16,.78);padding:10px 16px;border-radius:10px;opacity:0;transition:opacity .6s;width:max-content;max-width:84vw}
   body.touch canvas{touch-action:none}
@@ -5498,7 +5501,8 @@ const TOUCHMV={on:false,f:0,s:0,id:null,ox:0,oy:0}, TOUCHLK={id:null,x:0,y:0};
   body.touch #prompt{bottom:auto;top:60%;white-space:normal;max-width:72vw;text-align:center}
   body.touch #dot{width:8px;height:8px;margin:-4px 0 0 -4px}
   @media (max-width:700px){
-    #task{max-width:52vw;left:10px;top:10px;padding:9px 11px 10px} #task .t{font-size:14px} #task .d{font-size:11.5px} #task .n{font-size:10px}
+    #task{max-width:calc(50vw - 40px);left:10px;top:10px;padding:9px 11px 10px}
+    body.touch #status{max-width:calc(50vw - 40px)} body.touch #floorSub{display:none} #task .t{font-size:14px} #task .d{font-size:11.5px} #task .n{font-size:10px}
     #status{right:10px;top:10px;padding:8px 10px} #floorBig{font-size:21px} #floorSub{font-size:11px;max-width:36vw}
     #minimap{right:10px!important;width:150px;height:104px}
     #hand{left:10px;bottom:10px;min-width:0;padding:7px 10px}
@@ -5524,12 +5528,11 @@ const TOUCHMV={on:false,f:0,s:0,id:null,ox:0,oy:0}, TOUCHLK={id:null,x:0,y:0};
   if(TOUCH) document.body.classList.add('touch');
 })();
 const tcEl=document.createElement('div'); tcEl.id='tc';
-tcEl.innerHTML='<div id="joy"><i></i></div>'+
-  '<div id="tcHint">왼쪽 아래를 끌어 이동 · 화면을 끌어 둘러보기<br>F 버튼으로 상호작용 · 엘리베이터 층 버튼은 조준점을 맞추고 F</div>'+
+tcEl.innerHTML='<div id="joy"><i></i></div><button class="tb" id="tcMenu" data-a="pause"><b>Ⅱ</b>메뉴</button>'+
+  '<div id="tcHint">왼쪽 아래를 끌어 이동 · 화면을 끌어 둘러보기<br>F 버튼으로 상호작용 · 지도를 누르면 크게 보기<br>엘리베이터 층 버튼은 조준점을 맞추고 F</div>'+
   '<div id="tcBtns"><div class="row">'+
     '<button class="tb" data-k="KeyG"><b>G</b>놓기</button><button class="tb" data-k="KeyQ"><b>Q</b>배송</button>'+
-    '<button class="tb" data-k="KeyE"><b>E</b>설명</button><button class="tb" data-k="KeyM"><b>M</b>지도</button>'+
-    '<button class="tb" data-a="pause"><b>Ⅱ</b>메뉴</button></div>'+
+    '<button class="tb" data-k="KeyE"><b>E</b>설명</button></div>'+
   '<div class="row"><button class="tb mid" data-a="run">달리기</button><button class="tb mid" data-h="Space">점프</button>'+
     '<button class="tb big" data-k="KeyF"><b>F</b>상호작용</button></div></div>';
 document.body.appendChild(tcEl);
@@ -5578,6 +5581,8 @@ tcEl.querySelectorAll('.tb').forEach(b=>{
   cvs.addEventListener('touchend',end); cvs.addEventListener('touchcancel',end);
 })();
 dlgEl.addEventListener('click',()=>dlgNext());          // 대화창은 탭해서 넘긴다
+MAP.el.addEventListener('pointerdown',e=>{               // 터치: 지도를 누르면 크게 / 다시 누르면 작게
+  if(!TOUCH || !gameOn) return; e.preventDefault(); e.stopPropagation(); toggleMap(); });
 
 /* ============================================================
    부팅
@@ -5592,7 +5597,7 @@ frame();
 function startGame(){ $('#start').style.display='none'; gameOn=true; document.body.classList.add('playing'); lock();
   if(TOUCH){ const h=$('#tcHint'); h.style.opacity=1; setTimeout(()=>h.style.opacity=0,6000); } }
 if(TOUCH){
-  $('#start .grid').innerHTML='<div><b>왼쪽 아래 끌기</b> 이동</div><div><b>화면 끌기</b> 시점</div><div><b>F</b> 상호작용</div><div><b>Ⅱ</b> 메뉴</div>';
+  $('#start .grid').innerHTML='<div><b>왼쪽 아래 끌기</b> 이동</div><div><b>화면 끌기</b> 시점</div><div><b>F</b> 상호작용</div><div><b>지도 누르기</b> 크게 보기</div><div><b>Ⅱ</b> 메뉴</div>';
   $('#loadNote').textContent='가로 화면을 추천합니다.';
 }
 (function(){
