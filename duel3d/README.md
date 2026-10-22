@@ -1,7 +1,18 @@
 # Eclipse Duel 3D
 
 명조·젠레스 존 제로식 3D 액션 전투 게임의 시스템과 맵입니다. Three.js(`../lib/three.module.js`)만 사용하며 빌드 과정이 없습니다.
-정식 캐릭터 **레오 폰 아이젠가르트**(GLAIVIER) · **아자젤**(OVERLORD) · **아리엘**(AQUARIST) · **스이**(JADE RONIN) · **클라운**(CLOWN) · **제이**(SNIPER) · **세라**(LANCER) · **이그네시아**(DRAGON KNIGHT) · **라이아스**(GUARDIAN) · **오로라**(AURORA) · **단비**(SHAMAN) · **모르웬**(DOLLMAKER) · **그레이브**(CHAIN HUNTER) · **수트 스파이럴**(GUARDIAN GOLEM) · **아수라**(FALCON PILGRIM) · **엘루스**(RELIC THIEF)와 시스템 확인용 **훈련 기체 TB-01**이 들어 있고, 나머지 캐릭터는 `CHARACTER_GUIDE.md`에 따라 하나씩 추가합니다.
+정식 캐릭터 **레오 폰 아이젠가르트**(GLAIVIER) · **아자젤**(OVERLORD) · **아리엘**(AQUARIST) · **스이**(JADE RONIN) · **클라운**(CLOWN) · **제이**(SNIPER) · **세라**(LANCER) · **이그네시아**(DRAGON KNIGHT) · **라이아스**(GUARDIAN) · **오로라**(AURORA) · **단비**(SHAMAN) · **모르웬**(DOLLMAKER) · **그레이브**(CHAIN HUNTER) · **수트 스파이럴**(GUARDIAN GOLEM) · **아수라**(FALCON PILGRIM) · **엘루스**(RELIC THIEF) · **고죠 사토루**(최강의 주술사)와 시스템 확인용 **훈련 기체 TB-01**이 들어 있고, 나머지 캐릭터는 `CHARACTER_GUIDE.md`에 따라 하나씩 추가합니다.
+
+## 캐릭터: 고죠 사토루 (`gojo.js`, `gojo_model.js`) — 주술회전 · 무하한 술식 · 맨손 체술
+| 입력 | 기술 | 내용 |
+|---|---|---|
+| 좌클 ×4 | 맨손 체술 | 잽 30 → 돌려차기 42 → 장타 30+14 → 정권 + 근접 혁 30+36 |
+| 우클 | 허식 「무라사키」 (25초) | 2초 동안 창과 혁을 합쳐 일직선으로 쏘는 관통 허식 170 (빨간 경고) |
+| Shift | 술식순전 「창」 (9초) | 끌어당기는 푸른 구체 약 98. 4.5m보다 멀면 고죠가 구체 쪽으로 끌려감 |
+| E | 술식반전 「혁」 (10초) | 밀쳐내는 붉은 폭발 105 + 강한 넉백 |
+| Q | 영역전개 「무량공처」 | 영역을 펼쳐 상대를 묶고 정보 과부하 9×8 + 마무리 210 |
+| 반격 | 순간이동 | 등 뒤로 순간이동해 반격 92 |
+| 패시브 | 무하한 | 게이지가 차면 6초 동안 무한: 받는 피해 ×0.6, 가까이 날아오는 탄이 멈춤 |
 
 ## 캐릭터: 아수라 (`asura.js`, `asura_model.js`) — 황금 매 · 양날 장창
 | 입력 | 기술 | 내용 |
