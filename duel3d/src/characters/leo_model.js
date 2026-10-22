@@ -13,7 +13,7 @@ import { surf, loft, loftAt, loftRing, onSurf, strand, spl, lathe, ang, fbm, gau
 const V3 = THREE.Vector3, TAU = Math.PI * 2;
 export const DIMS = { hipH: 1.05, spineL: 0.23, chestL: 0.32, neckL: 0.1, shW: 0.235, uArm: 0.31, lArm: 0.29, hipW: 0.105, thigh: 0.49, shin: 0.48, headTop: 0.27 };
 // 글레이브 치수 (오른손 기준 +Z 방향, m)
-export const GL = { butt: -0.95, poleEnd: 0.98, guard: 1.0, bladeStart: 1.06, tip: 2.2, grip2: 0.6 };
+export const GL = { butt: -0.95, poleEnd: 0.98, guard: 1.0, bladeStart: 1.06, tip: 2.2, grip2: 0.48 };
 export const GOLD = 0xffc24a, FIRE = 0xff6a2a, SHIELD = 0x6ab4ff, ROSE = 0xff5a7a;
 const C = (k, fn) => cached('leo:' + k, fn);
 
@@ -540,7 +540,9 @@ export function createModel(pal) {
   m.ikW = 1;
   m.update = (dt, f) => {
     // 왼손은 창대를 잡는다 (기술마다 ikOff 로 끌 수 있음)
-    const want = m.weaponOut ? 0 : f.state === 'act' ? (f.act.ikOff ? 0 : 1) : f.state === 'guard' ? 1 : 0;
+    // 대기 · 앉기 자세에서도 두 손으로 창대를 쥔다 (오래 서 있을 때의 대기 자세 2 는 한 손)
+    const idle2 = f.def._poses && f.def._poses.idle2 && f.idleT > 4;
+    const want = m.weaponOut ? 0 : f.state === 'act' ? (f.act.ikOff ? 0 : 1) : f.state === 'guard' || ((f.state === 'idle' || f.state === 'crouch') && !idle2) ? 1 : 0;
     m.ikW += (want - m.ikW) * Math.min(1, dt * 14);
     if (m.ikW > 0.02) {
       J.chest.updateMatrixWorld(true); J.weapon.updateMatrixWorld(true);
@@ -579,10 +581,22 @@ export function createModel(pal) {
   m.sole = 0.07;
   // 무기 방향: 포즈의 weapon 값은 손목 회전이 아니라 [피치(위+), 좌우(오른쪽+), 롤] — 몸(루트) 기준 창끝 방향.
   const wE = new THREE.Euler(0, 0, 0, 'YXZ'), wQ = new THREE.Quaternion(), wP = new THREE.Quaternion(), wR = new THREE.Quaternion();
+  // 손목 맞춤: 주먹 구멍 축(손 로컬 Z)이 무기 축과 나란하도록 — 먼저 아래팔을 축으로 손을 돌리고(회내·회외), 남는 각만 손목을 꺾는다(최대 80°).
+  // 자루가 손가락을 뚫고 지나가거나 주먹 밖에 떠 보이지 않게 한다. 무기 방향(월드)은 그대로.
+  const hZ = new THREE.Vector3(), hY = new THREE.Vector3(), wD = new THREE.Vector3(), wPj = new THREE.Vector3(), hQ = new THREE.Quaternion(), dQ = new THREE.Quaternion(), qI = new THREE.Quaternion(), WR_MAX = 1.4;
   m.rigHook = () => {
     const w = J.weapon.rotation; wE.set(-w.x, -w.y, w.z, 'YXZ'); wQ.setFromEuler(wE);
-    m.root.getWorldQuaternion(wR); J.weapon.parent.getWorldQuaternion(wP);
-    J.weapon.quaternion.copy(wP.invert().multiply(wR).multiply(wQ)); J.weapon.updateMatrixWorld(true);
+    m.root.getWorldQuaternion(wR); wR.multiply(wQ); wD.set(0, 0, 1).applyQuaternion(wR);
+    J.handR.getWorldQuaternion(hQ); hZ.set(0, 0, 1).applyQuaternion(hQ); hY.set(0, -1, 0).applyQuaternion(hQ);
+    wPj.copy(wD).addScaledVector(hY, -wD.dot(hY));
+    if (wPj.lengthSq() > 1e-4) {
+      wPj.normalize(); if (hZ.dot(wPj) < 0) wPj.negate();
+      const tw = Math.atan2(hZ.clone().cross(wPj).dot(hY), hZ.dot(wPj)); dQ.setFromAxisAngle(hY, tw); hQ.premultiply(dQ); hZ.applyQuaternion(dQ);
+    }
+    if (hZ.dot(wD) < 0) wD.negate();
+    dQ.setFromUnitVectors(hZ, wD); const ang = 2 * Math.acos(Math.min(1, Math.abs(dQ.w))); if (ang > WR_MAX) dQ.slerpQuaternions(qI, dQ, WR_MAX / ang);
+    hQ.premultiply(dQ); J.handR.parent.getWorldQuaternion(wP); J.handR.quaternion.copy(wP.invert().multiply(hQ)); J.handR.updateMatrixWorld(true);
+    J.weapon.quaternion.copy(hQ.invert().multiply(wR)); J.weapon.updateMatrixWorld(true);
   };
   // 판정: 자루 앞부분부터 날 끝까지 / 궤적: 칼날만
   m.weaponPts = (b, t) => { J.weapon.localToWorld(b.set(0, 0, 0.25)); J.weapon.localToWorld(t.set(0, 0, GL.tip)); };

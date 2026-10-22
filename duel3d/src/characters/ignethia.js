@@ -18,7 +18,7 @@ const FLAMES = [PINK, VIOLET, HOTP];
 const poses = {
   // 기본: 장검을 오른손에 비스듬히 내려 들고, 왼손은 발톱을 세워 앞으로 — 여유로운 여왕의 자세
   base: { hips: [0, 0.18, 0], spine: [0.04, -0.08, 0], chest: [0.0, -0.1, 0], head: [0.04, 0.12, 0],
-    shoulderR: [-0.25, 0, -0.2], elbowR: [-0.55, 0, 0], weapon: [-0.55, 0.55, 0.3], shoulderL: [-0.35, 0, 0.3], elbowL: [-0.9, 0, 0],
+    shoulderR: [-0.3, 0, -0.22], elbowR: [-0.85, 0, 0], weapon: [-0.62, 0.42, 0.3], shoulderL: [-0.4, 0, 0.22], elbowL: [-1.2, 0, 0],
     hipL: [-0.15, 0, 0.06], kneeL: [0.22, 0, 0], footL: [-0.08, 0, 0], hipR: [0.12, 0, -0.08], kneeR: [0.12, 0, 0], footR: [0, 0, 0] },
   run: { hips: [0, -0.1, 0], spine: [0.38, 0.05, 0], chest: [0.08, 0.05, 0], head: [-0.25, 0, 0], shoulderR: [0.55, 0, -0.3], elbowR: [-0.3, 0, 0], weapon: [-0.15, 2.7, 0.3], shoulderL: [0.3, 0, 0.2], elbowL: [-1.0, 0, 0],
     hipL: [0, 0, 0], kneeL: [0.25, 0, 0], footL: [0, 0, 0], hipR: [0, 0, 0], kneeR: [0.25, 0, 0], footR: [0, 0, 0] },

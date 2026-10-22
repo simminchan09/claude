@@ -17,16 +17,16 @@ const V3 = THREE.Vector3, TAU = Math.PI * 2, UP = new V3(0, 1, 0);
 const poses = {
   // 기본: 낫을 오른손에 세워 들고(날은 오른쪽 위 바깥으로) 왼손은 허리에 — 고개를 살짝 갸웃
   base: { hips: [0, 0.18, 0], spine: [0.03, -0.06, 0], chest: [0.02, -0.08, 0], head: [0.05, 0.1, 0.08],
-    shoulderR: [-0.22, 0, -0.2], elbowR: [-0.85, 0, 0], weapon: [1.42, 0.12, -1.2], shoulderL: [0.15, 0, 0.32], elbowL: [-1.35, 0, 0],
-    hipL: [-0.12, 0, 0.04], kneeL: [0.16, 0, 0], footL: [-0.06, 0, 0], hipR: [0.1, 0, -0.06], kneeR: [0.12, 0, 0], footR: [0, 0, 0] },
+    shoulderR: [-0.42, 0, -0.24], elbowR: [-1.3, 0, 0], weapon: [1.22, 0.3, -1.2], shoulderL: [0.05, 0, 0.14], elbowL: [-0.5, 0, 0],
+    hipL: [-0.14, 0, 0.07], kneeL: [0.2, 0, 0], footL: [-0.06, 0, 0], hipR: [0.1, 0, -0.09], kneeR: [0.14, 0, 0], footR: [0, 0, 0] },
   run: { hips: [0, -0.1, 0], spine: [0.34, 0.05, 0], chest: [0.06, 0.05, 0], head: [-0.22, 0, 0], shoulderR: [0.45, 0, -0.3], elbowR: [-0.35, 0, 0], weapon: [-0.15, 2.75, 1.4], shoulderL: [0.3, 0, 0.2], elbowL: [-1.0, 0, 0],
     hipL: [0, 0, 0], kneeL: [0.25, 0, 0], footL: [0, 0, 0], hipR: [0, 0, 0], kneeR: [0.25, 0, 0], footR: [0, 0, 0] },
-  jump: { hipL: [-1.1, 0, 0.1], kneeL: [1.8, 0, 0], hipR: [-0.3, 0, -0.1], kneeR: [1.2, 0, 0], shoulderL: [-0.7, 0, 0.8], elbowL: [-0.5, 0, 0], shoulderR: [-0.6, 0, -0.5], elbowR: [-0.6, 0, 0], weapon: [0.5, 2.3, 1.2] },
+  jump: { hipL: [-1.1, 0, 0.1], kneeL: [1.8, 0, 0], hipR: [-0.3, 0, -0.1], kneeR: [1.2, 0, 0], shoulderL: [-0.6, 0, 0.45], elbowL: [-0.7, 0, 0], shoulderR: [-0.35, 0, -0.55], elbowR: [-0.95, 0, 0], weapon: [1.15, 0.45, -1.2] },
   // 방어: 낫 자루를 몸 앞에 비스듬히 세운다 (왼손 IK 로 자루를 잡음)
   guard: { hips: [0, -0.2, 0], spine: [0.15, 0.12, 0], chest: [0.05, 0.12, 0], shoulderR: [-0.9, 0, -0.15], elbowR: [-1.4, 0, 0], weapon: [0.75, -1.25, 1.57],
     hipL: [-0.5, 0, 0.2], kneeL: [0.85, 0, 0], hipR: [0.35, 0, -0.2], kneeR: [0.65, 0, 0] },
   hit: { spine: [-0.35, 0, 0], chest: [-0.15, 0.2, 0], head: [-0.35, 0, 0], shoulderR: [0.3, 0, -0.5], elbowR: [-0.6, 0, 0], weapon: [1.1, 0.6, -1.2], shoulderL: [0.4, 0, 0.6], elbowL: [-0.4, 0, 0] },
-  air: { hips: [-0.5, 0, 0], spine: [-0.4, 0, 0], head: [-0.5, 0, 0], shoulderR: [0.5, 0, -0.9], weapon: [0.6, 1.4, 1.0], shoulderL: [0.5, 0, 0.9], hipL: [-0.9, 0, 0], kneeL: [0.9, 0, 0], hipR: [-0.4, 0, 0], kneeR: [0.6, 0, 0] },
+  air: { hips: [-0.5, 0, 0], spine: [-0.4, 0, 0], head: [-0.5, 0, 0], shoulderR: [0.5, 0, -0.9], weapon: [0.35, 2.4, 1.3], shoulderL: [0.5, 0, 0.9], hipL: [-0.9, 0, 0], kneeL: [0.9, 0, 0], hipR: [-0.4, 0, 0], kneeR: [0.6, 0, 0] },
   down: { hipY: -0.74, hips: [-1.52, 0, 0], spine: [0, 0, 0], chest: [0, 0, 0], head: [0.3, 0, 0], shoulderR: [-2.4, 0, -0.5], shoulderL: [-2.2, 0, 0.6], elbowR: [-0.3, 0, 0], elbowL: [-0.4, 0, 0], weapon: [0.05, -0.9, 1.57],
     hipL: [-0.1, 0, 0.15], kneeL: [0.3, 0, 0], hipR: [-0.5, 0, -0.1], kneeR: [0.9, 0, 0] },
   dash: { hips: [0, 0, 0], spine: [0.55, 0, 0], chest: [0.1, 0, 0], shoulderR: [0.7, 0, -0.3], elbowR: [-0.3, 0, 0], weapon: [-0.1, 2.8, 1.4], shoulderL: [0.6, 0, 0.3], hipL: [-0.9, 0, 0], kneeL: [0.6, 0, 0], hipR: [0.5, 0, 0], kneeR: [1.1, 0, 0] },

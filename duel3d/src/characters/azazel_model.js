@@ -525,10 +525,22 @@ export function createModel(pal) {
   m.sole = 0.055;
   // 무기 방향: 포즈의 weapon 값 = 몸(루트) 기준 [피치(위+), 좌우(오른쪽+), 롤]
   const wE = new THREE.Euler(0, 0, 0, 'YXZ'), wQ = new THREE.Quaternion(), wP = new THREE.Quaternion(), wR = new THREE.Quaternion();
+  // 손목 맞춤: 주먹 구멍 축(손 로컬 Z)이 무기 축과 나란하도록 — 먼저 아래팔을 축으로 손을 돌리고(회내·회외), 남는 각만 손목을 꺾는다(최대 80°).
+  // 자루가 손가락을 뚫고 지나가거나 주먹 밖에 떠 보이지 않게 한다. 무기 방향(월드)은 그대로.
+  const hZ = new THREE.Vector3(), hY = new THREE.Vector3(), wD = new THREE.Vector3(), wPj = new THREE.Vector3(), hQ = new THREE.Quaternion(), dQ = new THREE.Quaternion(), qI = new THREE.Quaternion(), WR_MAX = 1.4;
   m.rigHook = () => {
     const w = J.weapon.rotation; wE.set(-w.x, -w.y, w.z, 'YXZ'); wQ.setFromEuler(wE);
-    m.root.getWorldQuaternion(wR); J.weapon.parent.getWorldQuaternion(wP);
-    J.weapon.quaternion.copy(wP.invert().multiply(wR).multiply(wQ)); J.weapon.updateMatrixWorld(true);
+    m.root.getWorldQuaternion(wR); wR.multiply(wQ); wD.set(0, 0, 1).applyQuaternion(wR);
+    J.handR.getWorldQuaternion(hQ); hZ.set(0, 0, 1).applyQuaternion(hQ); hY.set(0, -1, 0).applyQuaternion(hQ);
+    wPj.copy(wD).addScaledVector(hY, -wD.dot(hY));
+    if (wPj.lengthSq() > 1e-4) {
+      wPj.normalize(); if (hZ.dot(wPj) < 0) wPj.negate();
+      const tw = Math.atan2(hZ.clone().cross(wPj).dot(hY), hZ.dot(wPj)); dQ.setFromAxisAngle(hY, tw); hQ.premultiply(dQ); hZ.applyQuaternion(dQ);
+    }
+    if (hZ.dot(wD) < 0) wD.negate();
+    dQ.setFromUnitVectors(hZ, wD); const ang = 2 * Math.acos(Math.min(1, Math.abs(dQ.w))); if (ang > WR_MAX) dQ.slerpQuaternions(qI, dQ, WR_MAX / ang);
+    hQ.premultiply(dQ); J.handR.parent.getWorldQuaternion(wP); J.handR.quaternion.copy(wP.invert().multiply(hQ)); J.handR.updateMatrixWorld(true);
+    J.weapon.quaternion.copy(hQ.invert().multiply(wR)); J.weapon.updateMatrixWorld(true);
   };
   m.weaponPts = (b, t) => { J.weapon.localToWorld(b.set(0, 0, 0.3)); J.weapon.localToWorld(t.set(0, 0, CL.top)); };
   m.trailPts = (b, t) => { J.weapon.localToWorld(b.set(0, 0, CL.head0 + 0.12)); J.weapon.localToWorld(t.set(0, 0, CL.top)); };

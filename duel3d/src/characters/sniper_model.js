@@ -440,8 +440,10 @@ export function createModel(pal) {
   m.ikW = 0; m.glow = 0;
   m.update = (dt, f) => {
     const vis = f.root.visible, sc = f.scale;
-    // 왼손 IK: 조준하는 기술 중에는 총열 덮개를 받친다 (ikOff 기술 · 무기 없음이면 끔)
-    const want = m.weaponOut || !rifle.visible ? 0 : f.state === 'act' ? (f.act.ikOff ? 0 : 1) : f.state === 'guard' ? 1 : 0;
+    // 왼손 IK: 기술 중 · 방어 · 대기(낮은 경계 자세) · 달리기 · 앉기 · 점프 때 총열 덮개를 받친다
+    // (ikOff 기술 · 무기 없음 · 총을 어깨에 걸친 대기 자세 2 이면 끔)
+    const st = f.state, lowReady = (st === 'idle' && !(f.idleT > 4)) || st === 'run' || st === 'crouch' || st === 'jump';
+    const want = m.weaponOut || !rifle.visible ? 0 : st === 'act' ? (f.act.ikOff ? 0 : 1) : st === 'guard' || lowReady ? 1 : 0;
     m.ikW += (want - m.ikW) * Math.min(1, dt * 14);
     if (m.ikW > 0.02) {
       J.chest.updateMatrixWorld(true); J.weapon.updateMatrixWorld(true);

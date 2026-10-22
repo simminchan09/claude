@@ -379,7 +379,7 @@ export function createModel(pal) {
   m.update = (dt, f) => {
     const vis = f.root.visible, sc = f.scale;
     // 왼손은 창대를 잡는다 (기술마다 ikOff 로 끌 수 있음)
-    const want = m.weaponOut ? 0 : f.state === 'act' ? (f.act.ikOff ? 0 : 1) : (f.state === 'guard' || f.state === 'idle' || f.state === 'run') ? 1 : 0;
+    const want = m.weaponOut ? 0 : f.state === 'act' ? (f.act.ikOff ? 0 : 1) : (f.state === 'guard' || f.state === 'idle' || f.state === 'run' || f.state === 'jump' || f.state === 'crouch' || f.state === 'dash') ? 1 : 0;
     m.ikW += (want - m.ikW) * Math.min(1, dt * 14);
     if (m.ikW > 0.02) {
       J.chest.updateMatrixWorld(true); J.weapon.updateMatrixWorld(true);
