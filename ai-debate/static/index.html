@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 토론</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1d2129; --muted: #6b7280; --line: #e3e6eb;
+  --accent: #4f46e5; --accent-text: #fff; --code: #f1f3f6;
+  --claude: #d97706; --chatgpt: #059669; --gemini: #2563eb;
+  --ok: #059669; --no: #b45309; --err: #dc2626;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1115; --panel: #181b21; --text: #e6e8ec; --muted: #9aa1ad; --line: #2a2f38;
+    --accent: #818cf8; --accent-text: #0f1115; --code: #22262e;
+    --claude: #f59e0b; --chatgpt: #34d399; --gemini: #60a5fa;
+    --ok: #34d399; --no: #fbbf24; --err: #f87171;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 80px; }
+header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+h1 { font-size: 22px; margin: 0; }
+.status { color: var(--muted); font-size: 13px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+textarea { width: 100%; min-height: 90px; resize: vertical; border: 1px solid var(--line); border-radius: 8px;
+  padding: 12px; font: inherit; background: var(--bg); color: var(--text); }
+textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-top: 12px; }
+.controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+.chips { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; color: var(--text); font-size: 14px; }
+.chip input { margin: 0; }
+.spacer { flex: 1; }
+button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 9px 20px; cursor: pointer;
+  background: var(--accent); color: var(--accent-text); }
+button.stop { background: var(--err); color: #fff; }
+button:disabled { opacity: .5; cursor: default; }
+.hint { color: var(--muted); font-size: 12px; margin-top: 8px; }
+#log { margin-top: 24px; display: flex; flex-direction: column; gap: 24px; }
+.task { font-weight: 600; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--panel); border-radius: 8px; white-space: pre-wrap; }
+.round h2 { font-size: 15px; margin: 0 0 10px; color: var(--muted); font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-top: 4px solid var(--c, var(--line)); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.card .who { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.card .name { font-weight: 700; color: var(--c); }
+.card .model { color: var(--muted); font-size: 12px; }
+.badge { font-size: 12px; padding: 1px 8px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.badge.yes { color: var(--ok); } .badge.no { color: var(--no); }
+.body { overflow-wrap: anywhere; }
+.body.collapsed { max-height: 320px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); mask-image: linear-gradient(#000 75%, transparent); }
+.more { background: none; color: var(--accent); padding: 4px 0 0; font-weight: 500; font-size: 13px; }
+.body p:first-child { margin-top: 0; } .body p:last-child { margin-bottom: 0; }
+.body pre { background: var(--code); padding: 10px; border-radius: 6px; overflow-x: auto; }
+.body code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 90%; }
+.body pre code { padding: 0; background: none; }
+.body table { border-collapse: collapse; display: block; overflow-x: auto; }
+.body blockquote { margin: 8px 0; padding-left: 10px; border-left: 3px solid var(--line); color: var(--muted); }
+.body h3, .body h4, .body h5, .body h6 { margin: 12px 0 6px; }
+.body th, .body td { border: 1px solid var(--line); padding: 4px 8px; }
+.pending { color: var(--muted); display: flex; align-items: center; gap: 8px; }
+.spin { width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: s 0.8s linear infinite; }
+@keyframes s { to { transform: rotate(360deg); } }
+.consensus { color: var(--ok); font-weight: 600; }
+.final { border: 2px solid var(--accent); border-radius: 12px; background: var(--panel); padding: 16px 18px; }
+.final h2 { margin: 0 0 8px; font-size: 17px; }
+.final .saved { color: var(--muted); font-size: 12px; margin-top: 10px; }
+.error { color: var(--err); font-weight: 600; }
+.copy { background: none; color: var(--accent); border: 1px solid var(--line); padding: 3px 10px; font-size: 12px; font-weight: 500; float: right; }
+@media (max-width: 600px) { .grid { grid-template-columns: 1fr; } button.go { width: 100%; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>💬 AI 토론 <span style="font-weight:400;color:var(--muted);font-size:15px">Claude × ChatGPT × Gemini</span></h1>
+    <div class="status" id="status">연결 중…</div>
+  </header>
+
+  <div class="panel">
+    <textarea id="task" placeholder="명령이나 질문을 입력하세요. (Ctrl+Enter로 시작)"></textarea>
+    <div class="controls">
+      <span class="chips" id="who"></span>
+      <label>최대 라운드
+        <select id="rounds"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select>
+      </label>
+      <label>최종 정리 <select id="moderator"></select></label>
+      <span class="spacer"></span>
+      <button class="go" id="go">토론 시작</button>
+    </div>
+    <div class="hint">각 AI가 독립적으로 답한 뒤 서로의 답을 검토하며 수정합니다. 모두 합의하면 조기 종료하고, 진행자가 최종 답변을 정리합니다.</div>
+  </div>
+
+  <div id="log"></div>
+</div>
+
+<script>
+const COLORS = { Claude: "var(--claude)", ChatGPT: "var(--chatgpt)", Gemini: "var(--gemini)" };
+const $ = (s) => document.querySelector(s);
+let info = null, controller = null, cards = {}, currentGrid = null;
+
+// 외부 라이브러리 없는 간단한 마크다운 렌더러 (HTML은 먼저 이스케이프하므로 안전)
+function md(text) {
+  const t = text.replace(/\n?\s*합의\s*[:：]\s*(예|아니오|yes|no)\s*$/i, "");
+  const blocks = [];
+  let src = esc(t).replace(/```[^\n]*\n([\s\S]*?)```/g, (_, code) => {
+    blocks.push(`<pre><code>${code.replace(/\n$/, "")}</code></pre>`); return `\u0000${blocks.length - 1}\u0000`;
+  });
+  const inline = (s) => s
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  const out = []; let list = null, para = [], table = [];
+  const flushPara = () => { if (para.length) { out.push(`<p>${inline(para.join("<br>"))}</p>`); para = []; } };
+  const flushList = () => { if (list) { out.push(`<${list.tag}>${list.items.map(i => `<li>${inline(i)}</li>`).join("")}</${list.tag}>`); list = null; } };
+  const flushTable = () => {
+    if (!table.length) return;
+    const rows = table.filter(r => !/^\|?\s*:?-{2,}/.test(r)).map(r => r.replace(/^\||\|$/g, "").split("|").map(c => inline(c.trim())));
+    out.push(`<table>${rows.map((r, i) => `<tr>${r.map(c => i ? `<td>${c}</td>` : `<th>${c}</th>`).join("")}</tr>`).join("")}</table>`);
+    table = [];
+  };
+  const flush = () => { flushPara(); flushList(); flushTable(); };
+  for (const line of src.split("\n")) {
+    let m;
+    if (/^\u0000\d+\u0000$/.test(line.trim())) { flush(); out.push(line.trim()); }
+    else if ((m = line.match(/^(#{1,6})\s+(.*)/))) { flush(); const n = Math.min(6, m[1].length + 2); out.push(`<h${n}>${inline(m[2])}</h${n}>`); }
+    else if (/^\s*\|.*\|\s*$/.test(line)) { flushPara(); flushList(); table.push(line.trim()); }
+    else if ((m = line.match(/^\s*[-*+]\s+(.*)/))) { flushPara(); flushTable(); if (!list || list.tag !== "ul") { flushList(); list = { tag: "ul", items: [] }; } list.items.push(m[1]); }
+    else if ((m = line.match(/^\s*\d+[.)]\s+(.*)/))) { flushPara(); flushTable(); if (!list || list.tag !== "ol") { flushList(); list = { tag: "ol", items: [] }; } list.items.push(m[1]); }
+    else if (/^\s*(---+|\*\*\*+)\s*$/.test(line)) { flush(); out.push("<hr>"); }
+    else if ((m = line.match(/^&gt;\s?(.*)/))) { flush(); out.push(`<blockquote>${inline(m[1])}</blockquote>`); }
+    else if (!line.trim()) flush();
+    else { flushList(); flushTable(); para.push(line); }
+  }
+  flush();
+  return out.join("\n").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[+i]);
+}
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+function esc(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+async function loadInfo() {
+  try {
+    info = await (await fetch("/api/participants")).json();
+    const mode = { cli: "CLI 모드", api: "API 모드", mock: "모의 모드" }[info.backend] || info.backend;
+    $("#status").textContent = `${mode} · 참가자 ${info.participants.length}명`;
+    $("#who").innerHTML = info.participants.map(p =>
+      `<label class="chip" title="${esc(p.model)}"><input type="checkbox" value="${esc(p.name)}" checked>
+       <span style="color:${COLORS[p.name] || "inherit"};font-weight:600">${esc(p.name)}</span></label>`).join("");
+    $("#moderator").innerHTML = info.participants.map(p =>
+      `<option ${p.name.toLowerCase() === info.moderator.toLowerCase() ? "selected" : ""}>${esc(p.name)}</option>`).join("");
+    $("#rounds").value = String(Math.min(5, info.rounds));
+  } catch (e) {
+    $("#status").textContent = "서버에 연결할 수 없습니다.";
+  }
+}
+
+function pendingCard(name) {
+  const c = el("div", "card"); c.style.setProperty("--c", COLORS[name] || "var(--accent)");
+  c.innerHTML = `<div class="who"><span class="name">${esc(name)}</span></div>
+                 <div class="pending"><span class="spin"></span>생각하는 중…</div>`;
+  return c;
+}
+
+function fillCard(c, ev) {
+  const badge = ev.agreed ? `<span class="badge yes">합의</span>` : `<span class="badge no">이견</span>`;
+  c.innerHTML = `<div class="who"><span><span class="name">${esc(ev.name)}</span>
+                 <span class="model">${esc(ev.model)}</span></span>${ev.round > 1 ? badge : ""}</div>`;
+  const body = el("div", "body", md(ev.text)); c.appendChild(body);
+  requestAnimationFrame(() => {
+    if (body.scrollHeight > 360) {
+      body.classList.add("collapsed");
+      const b = el("button", "more", "전체 보기"); c.appendChild(b);
+      b.onclick = () => { const col = body.classList.toggle("collapsed"); b.textContent = col ? "전체 보기" : "접기"; };
+    }
+  });
+}
+
+function handle(ev, names, log) {
+  switch (ev.type) {
+    case "round": {
+      const sec = el("section", "round");
+      sec.appendChild(el("h2", null, `라운드 ${ev.round} <span style="font-weight:400">/ 최대 ${ev.max_rounds}</span>`));
+      currentGrid = el("div", "grid"); sec.appendChild(currentGrid); log.appendChild(sec);
+      cards = {}; names.forEach(n => { cards[n] = pendingCard(n); currentGrid.appendChild(cards[n]); });
+      break;
+    }
+    case "answer": fillCard(cards[ev.name], ev); break;
+    case "consensus": log.appendChild(el("div", "consensus", "✔ 모든 참가자가 합의했습니다.")); break;
+    case "final_start": {
+      const f = el("section", "final"); f.id = "final";
+      f.innerHTML = `<h2>🏁 최종 답변 <span style="font-weight:400;color:var(--muted);font-size:13px">진행자: ${esc(ev.name)}</span></h2>
+                     <div class="pending"><span class="spin"></span>토론을 종합하는 중…</div>`;
+      log.appendChild(f); break;
+    }
+    case "final": {
+      const f = $("#final"); f.querySelector(".pending").remove();
+      const copy = el("button", "copy", "복사"); copy.onclick = () => navigator.clipboard.writeText(ev.text).then(() => copy.textContent = "복사됨");
+      f.querySelector("h2").appendChild(copy);
+      f.appendChild(el("div", "body", md(ev.text)));
+      if (ev.saved) f.appendChild(el("div", "saved", `저장됨: ${esc(ev.saved)}`));
+      f.scrollIntoView({ behavior: "smooth", block: "start" });
+      break;
+    }
+    case "error": log.appendChild(el("div", "error", "오류: " + esc(ev.message))); break;
+  }
+}
+
+function setRunning(on) {
+  const b = $("#go");
+  b.textContent = on ? "중지" : "토론 시작";
+  b.classList.toggle("stop", on);
+  $("#task").disabled = on;
+}
+
+async function start() {
+  if (controller) { controller.abort(); return; }
+  const task = $("#task").value.trim();
+  if (!task) { $("#task").focus(); return; }
+  const only = [...document.querySelectorAll("#who input:checked")].map(i => i.value);
+  if (!only.length) { alert("참가할 AI를 하나 이상 선택하세요."); return; }
+
+  const log = $("#log"); log.innerHTML = "";
+  log.appendChild(el("div", "task", esc(task)));
+  controller = new AbortController(); setRunning(true);
+  try {
+    const res = await fetch("/api/debate", {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+      body: JSON.stringify({ task, only, rounds: +$("#rounds").value, moderator: $("#moderator").value }),
+    });
+    if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || res.statusText); }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "", names = only;
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const chunk = buf.slice(0, i); buf = buf.slice(i + 2);
+        if (!chunk.startsWith("data: ")) continue;
+        const ev = JSON.parse(chunk.slice(6));
+        if (ev.type === "start") names = ev.participants;
+        handle(ev, names, log);
+      }
+    }
+  } catch (e) {
+    log.appendChild(el("div", "error", e.name === "AbortError" ? "중지했습니다." : "오류: " + esc(e.message)));
+    document.querySelectorAll("#log .pending").forEach(p => p.innerHTML = "—");
+  } finally {
+    controller = null; setRunning(false);
+  }
+}
+
+$("#go").onclick = start;
+$("#task").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) start(); });
+loadInfo();
+</script>
+</body>
+</html>

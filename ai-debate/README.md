@@ -1,6 +1,20 @@
 # AI 토론 CLI (Claude × ChatGPT × Gemini)
 
-CLI에서 명령을 내리면 **Claude, ChatGPT, Gemini** 세 AI가 토론하여 답을 찾습니다.
+명령을 내리면 **Claude, ChatGPT, Gemini** 세 AI가 토론하여 답을 찾습니다.
+**localhost 웹사이트**와 **터미널 CLI** 두 가지로 사용할 수 있습니다.
+
+## 🌐 웹사이트로 실행 (localhost)
+```bash
+cd ai-debate
+python server.py            # → http://localhost:8000 접속
+python server.py --port 9000
+python server.py --mock     # 실제 호출 없이 화면 테스트
+```
+- 외부 패키지 설치 불필요 (Python 표준 라이브러리만 사용)
+- 라운드별로 세 AI의 답변이 카드로 표시되고, 먼저 끝난 AI부터 실시간으로 나타납니다
+- 참가 AI 선택, 최대 라운드, 최종 정리 AI를 화면에서 선택 / 진행 중 `중지` 가능
+- `--backend api`, `--save logs`, `--claude-model` 등 아래 CLI 옵션을 그대로 사용할 수 있습니다
+- 기본으로 `127.0.0.1`(내 컴퓨터)에서만 접속됩니다. 같은 네트워크의 다른 기기에서 접속하려면 `--host 0.0.0.0`
 
 ## 동작 방식
 1. **라운드 1** – 세 AI가 서로의 답을 보지 않고 독립적으로 답변 (병렬 호출)
@@ -41,7 +55,7 @@ cp .env.example .env   # 그리고 API 키 입력
 | `OPENAI_API_KEY` | ChatGPT |
 | `GEMINI_API_KEY` (또는 `GOOGLE_API_KEY`) | Gemini |
 
-## 사용법
+## 💻 터미널 CLI 사용법
 ```bash
 python debate.py "파이썬에서 리스트와 튜플 중 무엇을 써야 할까?"   # 한 번 실행
 python debate.py                                                    # 대화형 모드 (exit로 종료)

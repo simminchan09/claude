@@ -25,7 +25,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -322,7 +322,11 @@ def print_answer(p: Participant, text: str) -> None:
     print(text)
 
 
-def run_debate(task: str, participants: list[Participant], args: argparse.Namespace) -> str:
+def debate_events(task: str, participants: list[Participant], rounds: int, moderator_name: str):
+    """토론을 진행하며 이벤트(dict)를 순서대로 yield 합니다. CLI와 웹 서버가 공용으로 사용합니다.
+
+    이벤트 type: round, answer, consensus, final_start, final
+    """
     names = [p.name for p in participants]
     systems = {
         p.name: DEBATE_SYSTEM.format(name=p.name, others=", ".join(n for n in names if n != p.name) or "없음")
@@ -332,8 +336,8 @@ def run_debate(task: str, participants: list[Participant], args: argparse.Namesp
     transcript: list[str] = []
 
     with ThreadPoolExecutor(max_workers=len(participants)) as pool:
-        for rnd in range(1, args.rounds + 1):
-            header(f"라운드 {rnd} / 최대 {args.rounds}")
+        for rnd in range(1, rounds + 1):
+            yield {"type": "round", "round": rnd, "max_rounds": rounds}
             prompts = {}
             for p in participants:
                 if rnd == 1:
@@ -345,38 +349,63 @@ def run_debate(task: str, participants: list[Participant], args: argparse.Namesp
                     prompts[p.name] = ROUNDN_PROMPT.format(
                         round=rnd, task=task, mine=strip_agree(latest[p.name]), others=others
                     )
-            futures = {p.name: pool.submit(safe_ask, p, systems[p.name], prompts[p.name]) for p in participants}
-            for p in participants:
-                answer = futures[p.name].result()
+            futures = {pool.submit(safe_ask, p, systems[p.name], prompts[p.name]): p for p in participants}
+            for fut in as_completed(futures):  # 먼저 끝난 AI부터 전달
+                p = futures[fut]
+                answer = fut.result()
                 latest[p.name] = answer
                 transcript.append(f"[라운드 {rnd}] {p.name}:\n{answer}")
-                print_answer(p, answer)
+                yield {
+                    "type": "answer", "round": rnd, "name": p.name,
+                    "model": p.model or "기본 모델", "text": answer, "agreed": agreed(answer),
+                }
 
             if len(participants) > 1 and rnd > 1 and all(agreed(latest[n]) for n in names):
-                print(color("\n✔ 모든 참가자가 합의했습니다. 토론을 종료합니다.", "1;32"))
+                yield {"type": "consensus", "round": rnd}
                 break
             if len(participants) == 1:
                 break
 
-    # 최종 답변 작성
-    moderator = next((p for p in participants if p.name.lower() == args.moderator.lower()), participants[0])
-    header(f"최종 답변 (진행자: {moderator.name})")
+    moderator = next((p for p in participants if p.name.lower() == moderator_name.lower()), participants[0])
+    yield {"type": "final_start", "name": moderator.name}
     final = safe_ask(
         moderator,
         FINAL_SYSTEM,
         FINAL_PROMPT.format(task=task, transcript="\n\n".join(transcript)),
     )
-    print(final)
+    yield {"type": "final", "name": moderator.name, "text": final, "transcript": transcript}
 
-    if args.save:
-        save_dir = Path(args.save)
-        save_dir.mkdir(parents=True, exist_ok=True)
-        path = save_dir / f"debate_{datetime.now():%Y%m%d_%H%M%S}.md"
-        path.write_text(
-            f"# 명령\n\n{task}\n\n# 토론 기록\n\n" + "\n\n".join(transcript) + f"\n\n# 최종 답변\n\n{final}\n",
-            encoding="utf-8",
-        )
-        print(color(f"\n💾 저장됨: {path}", "36"))
+
+def save_transcript(save_dir: str | Path, task: str, transcript: list[str], final: str) -> Path:
+    save_dir = Path(save_dir)
+    save_dir.mkdir(parents=True, exist_ok=True)
+    path = save_dir / f"debate_{datetime.now():%Y%m%d_%H%M%S}.md"
+    path.write_text(
+        f"# 명령\n\n{task}\n\n# 토론 기록\n\n" + "\n\n".join(transcript) + f"\n\n# 최종 답변\n\n{final}\n",
+        encoding="utf-8",
+    )
+    return path
+
+
+def run_debate(task: str, participants: list[Participant], args: argparse.Namespace) -> str:
+    by_name = {p.name: p for p in participants}
+    final = ""
+    for ev in debate_events(task, participants, args.rounds, args.moderator):
+        t = ev["type"]
+        if t == "round":
+            header(f"라운드 {ev['round']} / 최대 {ev['max_rounds']}")
+        elif t == "answer":
+            print_answer(by_name[ev["name"]], ev["text"])
+        elif t == "consensus":
+            print(color("\n✔ 모든 참가자가 합의했습니다. 토론을 종료합니다.", "1;32"))
+        elif t == "final_start":
+            header(f"최종 답변 (진행자: {ev['name']})")
+        elif t == "final":
+            final = ev["text"]
+            print(final)
+            if args.save:
+                path = save_transcript(args.save, task, ev["transcript"], final)
+                print(color(f"\n💾 저장됨: {path}", "36"))
     return final
 
 
