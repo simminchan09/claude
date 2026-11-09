@@ -9,9 +9,10 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#4f46e5">
 <link rel="manifest" href="/manifest.json">
-<link rel="apple-touch-icon" href="/icon.svg">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <title>AI 토론</title>
 <link rel="icon" href="/icon.svg">
+<link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2129; --muted: #6b7280; --line: #e3e6eb;
@@ -82,7 +83,7 @@ button:disabled { opacity: .5; cursor: default; }
 .final .saved { color: var(--muted); font-size: 12px; margin-top: 10px; }
 .error { color: var(--err); font-weight: 600; }
 .copy { background: none; color: var(--accent); border: 1px solid var(--line); padding: 6px 12px; min-height: 0; font-size: 13px; font-weight: 500; float: right; }
-/* 아이패드 세로(768~834px): 카드 2열 대신 보기 좋게 */
+/* 태블릿 세로(갤럭시 탭 등 600~900px): 카드를 한 줄에 하나씩 */
 @media (min-width: 601px) and (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } button.go { width: 100%; } }
 </style>

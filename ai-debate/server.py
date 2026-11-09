@@ -5,7 +5,7 @@
     python server.py --port 9000
     python server.py --mock          # 실제 호출 없이 테스트
     python server.py --backend api   # API 키 사용
-    python server.py --pad           # 같은 Wi-Fi의 아이패드/휴대폰에서 접속 가능
+    python server.py --pad           # 같은 Wi-Fi의 태블릿(갤럭시 탭·아이패드)/휴대폰에서 접속 가능
 
 debate.py 의 옵션(--backend, --timeout, --claude-model 등)을 그대로 사용할 수 있습니다.
 외부 패키지 없이 Python 표준 라이브러리만 사용합니다.
@@ -77,7 +77,7 @@ class Handler(BaseHTTPRequestHandler):
     # ---- GET ----
     def do_GET(self):
         path = urlsplit(self.path).path
-        public = path in ("/manifest.json", "/icon.svg")  # 홈 화면 추가용 (비밀 아님)
+        public = path in ("/manifest.json", "/icon.svg", "/icon-192.png", "/icon-512.png", "/icon-maskable.png")  # 홈 화면 추가용 (비밀 아님)
         if not public and not self.authorized():
             return self.deny()
         if path == "/api/participants":
@@ -180,13 +180,13 @@ def main() -> int:
     ap.add_argument("--host", default=None)
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument("--pad", "--lan", action="store_true", dest="pad",
-                    help="같은 Wi-Fi의 아이패드/휴대폰에서 접속 허용")
+                    help="같은 Wi-Fi의 태블릿/휴대폰에서 접속 허용")
     ap.add_argument("--key", default=None, help="외부 접속 키 직접 지정 (기본: 자동 생성)")
     ap.add_argument("--no-key", action="store_true", help="외부 접속 시 키 검사 끄기 (권장하지 않음)")
     own, rest = ap.parse_known_args()
     if "-h" in rest or "--help" in rest:
         print(__doc__)
-        print("웹 서버 옵션: --port N, --pad(아이패드 접속), --host ADDR, --key KEY, --no-key")
+        print("웹 서버 옵션: --port N, --pad(태블릿/폰 접속), --host ADDR, --key KEY, --no-key")
         return 0
 
     host = own.host or ("0.0.0.0" if own.pad else "127.0.0.1")
@@ -214,8 +214,8 @@ def main() -> int:
     if external:
         ips = lan_ips() if host == "0.0.0.0" else [host]
         for ip in ips or ["<이 컴퓨터의 IP>"]:
-            print(f"📱 아이패드/폰: http://{ip}:{own.port}{q}")
-        print("   (같은 Wi-Fi에 연결된 기기의 Safari/Chrome에서 위 주소를 그대로 입력하세요)")
+            print(f"📱 태블릿/폰:  http://{ip}:{own.port}{q}")
+        print("   (같은 Wi-Fi에 연결된 갤럭시 탭의 Chrome/삼성 인터넷에 위 주소를 그대로 입력하세요)")
         print("   (안 열리면 이 컴퓨터의 방화벽에서 Python 접속을 허용하세요)")
     print("종료: Ctrl+C")
     try:
