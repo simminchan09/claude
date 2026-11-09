@@ -5,7 +5,13 @@
     python debate.py "질문 또는 명령"          # 한 번 실행
     python debate.py                           # 대화형 모드
     python debate.py -r 4 "질문"               # 최대 토론 라운드 4회
-    python debate.py --mock "질문"             # API 키 없이 동작 테스트
+    python debate.py --backend api "질문"      # CLI 대신 API 키로 호출
+    python debate.py --mock "질문"             # 실제 호출 없이 동작 테스트
+
+기본(--backend cli)은 설치·로그인된 CLI를 사용합니다 (API 키 불필요):
+    Claude  -> claude  (Claude Code)
+    ChatGPT -> codex   (OpenAI Codex CLI)
+    Gemini  -> gemini  (Gemini CLI)
 """
 
 from __future__ import annotations
@@ -13,7 +19,11 @@ from __future__ import annotations
 import argparse
 import os
 import re
+import shlex
+import shutil
+import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
@@ -117,6 +127,85 @@ class GeminiParticipant(Participant):
         return (resp.text or "").strip()
 
 
+# ---- CLI 백엔드 (구독 로그인된 CLI를 subprocess로 호출) ----------------------
+
+
+class CLIParticipant(Participant):
+    timeout: int = 600
+    env_cmd: str = ""      # 실행 파일 경로를 덮어쓰는 환경변수 이름
+    default_bin: str = ""
+
+    def binary(self) -> str:
+        return os.environ.get(self.env_cmd) or self.default_bin
+
+    def run(self, cmd: list[str], stdin: str, cwd: str) -> str:
+        proc = subprocess.run(
+            cmd,
+            input=stdin,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=self.timeout,
+            cwd=cwd,
+        )
+        if proc.returncode != 0:
+            err = (proc.stderr or proc.stdout).strip()[-800:]
+            raise RuntimeError(f"{shlex.join(cmd[:2])} 종료 코드 {proc.returncode}: {err}")
+        return proc.stdout
+
+    def ask(self, system: str, prompt: str) -> str:
+        with tempfile.TemporaryDirectory(prefix="ai-debate-") as cwd:
+            return self.ask_cli(system, prompt, cwd).strip()
+
+    def ask_cli(self, system: str, prompt: str, cwd: str) -> str:
+        raise NotImplementedError
+
+
+class ClaudeCLI(CLIParticipant):
+    env_cmd, default_bin = "CLAUDE_CMD", "claude"
+
+    def ask_cli(self, system: str, prompt: str, cwd: str) -> str:
+        cmd = [self.binary(), "-p", "--output-format", "text", "--system-prompt", system]
+        if self.model:
+            cmd += ["--model", self.model]
+        return self.run(cmd, prompt, cwd)
+
+
+class CodexCLI(CLIParticipant):
+    env_cmd, default_bin = "CODEX_CMD", "codex"
+
+    def ask_cli(self, system: str, prompt: str, cwd: str) -> str:
+        out = Path(cwd) / "last_message.txt"
+        cmd = [
+            self.binary(), "exec",
+            "--skip-git-repo-check",
+            "--sandbox", "read-only",
+            "--color", "never",
+            "-o", str(out),
+        ]
+        if self.model:
+            cmd += ["-m", self.model]
+        cmd.append("-")  # 프롬프트를 표준 입력으로 전달
+        stdout = self.run(cmd, f"{system}\n\n{prompt}", cwd)
+        return out.read_text(encoding="utf-8") if out.is_file() else stdout
+
+
+class GeminiCLI(CLIParticipant):
+    env_cmd, default_bin = "GEMINI_CMD", "gemini"
+
+    def ask_cli(self, system: str, prompt: str, cwd: str) -> str:
+        cmd = [
+            self.binary(),
+            "--output-format", "text",
+            "--approval-mode", "plan",
+            "-p", "위 내용의 지시에 따라 답변하세요.",  # 표준 입력 뒤에 덧붙여짐
+        ]
+        if self.model:
+            cmd += ["-m", self.model]
+        return self.run(cmd, f"{system}\n\n{prompt}", cwd)
+
+
 class MockParticipant(Participant):
     """API 키 없이 흐름을 확인하기 위한 가짜 참가자."""
 
@@ -129,21 +218,32 @@ class MockParticipant(Participant):
         return f"[{self.name} 모의 답변] 다른 의견을 검토해 수정했습니다.\n\n합의: 예"
 
 
+API_DEFAULT_MODELS = {"Claude": "claude-opus-5-5", "ChatGPT": "gpt-5", "Gemini": "gemini-2.5-pro"}
+
+
 def build_participants(args: argparse.Namespace) -> list[Participant]:
+    # (이름, API 클래스, CLI 클래스, 모델, 색상, API 키 환경변수)
     specs = [
-        ("Claude", ClaudeParticipant, args.claude_model, "1;33", ["ANTHROPIC_API_KEY"]),
-        ("ChatGPT", ChatGPTParticipant, args.openai_model, "1;32", ["OPENAI_API_KEY"]),
-        ("Gemini", GeminiParticipant, args.gemini_model, "1;34", ["GEMINI_API_KEY", "GOOGLE_API_KEY"]),
+        ("Claude", ClaudeParticipant, ClaudeCLI, args.claude_model, "1;33", ["ANTHROPIC_API_KEY"]),
+        ("ChatGPT", ChatGPTParticipant, CodexCLI, args.openai_model, "1;32", ["OPENAI_API_KEY"]),
+        ("Gemini", GeminiParticipant, GeminiCLI, args.gemini_model, "1;34", ["GEMINI_API_KEY", "GOOGLE_API_KEY"]),
     ]
     chosen = {s.strip().lower() for s in args.only.split(",")} if args.only else None
     result: list[Participant] = []
-    for name, cls, model, ccode, keys in specs:
+    for name, api_cls, cli_cls, model, ccode, keys in specs:
         if chosen and name.lower() not in chosen:
             continue
         if args.mock:
             result.append(MockParticipant(name, "mock", ccode, args.max_tokens))
+        elif args.backend == "cli":
+            p = cli_cls(name, model or "", ccode, args.max_tokens)
+            p.timeout = args.timeout
+            if shutil.which(p.binary()):
+                result.append(p)
+            else:
+                print(color(f"⚠ {name}: '{p.binary()}' 명령을 찾을 수 없어 토론에서 제외합니다.", "33"))
         elif any(os.environ.get(k) for k in keys):
-            result.append(cls(name, model, ccode, args.max_tokens))
+            result.append(api_cls(name, model or API_DEFAULT_MODELS[name], ccode, args.max_tokens))
         else:
             print(color(f"⚠ {name}: {' 또는 '.join(keys)} 가 없어 토론에서 제외합니다.", "33"))
     return result
@@ -218,7 +318,7 @@ def safe_ask(p: Participant, system: str, prompt: str, retries: int = 2) -> str:
 
 
 def print_answer(p: Participant, text: str) -> None:
-    print(color(f"\n▶ {p.name} ({p.model})", p.color_code))
+    print(color(f"\n▶ {p.name} ({p.model or '기본 모델'})", p.color_code))
     print(text)
 
 
@@ -291,10 +391,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("-r", "--rounds", type=int, default=3, help="최대 토론 라운드 수 (기본 3)")
     ap.add_argument("-m", "--moderator", default="Claude", help="최종 답변을 정리할 AI (Claude/ChatGPT/Gemini)")
     ap.add_argument("--only", help="참가할 AI만 지정 (예: claude,gemini)")
-    ap.add_argument("--claude-model", default=os.environ.get("CLAUDE_MODEL", "claude-opus-5-5"))
-    ap.add_argument("--openai-model", default=os.environ.get("OPENAI_MODEL", "gpt-5"))
-    ap.add_argument("--gemini-model", default=os.environ.get("GEMINI_MODEL", "gemini-2.5-pro"))
-    ap.add_argument("--max-tokens", type=int, default=2048, help="응답당 최대 토큰 (기본 2048)")
+    ap.add_argument("-b", "--backend", choices=["cli", "api"], default=os.environ.get("DEBATE_BACKEND", "cli"),
+                    help="cli: claude/codex/gemini CLI 사용 (기본), api: API 키 사용")
+    ap.add_argument("--timeout", type=int, default=600, help="CLI 응답 대기 시간(초, 기본 600)")
+    ap.add_argument("--claude-model", default=os.environ.get("CLAUDE_MODEL"))
+    ap.add_argument("--openai-model", default=os.environ.get("OPENAI_MODEL"))
+    ap.add_argument("--gemini-model", default=os.environ.get("GEMINI_MODEL"))
+    ap.add_argument("--max-tokens", type=int, default=2048, help="API 모드 응답당 최대 토큰 (기본 2048)")
     ap.add_argument("--save", metavar="DIR", help="토론 기록을 Markdown으로 저장할 폴더")
     ap.add_argument("--mock", action="store_true", help="API 호출 없이 모의 응답으로 실행")
     return ap.parse_args(argv)
@@ -310,9 +413,11 @@ def main(argv: list[str] | None = None) -> int:
 
     participants = build_participants(args)
     if not participants:
-        print(color("사용 가능한 AI가 없습니다. .env 파일에 API 키를 설정하세요.", "1;31"), file=sys.stderr)
+        hint = ("claude / codex / gemini CLI를 설치하고 로그인하세요." if args.backend == "cli"
+                else ".env 파일에 API 키를 설정하세요.")
+        print(color(f"사용 가능한 AI가 없습니다. {hint}", "1;31"), file=sys.stderr)
         return 1
-    print(color("참가자: " + ", ".join(f"{p.name}({p.model})" for p in participants), "1;36"))
+    print(color("참가자: " + ", ".join(f"{p.name}({p.model or '기본 모델'})" for p in participants), "1;36"))
 
     if args.task:
         run_debate(" ".join(args.task), participants, args)

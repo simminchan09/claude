@@ -1,3 +1,4 @@
+# API 모드(--backend api)에서만 필요합니다.
 anthropic>=0.40.0
 openai>=1.50.0
 google-genai>=1.0.0
