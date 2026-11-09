@@ -5,6 +5,7 @@
     python server.py --port 9000
     python server.py --mock          # 실제 호출 없이 테스트
     python server.py --backend api   # API 키 사용
+    python server.py --pad           # 같은 Wi-Fi의 아이패드/휴대폰에서 접속 가능
 
 debate.py 의 옵션(--backend, --timeout, --claude-model 등)을 그대로 사용할 수 있습니다.
 외부 패키지 없이 Python 표준 라이브러리만 사용합니다.
@@ -13,21 +14,28 @@ debate.py 의 옵션(--backend, --timeout, --claude-model 등)을 그대로 사�
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
+import secrets
+import socket
 import sys
 import threading
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import debate
 
 STATIC = Path(__file__).resolve().parent / "static"
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
-                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml"}
+                 ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
+                 ".json": "application/manifest+json; charset=utf-8", ".png": "image/png"}
 
 ARGS: argparse.Namespace
 PARTICIPANTS: list[debate.Participant] = []
 LOCK = threading.Lock()  # 한 번에 하나의 토론만 실행 (CLI 세션 충돌 방지)
+ACCESS_KEY = ""  # 외부(Wi-Fi) 접속 허용 시 필요한 접속 키. 빈 값이면 검사 안 함
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -45,9 +53,33 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    # ---- 접속 키 확인 (같은 Wi-Fi의 다른 사람이 마음대로 쓰지 못하게) ----
+    def authorized(self) -> bool:
+        if not ACCESS_KEY:
+            return True
+        candidates = [self.headers.get("X-Access-Key", "")]
+        candidates += parse_qs(urlsplit(self.path).query).get("key", [])
+        cookie = SimpleCookie(self.headers.get("Cookie", ""))
+        if "debate_key" in cookie:
+            candidates.append(cookie["debate_key"].value)
+        return any(hmac.compare_digest(c, ACCESS_KEY) for c in candidates if c)
+
+    def deny(self):
+        body = ("<!doctype html><meta charset=utf-8><meta name=viewport content='width=device-width'>"
+                "<body style='font-family:sans-serif;padding:24px'><h2>접속 키가 필요합니다</h2>"
+                "<p>서버를 실행한 컴퓨터의 터미널에 표시된 주소(<code>?key=...</code> 포함)로 접속하세요.</p>").encode()
+        self.send_response(403)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     # ---- GET ----
     def do_GET(self):
-        path = self.path.split("?", 1)[0]
+        path = urlsplit(self.path).path
+        public = path in ("/manifest.json", "/icon.svg")  # 홈 화면 추가용 (비밀 아님)
+        if not public and not self.authorized():
+            return self.deny()
         if path == "/api/participants":
             return self.send_json({
                 "backend": "mock" if ARGS.mock else ARGS.backend,
@@ -64,13 +96,18 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header("Content-Type", CONTENT_TYPES.get(file.suffix, "application/octet-stream"))
         self.send_header("Content-Length", str(len(body)))
+        if ACCESS_KEY and file.suffix == ".html":
+            # 홈 화면 앱으로 열어도 키가 유지되도록 쿠키 저장 (1년)
+            self.send_header("Set-Cookie", f"debate_key={ACCESS_KEY}; Path=/; Max-Age=31536000; SameSite=Strict; HttpOnly")
         self.end_headers()
         self.wfile.write(body)
 
     # ---- POST /api/debate : 토론 진행 상황을 SSE로 스트리밍 ----
     def do_POST(self):
-        if self.path != "/api/debate":
+        if urlsplit(self.path).path != "/api/debate":
             return self.send_error(404)
+        if not self.authorized():
+            return self.send_json({"error": "접속 키가 올바르지 않습니다."}, 403)
         try:
             length = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(length) or b"{}")
@@ -118,15 +155,44 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
 
 
+def lan_ips() -> list[str]:
+    """이 컴퓨터의 Wi-Fi/LAN IP 주소 목록."""
+    ips: list[str] = []
+    try:  # 기본 경로의 IP (실제 패킷은 보내지 않음)
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("10.255.255.255", 1))
+            ips.append(s.getsockname()[0])
+    except OSError:
+        pass
+    try:
+        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
+            ip = info[4][0]
+            if ip not in ips:
+                ips.append(ip)
+    except OSError:
+        pass
+    return [ip for ip in ips if not ip.startswith("127.")]
+
+
 def main() -> int:
-    global ARGS, PARTICIPANTS
+    global ARGS, PARTICIPANTS, ACCESS_KEY
     ap = argparse.ArgumentParser(description="AI 토론 웹 서버", add_help=False)
-    ap.add_argument("--host", default="127.0.0.1")
+    ap.add_argument("--host", default=None)
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--pad", "--lan", action="store_true", dest="pad",
+                    help="같은 Wi-Fi의 아이패드/휴대폰에서 접속 허용")
+    ap.add_argument("--key", default=None, help="외부 접속 키 직접 지정 (기본: 자동 생성)")
+    ap.add_argument("--no-key", action="store_true", help="외부 접속 시 키 검사 끄기 (권장하지 않음)")
     own, rest = ap.parse_known_args()
     if "-h" in rest or "--help" in rest:
         print(__doc__)
+        print("웹 서버 옵션: --port N, --pad(아이패드 접속), --host ADDR, --key KEY, --no-key")
         return 0
+
+    host = own.host or ("0.0.0.0" if own.pad else "127.0.0.1")
+    external = host not in ("127.0.0.1", "localhost", "::1")
+    if external and not own.no_key:
+        ACCESS_KEY = own.key or secrets.token_urlsafe(6)
 
     debate.load_dotenv(Path(__file__).resolve().parent / ".env")
     ARGS = debate.parse_args(rest)
@@ -135,11 +201,23 @@ def main() -> int:
         print("사용 가능한 AI가 없습니다. CLI 설치/로그인 또는 API 키를 확인하세요.", file=sys.stderr)
         return 1
 
-    httpd = ThreadingHTTPServer((own.host, own.port), Handler)
+    try:
+        httpd = ThreadingHTTPServer((host, own.port), Handler)
+    except OSError as e:
+        print(f"포트 {own.port}를 열 수 없습니다 ({e}). --port 9000 처럼 다른 포트를 지정하세요.", file=sys.stderr)
+        return 1
     httpd.daemon_threads = True
     names = ", ".join(f"{p.name}({p.model or '기본 모델'})" for p in PARTICIPANTS)
+    q = f"/?key={ACCESS_KEY}" if ACCESS_KEY else "/"
     print(f"참가자: {names}")
-    print(f"🌐 http://{'localhost' if own.host in ('127.0.0.1', '0.0.0.0') else own.host}:{own.port} 에서 열렸습니다. (종료: Ctrl+C)")
+    print(f"💻 이 컴퓨터:   http://localhost:{own.port}{q}")
+    if external:
+        ips = lan_ips() if host == "0.0.0.0" else [host]
+        for ip in ips or ["<이 컴퓨터의 IP>"]:
+            print(f"📱 아이패드/폰: http://{ip}:{own.port}{q}")
+        print("   (같은 Wi-Fi에 연결된 기기의 Safari/Chrome에서 위 주소를 그대로 입력하세요)")
+        print("   (안 열리면 이 컴퓨터의 방화벽에서 Python 접속을 허용하세요)")
+    print("종료: Ctrl+C")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

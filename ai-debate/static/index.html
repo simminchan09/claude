@@ -2,9 +2,16 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="AI 토론">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#4f46e5">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon.svg">
 <title>AI 토론</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💬</text></svg>">
+<link rel="icon" href="/icon.svg">
 <style>
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #1d2129; --muted: #6b7280; --line: #e3e6eb;
@@ -23,22 +30,24 @@
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; }
-.wrap { max-width: 1200px; margin: 0 auto; padding: 24px 16px 80px; }
+html { -webkit-text-size-adjust: 100%; }
+.wrap { max-width: 1200px; margin: 0 auto;
+  padding: calc(24px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(80px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); }
 header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
 h1 { font-size: 22px; margin: 0; }
 .status { color: var(--muted); font-size: 13px; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
 textarea { width: 100%; min-height: 90px; resize: vertical; border: 1px solid var(--line); border-radius: 8px;
-  padding: 12px; font: inherit; background: var(--bg); color: var(--text); }
+  padding: 12px; font: inherit; font-size: 16px; background: var(--bg); color: var(--text); }
 textarea:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 .controls { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; margin-top: 12px; }
 .controls label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
-select { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
+select { font: inherit; font-size: 16px; min-height: 36px; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); }
 .chips { display: inline-flex; gap: 8px; flex-wrap: wrap; }
-.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; cursor: pointer; color: var(--text); font-size: 14px; }
-.chip input { margin: 0; }
+.chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; min-height: 36px; cursor: pointer; color: var(--text); font-size: 14px; }
+.chip input { margin: 0; width: 18px; height: 18px; }
 .spacer { flex: 1; }
-button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 9px 20px; cursor: pointer;
+button { font: inherit; font-weight: 600; border: 0; border-radius: 8px; padding: 10px 22px; min-height: 44px; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
   background: var(--accent); color: var(--accent-text); }
 button.stop { background: var(--err); color: #fff; }
 button:disabled { opacity: .5; cursor: default; }
@@ -55,7 +64,7 @@ button:disabled { opacity: .5; cursor: default; }
 .badge.yes { color: var(--ok); } .badge.no { color: var(--no); }
 .body { overflow-wrap: anywhere; }
 .body.collapsed { max-height: 320px; overflow: hidden; -webkit-mask-image: linear-gradient(#000 75%, transparent); mask-image: linear-gradient(#000 75%, transparent); }
-.more { background: none; color: var(--accent); padding: 4px 0 0; font-weight: 500; font-size: 13px; }
+.more { background: none; color: var(--accent); padding: 8px 0 0; min-height: 0; font-weight: 500; font-size: 14px; }
 .body p:first-child { margin-top: 0; } .body p:last-child { margin-bottom: 0; }
 .body pre { background: var(--code); padding: 10px; border-radius: 6px; overflow-x: auto; }
 .body code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 90%; }
@@ -72,7 +81,9 @@ button:disabled { opacity: .5; cursor: default; }
 .final h2 { margin: 0 0 8px; font-size: 17px; }
 .final .saved { color: var(--muted); font-size: 12px; margin-top: 10px; }
 .error { color: var(--err); font-weight: 600; }
-.copy { background: none; color: var(--accent); border: 1px solid var(--line); padding: 3px 10px; font-size: 12px; font-weight: 500; float: right; }
+.copy { background: none; color: var(--accent); border: 1px solid var(--line); padding: 6px 12px; min-height: 0; font-size: 13px; font-weight: 500; float: right; }
+/* 아이패드 세로(768~834px): 카드 2열 대신 보기 좋게 */
+@media (min-width: 601px) and (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } button.go { width: 100%; } }
 </style>
 </head>
@@ -84,7 +95,7 @@ button:disabled { opacity: .5; cursor: default; }
   </header>
 
   <div class="panel">
-    <textarea id="task" placeholder="명령이나 질문을 입력하세요. (Ctrl+Enter로 시작)"></textarea>
+    <textarea id="task" placeholder="명령이나 질문을 입력하세요. (Ctrl/⌘+Enter로 시작)"></textarea>
     <div class="controls">
       <span class="chips" id="who"></span>
       <label>최대 라운드
