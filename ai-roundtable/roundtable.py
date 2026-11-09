@@ -17,7 +17,10 @@ import concurrent.futures
 import datetime as dt
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.request
 
@@ -62,6 +65,10 @@ class Participant:
     def available(self) -> bool:
         return bool(self.api_key)
 
+    @property
+    def label(self) -> str:
+        return self.model
+
     def chat(self, system: str, messages: list[dict]) -> str:
         raise NotImplementedError
 
@@ -84,6 +91,59 @@ class Claude(Participant):
             },
         )
         return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+
+
+class ClaudeCLI(Participant):
+    """API 키 없이, 구독 계정으로 로그인한 Claude Code(`claude` 명령)를 통해 Claude를 부릅니다."""
+
+    name = "Claude"
+    env_key = "ANTHROPIC_API_KEY"
+    env_model = "CLAUDE_MODEL"
+    default_model = ""  # 비워두면 Claude Code 기본 모델 사용
+
+    def __init__(self, max_tokens):
+        super().__init__(max_tokens)
+        self.bin = shutil.which("claude")
+        self.model = os.environ.get(self.env_model, "")
+
+    @property
+    def label(self):
+        return f"Claude Code{' ' + self.model if self.model else ''}"
+
+    @property
+    def available(self):
+        return bool(self.bin)
+
+    @staticmethod
+    def _flatten(messages):
+        if len(messages) == 1:
+            return messages[0]["content"]
+        parts = ["아래는 지금까지의 대화입니다. 마지막 [사용자] 메시지에 답하세요.\n"]
+        for m in messages:
+            who = "사용자" if m["role"] == "user" else "당신(이전 답변)"
+            parts.append(f"[{who}]\n{m['content']}\n")
+        return "\n".join(parts)
+
+    def _run(self, args, prompt, env):
+        with tempfile.TemporaryDirectory() as cwd:  # 프로젝트 파일을 읽지 않도록 빈 폴더에서 실행
+            return subprocess.run(
+                [self.bin, *args], input=prompt, capture_output=True, text=True,
+                encoding="utf-8", errors="replace", cwd=cwd, env=env, timeout=TIMEOUT,
+            )
+
+    def chat(self, system, messages):
+        env = dict(os.environ)
+        env.pop("ANTHROPIC_API_KEY", None)  # API 과금이 아닌 구독 계정으로 실행
+        prompt = self._flatten(messages)
+        model = ["--model", self.model] if self.model else []
+        r = self._run(["-p", "--system-prompt", system, "--tools", "", "--no-session-persistence", *model],
+                      prompt, env)
+        if r.returncode != 0 and "unknown option" in (r.stderr + r.stdout).lower():
+            # 옵션을 모르는 구버전 Claude Code: 지시문을 본문에 합쳐 최소 옵션으로 재시도
+            r = self._run(["-p", *model], f"[지시]\n{system}\n\n{prompt}", env)
+        if r.returncode != 0:
+            raise RuntimeError(f"claude 명령 실패 ({r.returncode}): {(r.stderr or r.stdout).strip()[:500]}")
+        return r.stdout
 
 
 class ChatGPT(Participant):
@@ -232,8 +292,8 @@ class Roundtable:
                 reply = replies[p.name] or "(빈 응답)"
                 histories[p.name].append({"role": "assistant", "content": reply})
                 latest[p.name] = reply
-                transcript.append({"round": r, "speaker": p.name, "model": p.model, "text": reply})
-                self.log(f"\n--- {p.name} ({p.model}) ---\n{reply}")
+                transcript.append({"round": r, "speaker": p.name, "model": p.label, "text": reply})
+                self.log(f"\n--- {p.name} ({p.label}) ---\n{reply}")
 
             if r > 1 and len(self.participants) > 1 and all(
                 CONSENSUS_TAG in latest[n] for n in names
@@ -251,7 +311,7 @@ class Roundtable:
             [{"role": "user", "content": f"사용자의 명령:\n{task}\n\n토론 기록:\n{record}\n\n최종 답변을 작성하세요."}],
         )
         print(final, flush=True)
-        transcript.append({"round": "final", "speaker": self.moderator.name, "model": self.moderator.model, "text": final})
+        transcript.append({"round": "final", "speaker": self.moderator.name, "model": self.moderator.label, "text": final})
         return final, transcript
 
 
@@ -280,6 +340,13 @@ def build(args) -> tuple[list[Participant], Participant]:
         ps = []
         for w in wanted:
             p = PARTICIPANT_CLASSES[w](args.max_tokens)
+            if w == "claude":
+                cli = ClaudeCLI(args.max_tokens)
+                if args.claude == "cli" or (args.claude == "auto" and not p.available):
+                    p = cli
+                    if not p.available:
+                        print("[경고] Claude: `claude` 명령(Claude Code)을 찾을 수 없어 제외합니다.", file=sys.stderr)
+                        continue
             if p.available:
                 ps.append(p)
             else:
@@ -298,6 +365,9 @@ def main():
     ap.add_argument("-r", "--rounds", type=int, default=3, help="최대 토론 라운드 수 (기본 3)")
     ap.add_argument("-m", "--models", default="claude,chatgpt,gemini", help="참가 모델 (쉼표 구분)")
     ap.add_argument("--moderator", default="claude", help="최종 답변을 정리할 모델 (기본 claude)")
+    ap.add_argument("--claude", choices=["auto", "api", "cli"], default="auto",
+                    help="Claude 호출 방식: api=API 키, cli=구독 로그인한 claude 명령, "
+                         "auto=API 키가 있으면 api 아니면 cli (기본)")
     ap.add_argument("--max-tokens", type=int, default=4096, help="응답당 최대 토큰")
     ap.add_argument("-o", "--output", help="토론 기록을 저장할 마크다운 파일 경로")
     ap.add_argument("-q", "--quiet", action="store_true", help="토론 과정은 숨기고 최종 답변만 출력")
@@ -306,7 +376,7 @@ def main():
 
     participants, moderator = build(args)
     table = Roundtable(participants, moderator, max(1, args.rounds), verbose=not args.quiet)
-    print(f"참가자: {', '.join(f'{p.name}({p.model})' for p in participants)} | 진행자: {moderator.name}")
+    print(f"참가자: {', '.join(f'{p.name}({p.label})' for p in participants)} | 진행자: {moderator.name}")
 
     def handle(task: str, idx: int | None = None):
         _, transcript = table.run(task)
