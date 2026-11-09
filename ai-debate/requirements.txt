@@ -1,4 +1,1 @@
-# API 모드(--backend api)에서만 필요합니다.
-anthropic>=0.40.0
-openai>=1.50.0
-google-genai>=1.0.0
+# 필요한 외부 패키지가 없습니다. (Python 3.9+ 표준 라이브러리만 사용)

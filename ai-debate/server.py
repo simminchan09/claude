@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import hmac
 import json
+import os
 import secrets
 import socket
 import sys
@@ -27,7 +28,9 @@ from urllib.parse import parse_qs, urlsplit
 
 import debate
 
-STATIC = Path(__file__).resolve().parent / "static"
+BASE = Path(__file__).resolve().parent
+STATIC = BASE / "static"
+ENV_FILE = BASE / ".env"
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml",
                  ".json": "application/manifest+json; charset=utf-8", ".png": "image/png"}
@@ -83,9 +86,11 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/participants":
             return self.send_json({
                 "backend": "mock" if ARGS.mock else ARGS.backend,
-                "participants": [{"name": p.name, "model": p.model or "기본 모델"} for p in PARTICIPANTS],
+                "participants": [{"name": p.name, "model": p.model or "기본 모델", "via": p.via} for p in PARTICIPANTS],
                 "rounds": ARGS.rounds,
                 "moderator": ARGS.moderator,
+                "keys": {k: bool(os.environ.get(k)) for k in debate.KEY_NAMES},
+                "can_edit_keys": self.is_local(),
             })
         if path == "/":
             path = "/index.html"
@@ -102,12 +107,49 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def is_local(self) -> bool:
+        return self.client_address[0] in ("127.0.0.1", "::1", "::ffff:127.0.0.1")
+
+    # ---- POST /api/keys : 웹 화면에서 API 키 저장 (이 기기에서 접속한 경우만) ----
+    def save_keys(self):
+        global PARTICIPANTS
+        if not self.is_local():
+            return self.send_json({"error": "API 키는 서버가 실행 중인 기기에서만 설정할 수 있습니다."}, 403)
+        try:
+            req = json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        except ValueError:
+            return self.send_json({"error": "잘못된 요청입니다."}, 400)
+        updates = {}
+        for k in debate.KEY_NAMES:
+            if k in req:
+                v = str(req[k]).strip()
+                if any(c.isspace() for c in v):
+                    return self.send_json({"error": f"{k} 값에 공백이 있습니다."}, 400)
+                updates[k] = v
+        if not LOCK.acquire(blocking=False):
+            return self.send_json({"error": "토론 진행 중에는 변경할 수 없습니다."}, 409)
+        try:
+            debate.save_dotenv(ENV_FILE, updates)
+            for k, v in updates.items():
+                if v:
+                    os.environ[k] = v
+                else:
+                    os.environ.pop(k, None)
+            PARTICIPANTS = debate.build_participants(ARGS, quiet=True)
+        finally:
+            LOCK.release()
+        self.log_message("API 키 설정 갱신: %s", ", ".join(f"{k}={'설정' if v else '삭제'}" for k, v in updates.items()))
+        return self.send_json({"ok": True, "participants": [p.name for p in PARTICIPANTS]})
+
     # ---- POST /api/debate : 토론 진행 상황을 SSE로 스트리밍 ----
     def do_POST(self):
-        if urlsplit(self.path).path != "/api/debate":
+        path = urlsplit(self.path).path
+        if path not in ("/api/debate", "/api/keys"):
             return self.send_error(404)
         if not self.authorized():
             return self.send_json({"error": "접속 키가 올바르지 않습니다."}, 403)
+        if path == "/api/keys":
+            return self.save_keys()
         try:
             length = int(self.headers.get("Content-Length", 0))
             req = json.loads(self.rfile.read(length) or b"{}")
@@ -121,7 +163,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_json({"error": "명령을 입력하세요."}, 400)
         participants = [p for p in PARTICIPANTS if not only or p.name.lower() in only]
         if not participants:
-            return self.send_json({"error": "참가할 AI가 없습니다."}, 400)
+            return self.send_json({"error": "참가할 AI가 없습니다. ⚙ 설정에서 API 키를 입력하세요."}, 400)
         if not LOCK.acquire(blocking=False):
             return self.send_json({"error": "다른 토론이 진행 중입니다. 끝난 뒤 다시 시도하세요."}, 409)
 
@@ -194,12 +236,11 @@ def main() -> int:
     if external and not own.no_key:
         ACCESS_KEY = own.key or secrets.token_urlsafe(6)
 
-    debate.load_dotenv(Path(__file__).resolve().parent / ".env")
+    debate.load_dotenv(ENV_FILE)
     ARGS = debate.parse_args(rest)
     PARTICIPANTS = debate.build_participants(ARGS)
     if not PARTICIPANTS:
-        print("사용 가능한 AI가 없습니다. CLI 설치/로그인 또는 API 키를 확인하세요.", file=sys.stderr)
-        return 1
+        print("⚠ 아직 사용 가능한 AI가 없습니다. 웹 화면의 ⚙ 설정에서 API 키를 입력하세요.")
 
     try:
         httpd = ThreadingHTTPServer((host, own.port), Handler)
@@ -207,7 +248,7 @@ def main() -> int:
         print(f"포트 {own.port}를 열 수 없습니다 ({e}). --port 9000 처럼 다른 포트를 지정하세요.", file=sys.stderr)
         return 1
     httpd.daemon_threads = True
-    names = ", ".join(f"{p.name}({p.model or '기본 모델'})" for p in PARTICIPANTS)
+    names = ", ".join(f"{p.name}({p.model or '기본 모델'}, {p.via})" for p in PARTICIPANTS) or "없음"
     q = f"/?key={ACCESS_KEY}" if ACCESS_KEY else "/"
     print(f"참가자: {names}")
     print(f"💻 이 컴퓨터:   http://localhost:{own.port}{q}")

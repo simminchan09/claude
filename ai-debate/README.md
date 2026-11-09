@@ -16,6 +16,32 @@ python server.py --mock     # 실제 호출 없이 화면 테스트
 - `--backend api`, `--save logs`, `--claude-model` 등 아래 CLI 옵션을 그대로 사용할 수 있습니다
 - 기본으로 `127.0.0.1`(내 컴퓨터)에서만 접속됩니다.
 
+## 📲 컴퓨터 없이 갤럭시 탭만으로 사용 (Termux)
+갤럭시 탭 안에서 서버를 실행하고, 같은 탭의 Chrome으로 `localhost`에 접속합니다.
+탭에는 Claude/Codex CLI가 없으므로 **API 키**로 AI를 호출합니다 (각 사의 API 사용료가 별도로 듭니다).
+
+1. **Termux 설치**: [F-Droid](https://f-droid.org/packages/com.termux/) 또는 [GitHub](https://github.com/termux/termux-app/releases)에서 받으세요.
+   (Play 스토어 버전은 오래되어 동작하지 않을 수 있습니다)
+2. Termux를 열고 아래 한 줄을 입력 (설치는 처음 한 번만)
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/simminchan09/claude/ccr-cf22c3aa-pwnjua/ai-debate/termux_setup.sh | bash
+   ```
+3. 실행
+   ```bash
+   ai-debate
+   ```
+   Chrome이 자동으로 `http://localhost:8000`을 엽니다. (안 열리면 직접 입력)
+4. 처음 한 번 화면의 **⚙ 설정**에 API 키 입력 → 저장
+   - Claude: https://console.anthropic.com/settings/keys
+   - ChatGPT: https://platform.openai.com/api-keys
+   - Gemini: https://aistudio.google.com/apikey
+   - 키가 있는 AI만 참가합니다. (Gemini 하나만 넣어도 동작)
+5. (선택) Chrome ⋮ → **홈 화면에 추가** — 다음부터는 Termux에서 `ai-debate` 실행 후 홈 화면 아이콘으로 열면 됩니다.
+
+- 종료: Termux에서 `Ctrl+C` (Termux 키보드 위 CTRL 버튼 + C)
+- Termux가 백그라운드에서 꺼지면: 설정 → 애플리케이션 → Termux → 배터리 → **제한 없음**
+- 업데이트: Termux에서 2번 명령을 다시 실행
+
 ## 📱 갤럭시 탭(태블릿·휴대폰)에서 사용
 AI CLI는 컴퓨터에서 실행되므로, **컴퓨터에서 서버를 켜고 갤럭시 탭은 브라우저로 접속**합니다.
 
@@ -54,7 +80,7 @@ python debate.py --mock "질문"          # 실제 호출 없이 흐름 테스�
 | `-r, --rounds` | 3 | 최대 토론 라운드 |
 | `-m, --moderator` | Claude | 최종 답변 정리 AI |
 | `--only` | 전체 | 참가 AI 지정 (쉼표 구분) |
-| `-b, --backend` | `cli` (`DEBATE_BACKEND`) | `cli` 또는 `api` |
+| `-b, --backend` | `auto` (`DEBATE_BACKEND`) | `auto`(CLI 우선, 없으면 API) / `cli` / `api` |
 | `--timeout` | 600 | CLI 응답 대기 시간(초) |
 | `--claude-model` | CLI: 각 CLI 기본값 / API: `claude-opus-5-5` (`CLAUDE_MODEL`) | Claude 모델 |
 | `--openai-model` | CLI: 각 CLI 기본값 / API: `gpt-5` (`OPENAI_MODEL`) | ChatGPT 모델 |

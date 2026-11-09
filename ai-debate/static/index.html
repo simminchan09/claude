@@ -82,6 +82,16 @@ button:disabled { opacity: .5; cursor: default; }
 .final h2 { margin: 0 0 8px; font-size: 17px; }
 .final .saved { color: var(--muted); font-size: 12px; margin-top: 10px; }
 .error { color: var(--err); font-weight: 600; }
+.hdr-right { display: flex; align-items: center; gap: 10px; }
+button.ghost { background: none; color: var(--text); border: 1px solid var(--line); padding: 6px 12px; min-height: 36px; font-weight: 500; }
+.settings { margin-bottom: 16px; }
+.settings h2 { font-size: 16px; margin: 0 0 6px; }
+.keys { display: grid; gap: 12px; }
+.keys label { display: grid; gap: 4px; font-size: 14px; }
+.keys a { color: var(--accent); font-size: 13px; margin-left: 6px; }
+.keys input { font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
+.keys em { font-style: normal; font-size: 12px; color: var(--muted); }
+.keys em.on { color: var(--ok); }
 .copy { background: none; color: var(--accent); border: 1px solid var(--line); padding: 6px 12px; min-height: 0; font-size: 13px; font-weight: 500; float: right; }
 /* 태블릿 세로(갤럭시 탭 등 600~900px): 카드를 한 줄에 하나씩 */
 @media (min-width: 601px) and (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
@@ -92,8 +102,25 @@ button:disabled { opacity: .5; cursor: default; }
 <div class="wrap">
   <header>
     <h1>💬 AI 토론 <span style="font-weight:400;color:var(--muted);font-size:15px">Claude × ChatGPT × Gemini</span></h1>
-    <div class="status" id="status">연결 중…</div>
+    <div class="hdr-right"><span class="status" id="status">연결 중…</span>
+      <button class="ghost" id="gear" title="API 키 설정">⚙ 설정</button></div>
   </header>
+
+  <div class="panel settings" id="settings" hidden>
+    <h2>API 키 설정</h2>
+    <p class="hint" style="margin-top:0">CLI가 없는 기기(갤럭시 탭 등)에서는 API 키로 AI를 호출합니다. 키는 이 기기의 <code>ai-debate/.env</code> 파일에만 저장됩니다.
+      비워 두고 저장하면 변경하지 않고, <b>삭제</b>를 체크하면 지웁니다.</p>
+    <div class="keys">
+      <label><span><b style="color:var(--claude)">Claude</b> · Anthropic <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">키 발급</a></span>
+        <input type="password" autocomplete="off" data-key="ANTHROPIC_API_KEY" placeholder="sk-ant-..."><em></em></label>
+      <label><span><b style="color:var(--chatgpt)">ChatGPT</b> · OpenAI <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener">키 발급</a></span>
+        <input type="password" autocomplete="off" data-key="OPENAI_API_KEY" placeholder="sk-..."><em></em></label>
+      <label><span><b style="color:var(--gemini)">Gemini</b> · Google <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">키 발급</a></span>
+        <input type="password" autocomplete="off" data-key="GEMINI_API_KEY" placeholder="AIza..."><em></em></label>
+    </div>
+    <div class="controls"><span class="spacer"></span><span class="hint" id="keymsg" style="margin:0"></span>
+      <button id="savekeys">저장</button></div>
+  </div>
 
   <div class="panel">
     <textarea id="task" placeholder="명령이나 질문을 입력하세요. (Ctrl/⌘+Enter로 시작)"></textarea>
@@ -160,10 +187,20 @@ function esc(s) { const d = document.createElement("div"); d.textContent = s; re
 async function loadInfo() {
   try {
     info = await (await fetch("/api/participants")).json();
-    const mode = { cli: "CLI 모드", api: "API 모드", mock: "모의 모드" }[info.backend] || info.backend;
+    const mode = { auto: "자동", cli: "CLI 모드", api: "API 모드", mock: "모의 모드" }[info.backend] || info.backend;
     $("#status").textContent = `${mode} · 참가자 ${info.participants.length}명`;
-    $("#who").innerHTML = info.participants.map(p =>
-      `<label class="chip" title="${esc(p.model)}"><input type="checkbox" value="${esc(p.name)}" checked>
+    $("#gear").hidden = !info.can_edit_keys;
+    document.querySelectorAll("#settings input[data-key]").forEach(i => {
+      const on = info.keys[i.dataset.key];
+      const em = i.nextElementSibling;
+      em.className = on ? "on" : "";
+      em.innerHTML = on ? `✔ 저장됨 · <label style="display:inline"><input type="checkbox" data-del="${i.dataset.key}"> 삭제</label>` : "미설정";
+    });
+    if (!info.participants.length) {
+      $("#who").innerHTML = `<span class="error">사용 가능한 AI가 없습니다. ⚙ 설정에서 API 키를 입력하세요.</span>`;
+      if (info.can_edit_keys) $("#settings").hidden = false;
+    } else $("#who").innerHTML = info.participants.map(p =>
+      `<label class="chip" title="${esc(p.model)} · ${esc(p.via)}"><input type="checkbox" value="${esc(p.name)}" checked>
        <span style="color:${COLORS[p.name] || "inherit"};font-weight:600">${esc(p.name)}</span></label>`).join("");
     $("#moderator").innerHTML = info.participants.map(p =>
       `<option ${p.name.toLowerCase() === info.moderator.toLowerCase() ? "selected" : ""}>${esc(p.name)}</option>`).join("");
@@ -270,6 +307,21 @@ async function start() {
   }
 }
 
+$("#gear").onclick = () => { $("#settings").hidden = !$("#settings").hidden; };
+$("#savekeys").onclick = async () => {
+  const body = {};
+  document.querySelectorAll("#settings input[data-key]").forEach(i => { if (i.value.trim()) body[i.dataset.key] = i.value.trim(); });
+  document.querySelectorAll("#settings input[data-del]:checked").forEach(i => { body[i.dataset.del] = ""; });
+  if (!Object.keys(body).length) { $("#keymsg").textContent = "변경할 내용이 없습니다."; return; }
+  try {
+    const r = await fetch("/api/keys", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    document.querySelectorAll("#settings input[data-key]").forEach(i => i.value = "");
+    $("#keymsg").textContent = `저장했습니다. 참가자: ${j.participants.join(", ") || "없음"}`;
+    await loadInfo();
+  } catch (e) { $("#keymsg").textContent = "오류: " + e.message; }
+};
 $("#go").onclick = start;
 $("#task").addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) start(); });
 loadInfo();
