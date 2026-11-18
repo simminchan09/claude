@@ -11,7 +11,6 @@ import java.util.Arrays;
 public class Bot {
     public static final Bot I = new Bot();
 
-    static final int TOL = 60;
     static final float LAT_MIN = -400f, LAT_MAX = 600f;
 
     // ---- 설정 (화면 좌표) ----
@@ -29,7 +28,13 @@ public class Bot {
     public volatile float scale = 1f;
     public volatile boolean sampleRequest = false;
 
+    // 릴별 7의 세로 무늬(캡처 좌표, 아래로 tplStep 간격 RGB). 색 하나가 아니라 무늬 전체로 7을 찾는다.
+    public int[][] tpl = new int[3][];
+    public int tplStep = 2, tplDx = 10;           // 세로 간격, 좌우 줄 간격 (캡처 좌표)
+    public int[] tplThr = {30, 30, 30};           // 릴별 허용치 (채널당 평균 색 차이, 설정 때 자동 결정)
+
     int hits = 0, total = 0;
+    double lastStartTap = 0; int startTries = 0;
 
     // ---- 판 진행 상태 ----
     static class St {
@@ -68,6 +73,17 @@ public class Bot {
                 configured = Integer.parseInt(a[k++]) == 1;
             } catch (Exception e) { configured = false; }
         }
+        for (int i = 0; i < 3; i++) {
+            String ts = p.getString("tpl" + i, null);
+            if (ts == null || ts.length() == 0) { tpl[i] = null; continue; }
+            String[] a = ts.split(",");
+            tpl[i] = new int[a.length];
+            for (int j = 0; j < a.length; j++) tpl[i][j] = Integer.parseInt(a[j]);
+        }
+        tplStep = p.getInt("tplStep", 2);
+        tplDx = p.getInt("tplDx", 10);
+        for (int i = 0; i < 3; i++) tplThr[i] = p.getInt("tplThr" + i, 30);
+        if (tpl[0] == null) configured = false;
         latency = p.getFloat("latency", 80f);
         repeat = p.getBoolean("repeat", false);
     }
@@ -79,7 +95,16 @@ public class Bot {
         for (int i = 0; i < 3; i++) b.append(sx[i]).append(',').append(sy[i]).append(',');
         b.append(lx).append(',').append(ly).append(',').append(top).append(',').append(bot).append(',').append(yc)
          .append(',').append(rows).append(',').append(dir).append(',').append(configured ? 1 : 0);
-        p.edit().putString("cfg", b.toString()).putFloat("latency", latency).putBoolean("repeat", repeat).apply();
+        SharedPreferences.Editor e = p.edit();
+        for (int i = 0; i < 3; i++) {
+            StringBuilder t = new StringBuilder();
+            if (tpl[i] != null) for (int j = 0; j < tpl[i].length; j++) { if (j > 0) t.append(','); t.append(tpl[i][j]); }
+            e.putString("tpl" + i, t.toString());
+        }
+        e.putInt("tplStep", tplStep);
+        e.putInt("tplDx", tplDx);
+        for (int i = 0; i < 3; i++) e.putInt("tplThr" + i, tplThr[i]);
+        e.putString("cfg", b.toString()).putFloat("latency", latency).putBoolean("repeat", repeat).apply();
     }
 
     // ---------------- 제어 ----------------
@@ -102,7 +127,8 @@ public class Bot {
     void newRound(double t, boolean first) {
         st = new St[]{new St(), new St(), new St()};
         cur = 0; settling = false; roundStart = t; roundDoneAt = -1;
-        if (repeat) tap(lx, ly, 0);
+        if (repeat) { tap(lx, ly, 0); lastStartTap = t; }
+        startTries = 0;
     }
 
     // ---------------- 프레임 처리 (캡처 스레드) ----------------
@@ -118,8 +144,11 @@ public class Bot {
             else newRound(t, false);
             return;
         }
-        if (repeat && !settling && st[cur].vn == 0 && t - roundStart > 20000) {
-            stop("20초 동안 릴이 돌지 않아 멈췄습니다");
+        if (repeat && cur == 0 && !settling && st[0].vn == 0 && t - lastStartTap > 4000
+                && st[0].stillSince > 0 && t - st[0].stillSince > 1500) {
+            // 시작 탭이 안 먹었으면 다시 누름 (5번 실패하면 정지: 코인 부족 등)
+            if (++startTries > 5) { stop("릴이 돌지 않아 멈췄습니다 (코인 확인)"); return; }
+            tap(lx, ly, 0); lastStartTap = t;
             return;
         }
 
@@ -177,41 +206,71 @@ public class Bot {
         return true;
     }
 
-    // 릴 세로줄에서 목표 색 덩어리 중심(y, 화면 좌표)을 찾고, 정지 판정용 줄 밝기 합도 계산
+    // 릴의 세로줄 3개(가운데, 좌, 우)를 읽어 둠: col[c][i*3..] = RGB
+    int[][] readCols(ByteBuffer b, int rs, int ps, int w, int y0, int len, int cx, double[] sigOut) {
+        int lim = b.limit();
+        int[][] col = new int[3][len * 3];
+        int[] xs = {cx, Math.max(0, cx - tplDx), Math.min(w - 1, cx + tplDx)};
+        double sig = 0;
+        for (int c = 0; c < 3; c++) for (int i = 0; i < len; i++) {
+            int off = (y0 + i) * rs + xs[c] * ps;
+            if (off + 2 >= lim) break;
+            int r = b.get(off) & 0xff, g = b.get(off + 1) & 0xff, bl = b.get(off + 2) & 0xff;
+            col[c][i * 3] = r; col[c][i * 3 + 1] = g; col[c][i * 3 + 2] = bl;
+            if (c == 0) sig += r + g + bl;
+        }
+        if (sigOut != null) sigOut[0] = sig;
+        return col;
+    }
+
+    // 무늬 비교 비용 배열 (위치 p0 = 무늬 맨 위가 y0+p0). 값 = 채널당 평균 차이 * 100
+    int[] costs(int[][] col, int len, int[] tp, int cap) {
+        int n = tp.length / 9, span = (n - 1) * tplStep;
+        int positions = len - span;
+        if (positions <= 0) return new int[0];
+        int[] cost = new int[positions];
+        long maxSum = (long) cap * 9 * n / 100;
+        for (int p0 = 0; p0 < positions; p0++) {
+            long c = 0;
+            outer:
+            for (int k = 0; k < n; k++) {
+                int q = (p0 + k * tplStep) * 3;
+                for (int cc = 0; cc < 3; cc++) {
+                    int t9 = (cc * n + k) * 3;
+                    int[] cl = col[cc];
+                    c += Math.abs(cl[q] - tp[t9]) + Math.abs(cl[q + 1] - tp[t9 + 1]) + Math.abs(cl[q + 2] - tp[t9 + 2]);
+                }
+                if (c > maxSum) { c = -1; break outer; }
+            }
+            cost[p0] = c < 0 ? Integer.MAX_VALUE : (int) Math.min(Integer.MAX_VALUE, c * 100 / (9L * n));
+        }
+        return cost;
+    }
+
+    // 릴에서 7의 무늬와 맞는 위치(무늬 중심 y, 화면 좌표)를 찾고, 정지 판정용 줄 밝기 합도 계산
     float[] findBlobs(ByteBuffer b, int rs, int ps, int w, int h, int reel, double[] sigOut) {
         float sc = scale;
-        int cx = (int) (rx[reel] * sc);
-        int y0 = (int) (top * sc) + 2, y1 = Math.min(h - 1, (int) (bot * sc) - 2);
-        int step = sc >= 0.75f ? 2 : 1;
-        int dx = Math.max(1, (int) (4 * sc));
-        int[] xs = {cx - dx, cx, cx + dx};
-        int[] c = rcol[reel];
-        float minRun = 4 * sc;
-        float[] out = new float[16];
-        int n = 0, runStart = -1;
-        double sig = 0;
-        int lim = b.limit();
-        for (int y = y0; y <= y1; y += step) {
-            boolean hit = false;
-            for (int k = 0; k < 3; k++) {
-                int x = xs[k];
-                if (x < 0 || x >= w) continue;
-                int off = y * rs + x * ps;
-                if (off + 2 >= lim) continue;
-                int r = b.get(off) & 0xff, g = b.get(off + 1) & 0xff, bl = b.get(off + 2) & 0xff;
-                if (k == 1) sig += r + g + bl;
-                if (Math.abs(r - c[0]) + Math.abs(g - c[1]) + Math.abs(bl - c[2]) <= TOL) hit = true;
-            }
-            if (hit) {
-                if (runStart < 0) runStart = y;
-            } else if (runStart >= 0) {
-                int end = y - step;
-                if (end - runStart >= minRun && runStart > y0 && n < out.length) out[n++] = ((runStart + end) / 2f) / sc;
-                runStart = -1;
-            }
+        int[] tp = tpl[reel];
+        int cx = Math.min(w - 1, Math.max(0, (int) (rx[reel] * sc)));
+        int y0 = Math.max(0, (int) (top * sc) + 1), y1 = Math.min(h - 1, (int) (bot * sc) - 1);
+        int len = y1 - y0 + 1;
+        if (len <= 0 || tp == null) { sigOut[0] = 0; return new float[0]; }
+        int[][] col = readCols(b, rs, ps, w, y0, len, cx, sigOut);
+        int thr = tplThr[reel] * 100;
+        int[] cost = costs(col, len, tp, thr);
+        int n = tp.length / 9, half = ((n - 1) * tplStep) / 2;
+        float symHc = (bot - top) * sc / rows;
+        int sep = Math.max(2, (int) (symHc * 0.5f));
+        float[] out = new float[8];
+        int m = 0;
+        for (int p0 = 0; p0 < cost.length; p0++) {
+            if (cost[p0] > thr) continue;
+            boolean best = true;
+            for (int q = Math.max(0, p0 - sep); q <= Math.min(cost.length - 1, p0 + sep); q++)
+                if (cost[q] < cost[p0] || (cost[q] == cost[p0] && q < p0)) { best = false; break; }
+            if (best && m < out.length) out[m++] = (y0 + p0 + half) / sc;
         }
-        sigOut[0] = sig;
-        return Arrays.copyOf(out, n);
+        return Arrays.copyOf(out, m);
     }
 
     void update(St s, float[] ys, double sig, double t) {
@@ -306,16 +365,34 @@ public class Bot {
 
     void sample(ByteBuffer b, int rs, int ps, int w, int h) {
         float sc = scale;
+        float symHc = (bot - top) * sc / rows;
+        tplStep = symHc > 60 ? 2 : 1;
+        tplDx = Math.max(2, Math.round(symHc * 0.28f));
+        int half = (int) (symHc * 0.42f);
+        int y0 = Math.max(0, (int) (top * sc) + 1), y1 = Math.min(h - 1, (int) (bot * sc) - 1);
+        int len = y1 - y0 + 1;
         for (int i = 0; i < 3; i++) {
-            int cx = (int) (rx[i] * sc), cy = (int) (ry[i] * sc);
-            long r = 0, g = 0, bl = 0; int n = 0;
-            for (int dy = -2; dy <= 2; dy++) for (int dx = -2; dx <= 2; dx++) {
-                int x = cx + dx, y = cy + dy;
-                if (x < 0 || y < 0 || x >= w || y >= h) continue;
-                int off = y * rs + x * ps;
-                r += b.get(off) & 0xff; g += b.get(off + 1) & 0xff; bl += b.get(off + 2) & 0xff; n++;
+            int cx = Math.min(w - 1, Math.max(0, (int) (rx[i] * sc))), cy = (int) (ry[i] * sc);
+            int n = (2 * half) / tplStep + 1;
+            int[][] col = readCols(b, rs, ps, w, 0, h, cx, null);
+            int[] t = new int[9 * n];
+            for (int cc = 0; cc < 3; cc++) for (int k = 0; k < n; k++) {
+                int y = Math.min(h - 1, Math.max(0, cy - half + k * tplStep));
+                for (int ch = 0; ch < 3; ch++) t[(cc * n + k) * 3 + ch] = col[cc][y * 3 + ch];
             }
-            if (n > 0) { rcol[i][0] = (int) (r / n); rcol[i][1] = (int) (g / n); rcol[i][2] = (int) (bl / n); }
+            tpl[i] = t;
+            for (int ch = 0; ch < 3; ch++) rcol[i][ch] = col[0][Math.min(h - 1, cy) * 3 + ch];
+            // 허용치 자동 결정: 7에서 반 칸 이상 떨어진 다른 그림들과의 최소 차이의 절반
+            if (len > 0) {
+                int[][] wcol = readCols(b, rs, ps, w, y0, len, cx, null);
+                int[] cost = costs(wcol, len, t, 100000);
+                int truePos = cy - half - y0;
+                int minFalse = Integer.MAX_VALUE;
+                for (int p0 = 0; p0 < cost.length; p0++)
+                    if (Math.abs(p0 - truePos) > symHc * 0.5f) minFalse = Math.min(minFalse, cost[p0]);
+                int thr = minFalse == Integer.MAX_VALUE ? 30 : minFalse / 200;
+                tplThr[i] = Math.max(8, Math.min(40, thr));
+            }
         }
         configured = true;
         BotService s = BotService.instance;

@@ -100,7 +100,7 @@ public class BotService extends AccessibilityService {
         main.post(new Runnable() {
             @Override public void run() {
                 int[] c = Bot.I.rcol[0];
-                statusView.setText("설정 저장됨 (릴1 색 " + c[0] + "," + c[1] + "," + c[2] + ")\n'봇 시작'을 누르세요");
+                statusView.setText("7 무늬 저장됨\n'봇 시작'을 누르세요");
                 refreshButtons();
             }
         });
@@ -244,7 +244,7 @@ public class BotService extends AccessibilityService {
             Bot.I.running = false;
             setupMode = true;
             showMarkers();
-            statusView.setText("릴이 멈춘 화면에서 표시를 끌어 놓으세요\n1·2·3: 릴의 7(목표 그림) 진한 색 위\nS1·S2·S3: 멈춤 버튼, 레버: 시작 버튼\n선: 릴 창 위끝·당첨 줄·아래끝");
+            statusView.setText("가운데 줄에 7이 보이게 멈춘 화면에서:\n빨간 1·2·3 → 각 릴 7의 한가운데\n초록 '탭' → 탭할 곳 (왼쪽 B 버튼은 피하기)\n노란 선 → 릴 창 위끝·아래끝, 파란 선 → 가운데 줄");
         } else {
             readMarkers();
             removeMarkers();
@@ -261,25 +261,23 @@ public class BotService extends AccessibilityService {
         int W = dm.widthPixels, H = dm.heightPixels;
         Bot b = Bot.I;
         boolean has = b.top > 0 && b.bot > b.top;
-        String[] labels = {"1", "2", "3", "S1", "S2", "S3", "레버", "릴 창 위끝", "당첨 줄", "릴 창 아래끝"};
-        int[] colors = {0xFFFF4F7A, 0xFFFF4F7A, 0xFFFF4F7A, 0xFF4FE0A8, 0xFF4FE0A8, 0xFF4FE0A8, 0xFF5AB4FF, 0xFFFFCF3F, 0xFFFF4F7A, 0xFFFFCF3F};
-        int[][] pos = new int[10][2];
-        for (int i = 0; i < 3; i++) {
-            pos[i] = has ? new int[]{b.rx[i], b.ry[i]} : new int[]{(int) (W * (0.35 + 0.15 * i)), (int) (H * 0.45)};
-            pos[3 + i] = has ? new int[]{b.sx[i], b.sy[i]} : new int[]{(int) (W * (0.35 + 0.15 * i)), (int) (H * 0.8)};
-        }
-        pos[6] = has ? new int[]{b.lx, b.ly} : new int[]{(int) (W * 0.85), (int) (H * 0.55)};
-        pos[7] = new int[]{0, has ? b.top : (int) (H * 0.3)};
-        pos[8] = new int[]{0, has ? b.yc : (int) (H * 0.45)};
-        pos[9] = new int[]{0, has ? b.bot : (int) (H * 0.6)};
+        // 기본 위치: 게임코너 슬롯 화면 배치 기준 (릴 3개 + 오른쪽 검은 화면)
+        double[] reelX = {0.271, 0.385, 0.499};
+        String[] labels = {"1", "2", "3", "탭", "릴 창 위끝", "당첨 줄", "릴 창 아래끝"};
+        int[] colors = {0xFFFF4F7A, 0xFFFF4F7A, 0xFFFF4F7A, 0xFF4FE0A8, 0xFFFFCF3F, 0xFF5AB4FF, 0xFFFFCF3F};
+        int[][] pos = new int[7][2];
+        for (int i = 0; i < 3; i++)
+            pos[i] = has ? new int[]{b.rx[i], b.ry[i]} : new int[]{(int) (W * reelX[i]), (int) (H * 0.48)};
+        pos[3] = has ? new int[]{b.lx, b.ly} : new int[]{(int) (W * 0.75), (int) (H * 0.52)};
+        pos[4] = new int[]{0, has ? b.top : (int) (H * 0.316)};
+        pos[5] = new int[]{0, has ? b.yc : (int) (H * 0.48)};
+        pos[6] = new int[]{0, has ? b.bot : (int) (H * 0.647)};
 
-        markers = new Marker[10];
-        markerLp = new WindowManager.LayoutParams[10];
+        markers = new Marker[7];
+        markerLp = new WindowManager.LayoutParams[7];
         int ms = dp(56), lh = dp(36);
-        // 선을 먼저 추가해 동그라미 표시가 위에 오도록
-        for (int k = 7; k <= 9; k++) addMarker(k, labels[k], colors[k], true, pos[k], W, lh);
-        for (int k = 0; k <= 6; k++) addMarker(k, labels[k], colors[k], false, pos[k], ms, ms);
-        // 조작 창을 맨 위로
+        for (int k = 4; k <= 6; k++) addMarker(k, labels[k], colors[k], true, pos[k], W, lh);
+        for (int k = 0; k <= 3; k++) addMarker(k, labels[k], colors[k], false, pos[k], ms, ms);
         try { wm.removeView(panel); wm.addView(panel, panelLp); } catch (Exception ignored) {}
     }
 
@@ -303,14 +301,15 @@ public class BotService extends AccessibilityService {
     void readMarkers() {
         if (markers == null) return;
         Bot b = Bot.I;
+        int[] t = center(3);
         for (int i = 0; i < 3; i++) {
             int[] c = center(i); b.rx[i] = c[0]; b.ry[i] = c[1];
-            int[] s = center(3 + i); b.sx[i] = s[0]; b.sy[i] = s[1];
+            b.sx[i] = t[0]; b.sy[i] = t[1];      // 화면 탭 = 왼쪽 릴부터 차례로 멈춤
         }
-        int[] l = center(6); b.lx = l[0]; b.ly = l[1];
-        int a = center(7)[1], c = center(9)[1];
+        b.lx = t[0]; b.ly = t[1];                 // 시작도 같은 탭
+        int a = center(4)[1], c = center(6)[1];
         b.top = Math.min(a, c); b.bot = Math.max(a, c);
-        b.yc = center(8)[1];
+        b.yc = center(5)[1];
     }
 
     void removeMarkers() {
