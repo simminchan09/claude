@@ -28,6 +28,11 @@ public class Bot {
     public volatile float scale = 1f;
     public volatile boolean sampleRequest = false;
 
+    // ---- 진단 기록 ----
+    public volatile boolean recordReq = false;
+    Diag rec = null;
+    String lastMethod = "";
+
     // 릴별 7의 세로 무늬(캡처 좌표, 아래로 tplStep 간격 RGB). 색 하나가 아니라 무늬 전체로 7을 찾는다.
     public int[][] tpl = new int[3][];
     public int tplStep = 2, tplDx = 10;           // 세로 간격, 좌우 줄 간격 (캡처 좌표)
@@ -125,6 +130,8 @@ public class Bot {
     }
 
     void newRound(double t, boolean first) {
+        if (rec != null) finishRec();
+        if (recordReq) { recordReq = false; rec = new Diag(this, t); status("진단 기록 중… 한 판이 끝나면 저장됩니다"); }
         st = new St[]{new St(), new St(), new St()};
         cur = 0; settling = false; roundStart = t; roundDoneAt = -1;
         if (repeat) { tap(lx, ly, 0); lastStartTap = t; }
@@ -139,6 +146,12 @@ public class Bot {
         if (lastT > 0) frameDt = frameDt * 0.9 + Math.min(200, t - lastT) * 0.1;
         lastT = t;
 
+        if (rec != null) {
+            rec.frame(buf, rs, ps, w, h, t);
+            if ((cur >= 3 && t - roundDoneAt > 1200) || t - rec.t0 > 25000) finishRec();
+        } else if (recordReq && cur == 0 && !settling && st[0].vn == 0) {
+            recordReq = false; rec = new Diag(this, t); status("진단 기록 중… 한 판이 끝나면 저장됩니다");
+        }
         if (cur >= 3) {
             if (repeat) { if (t - roundDoneAt > 2500) newRound(t, false); }
             else newRound(t, false);
@@ -157,6 +170,7 @@ public class Bot {
         for (int i = cur; i < 3; i++) {
             ys[i] = findBlobs(buf, rs, ps, w, h, i, sig);
             update(st[i], ys[i], sig[0], t);
+            if (rec != null) rec.blobs(i, ys[i]);
         }
         St s = st[cur];
         if (!settling) {
@@ -165,12 +179,20 @@ public class Bot {
             if (press > 0 && press - now < frameDt * 1.5 + 15) {
                 tap(sx[cur], sy[cur], press);
                 settling = true; pressT = press; pressV = speed(s);
+                if (rec != null) rec.event(press, cur, "탭(" + lastMethod + ") v=" + String.format("%.2f", pressV) + " P=" + Math.round(s.P) + " 지연=" + Math.round(latency));
                 status("릴 " + (cur + 1) + " 멈춤 탭");
             }
         } else if (t > pressT + 120) {
             boolean done = (s.stillSince > 0 && t - s.stillSince >= 250) || t - pressT > 2500;
             if (done) evaluate(ys[cur], t, s);
         }
+    }
+
+    void finishRec() {
+        final Diag d = rec;
+        rec = null;
+        BotService svc = BotService.instance;
+        if (svc != null && d != null) svc.saveDiag(d);
     }
 
     void evaluate(float[] ys, double t, St s) {
@@ -188,6 +210,7 @@ public class Bot {
             } else msg = coarse(s) ? "많이 어긋남 → 멈춘 시각으로 보정" : "판정 불가";
         } else msg = coarse(s) ? "7이 창 밖 → 멈춘 시각으로 보정" : "목표 그림 안 보임";
         total++;
+        if (rec != null) rec.event(t, cur, msg + (Float.isNaN(near) ? "" : " 오차=" + Math.round((near - yc) * dir) + "px"));
         BotService svc = BotService.instance;
         if (svc != null) svc.saveLatency(latency);
         status("릴 " + (cur + 1) + ": " + msg + "\n적중 " + hits + "/" + total + " · 지연 " + Math.round(latency) + "ms");
@@ -350,14 +373,14 @@ public class Bot {
         double best = -1;
         for (float y : ys) {
             double press = t + ((yc - y) * dir) / v - latency;
-            if (press > now + minLead && (best < 0 || press < best)) best = press;
+            if (press > now + minLead && (best < 0 || press < best)) { best = press; lastMethod = "직접"; }
         }
         if (best < 0 && s.P > 0) {
             for (double[] p : s.passes) {
                 if (p[1] < 2) continue;
                 double k = Math.ceil((now + minLead + latency - p[0]) / s.P);
                 double press = p[0] + k * s.P - latency;
-                if (best < 0 || press < best) best = press;
+                if (best < 0 || press < best) { best = press; lastMethod = "주기"; }
             }
         }
         return best;

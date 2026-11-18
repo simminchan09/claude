@@ -85,6 +85,27 @@ public class BotService extends AccessibilityService {
         else tapHandler.postAtTime(r, (long) atMs);
     }
 
+    public void saveDiag(final Diag d) {
+        new Thread(new Runnable() {
+            @Override public void run() {
+                try {
+                    android.graphics.Bitmap bm = d.render();
+                    android.content.ContentValues v = new android.content.ContentValues();
+                    v.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME, "slotbot_" + System.currentTimeMillis() + ".png");
+                    v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/png");
+                    v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Slotbot");
+                    android.net.Uri u = getContentResolver().insert(android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+                    java.io.OutputStream o = getContentResolver().openOutputStream(u);
+                    bm.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, o);
+                    o.close();
+                    setStatus("진단 이미지 저장됨\n갤러리 → Slotbot 앨범");
+                } catch (Exception e) {
+                    setStatus("진단 저장 실패: " + e.getMessage());
+                }
+            }
+        }).start();
+    }
+
     public void saveLatency(float l) { prefs.edit().putFloat("latency", l).apply(); }
 
     public void setStatus(final String s) {
@@ -194,6 +215,16 @@ public class BotService extends AccessibilityService {
         });
         r2.addView(bRepeat); r2.addView(bQuit);
         panel.addView(r2);
+
+        LinearLayout r3 = row();
+        r3.addView(btn("진단 기록", new View.OnClickListener() {
+            @Override public void onClick(View v) {
+                if (!Bot.I.running) { statusView.setText("'봇 시작'을 누른 뒤에 진단 기록을 누르세요"); return; }
+                Bot.I.recordReq = true;
+                statusView.setText("다음 판을 기록합니다");
+            }
+        }));
+        panel.addView(r3);
 
         setupRow = row();
         bRows = btn("", new View.OnClickListener() {
